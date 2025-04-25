@@ -1,3 +1,6 @@
-timestamp,symbol,security_id,quantity,buy_price,target_pct,stop_pct,live_price,change_pct,last_checked,status,exit_price
-4/25/2025 9:45,NHPC,3505,41,87.5,1.5,1,86.43,-1.22,4/25/2025 14:52,HOLD,
-Test,test,test,,,,,,,,,
+symbol,security_id,quantity,buy_price,target_pct,stop_pct,status,live_price,change_pct,last_checked,exit_price
+NHPC,3505,6,144.75,5,3,STOP LOSS,89.87,-37.91,2025-04-23 14:44,89.87
+IRFC,15919,6,164.1,5,3,STOP LOSS,132.41,-19.31,2025-04-23 14:44,132.41
+NLCINDIA,10158,4,224.9,5,3,TARGET HIT,242.31,7.74,2025-04-23 14:44,242.31
+BEL,11740,3,257.8,5,3,TARGET HIT,305.05,18.33,2025-04-23 14:44,305.05
+BHEL,1343,3,296.45,5,3,STOP LOSS,229.2,-22.69,2025-04-23 14:44,229.2
