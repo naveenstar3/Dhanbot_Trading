@@ -1,0 +1,9 @@
+# Ignore Python cache
+__pycache__/
+
+# Ignore duplicate Git folder if accidentally pulled
+Dhanbot/
+
+# Ignore temp/backup CSVs or logs if needed
+*.log
+*.tmp

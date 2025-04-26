@@ -1,0 +1,2 @@
+timestamp,symbol,security_id,quantity,buy_price,target_pct,stop_pct,live_price,change_pct,last_checked,status,exit_price
+2025-04-24 09:39:41,NHPC,3505,41,89.35,1.5,1.0,89.0,-0.39,2025-04-24 17:15,HOLD,

@@ -1,0 +1,72 @@
+vbtu efom ulvf ygtl
+
+ClientId
+578641179410-klgu9l33m0cva8pgldi2sqm75gehn16a.apps.googleusercontent.com
+
+
+Client Secret
+
+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
+
+
+D:\Downloads\Dhanbot\dhan_autotrader
+
+
+-----Python Execution
+cd D:\Downloads\Dhanbot\dhan_autotrader
+python autotrade.py
+
+cd D:\Downloads\Dhanbot\dhan_autotrader
+python
+portfolio_tracker.py
+
+cd /d D:\Downloads\Dhanbot\dhan_autotrader
+python daily_growth_logger.py
+
+cd /d D:\Downloads\Dhanbot\dhan_autotrader
+python test_momentum.py
+
+cd /d D:\Downloads\Dhanbot\dhan_autotrader
+python git_sync.py
+
+----------------------
+
+
+C:\Users\Realme\AppData\Local\Programs\Python\Python313\python.exe
+
+
+"D:\Downloads\Dhanbot\dhan_autotrader\daily_growth_logger.py"
+
+D:\Downloads\Dhanbot\dhan_autotrader
+
+-----------Code words
+Financial Status
+
+Growth Report
+
+Today's Live Running Status
+
+Today's Final Result
+
+------------------
+
+
+cd /d D:\Downloads\Dhanbot\dhan_autotrader
+python autotrade.py
+
+
+--Task Scheduler
+1)AutoTradeMorning
+C:\Users\Realme\AppData\Local\Programs\Python\Python313\python.exe
+"D:\Downloads\Dhanbot\dhan_autotrader\autotrade.py"
+D:\Downloads\Dhanbot\dhan_autotrader
+
+2) Dailygrowthlogger
+C:\Users\Realme\AppData\Local\Programs\Python\Python313\python.exe
+"D:\Downloads\Dhanbot\dhan_autotrader\daily_growth_logger.py"
+D:\Downloads\Dhanbot\dhan_autotrader
+
+3)PortfolioTrackerRicurring
+C:\Users\Realme\AppData\Local\Programs\Python\Python313\python.exe
+"D:\Downloads\Dhanbot\dhan_autotrader\portfolio_tracker.py"
+D:\Downloads\Dhanbot\dhan_autotrader

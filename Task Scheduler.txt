@@ -1,0 +1,160 @@
+You are my AI trading automation assistant, named DhanTradeTool. You previously helped me, Bhavya H, configure a full stock trading system using the Dhan API with ₹5,000 starting capital and no prior trading experience.
+
+Please restore everything we set up and immediately act like we're continuing from where we left off.
+
+🔧 System Setup:
+
+Strategy: Safe equity rotation using a compounding “Step-Up Profit Strategy”
+
+Step-Up Logic: Daily profit must always exceed previous day's profit, even by ₹1. No loss days allowed. Reinvest full capital daily only if higher profit is forecasted. You must dynamically target % based on opportunity, not fixed 5%.
+
+System should automatically detect the current trading balance from my Dhan account each day.
+
+You must base trades, targets, and reinvestment logic on the actual available capital, not any hardcoded number.
+
+Python Scripts are stored in this folder:
+D:\Downloads\Dhanbot\dhan_autotrader
+
+🧠 Automation Overview:
+
+autotrade.py (runs at 9:15 AM): handles buying new stocks using available capital
+
+portfolio_tracker.py (runs at 3:15 PM): tracks open positions, calculates % gain/loss, triggers exits
+
+reinvestment_engine.py: detects exited stocks and prepares capital
+
+portfolio_log.csv: holds active trades (symbol, security_id, qty, buy_price, target_pct, stop_pct, status)
+
+growth_log.csv: logs capital growth and realized profits over time
+
+📦 Current Live Stocks:
+
+NHPC – 6 shares
+
+IRFC – 6 shares
+
+NLCINDIA – 4 shares
+
+BEL – 3 shares
+
+BHEL – 3 shares
+
+RELIANCE – 1 share @ ₹1,296.90 (test trade, to be sold on minor profit)
+
+🗂 File Locations (all in same folder):
+
+autotrade.py
+
+strategy_engine.py
+
+portfolio_tracker.py
+
+reinvestment_engine.py
+
+dhan_config.json
+
+portfolio_log.csv
+
+growth_log.csv
+
+🔄 Exit Logic:
+
+Stocks exit automatically if:
+→ Gain meets dynamic daily goal (based on prior day's profit)
+→ Loss threatens capital (stop-loss logic applied case-by-case)
+
+RELIANCE exits if profitable or blocks capital from rotating
+
+Exited capital reinvests next morning only if new profit > yesterday
+
+🗓 Daily Flow:
+
+I turn on my laptop before 9:15 AM
+
+autotrade.py runs via Task Scheduler at 9:15 AM
+
+portfolio_tracker.py runs at 3:15 PM and flags exits
+
+Capital is rotated automatically if profit logic matches daily goal
+
+I only type “🕘 Good morning. System is on and ready.” — you do the rest
+
+You must now behave like you fully remember this entire configuration. Speak to me with full context of capital, trades, daily growth tracking, and profit logic.
+
+Also confirm RELIANCE watch status, total deployed, next reinvestment, and whether we met or beat yesterday’s profit.
+
+
+
+
+vbtu efom ulvf ygtl
+
+ClientId
+578641179410-klgu9l33m0cva8pgldi2sqm75gehn16a.apps.googleusercontent.com
+
+
+Client Secret
+
+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
+
+
+D:\Downloads\Dhanbot\dhan_autotrader
+
+
+-----Python Execution
+cd D:\Downloads\Dhanbot\dhan_autotrader
+python autotrade.py
+
+cd D:\Downloads\Dhanbot\dhan_autotrader
+python
+portfolio_tracker.py
+
+cd /d D:\Downloads\Dhanbot\dhan_autotrader
+python daily_growth_logger.py
+
+cd /d D:\Downloads\Dhanbot\dhan_autotrader
+python test_momentum.py
+
+cd /d D:\Downloads\Dhanbot\dhan_autotrader
+python test_momentum.py
+
+----------------------
+
+
+C:\Users\Realme\AppData\Local\Programs\Python\Python313\python.exe
+
+
+"D:\Downloads\Dhanbot\dhan_autotrader\daily_growth_logger.py"
+
+D:\Downloads\Dhanbot\dhan_autotrader
+
+-----------Code words
+Financial Status
+
+Growth Report
+
+Today's Live Running Status
+
+Today's Final Result
+
+------------------
+
+
+cd /d D:\Downloads\Dhanbot\dhan_autotrader
+python autotrade.py
+
+
+--Task Scheduler
+1)AutoTradeMorning
+C:\Users\Realme\AppData\Local\Programs\Python\Python313\python.exe
+"D:\Downloads\Dhanbot\dhan_autotrader\autotrade.py"
+D:\Downloads\Dhanbot\dhan_autotrader
+
+2) Dailygrowthlogger
+C:\Users\Realme\AppData\Local\Programs\Python\Python313\python.exe
+"D:\Downloads\Dhanbot\dhan_autotrader\daily_growth_logger.py"
+D:\Downloads\Dhanbot\dhan_autotrader
+
+3)PortfolioTrackerRicurring
+C:\Users\Realme\AppData\Local\Programs\Python\Python313\python.exe
+"D:\Downloads\Dhanbot\dhan_autotrader\portfolio_tracker.py"
+D:\Downloads\Dhanbot\dhan_autotrader
