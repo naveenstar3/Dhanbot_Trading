@@ -1,9 +1,20 @@
-# Ignore Python cache
+# Ignore everything by default
+*
+
+# But do not ignore these specific file types
+!*.csv
+!*.py
+
+# Also do not ignore folders (important for folder structure)
+!*/
+
+# Allow .gitignore itself to stay tracked
+!.gitignore
+
+# Optional: Ignore Python cache folders
 __pycache__/
 
-# Ignore duplicate Git folder if accidentally pulled
-Dhanbot/
-
-# Ignore temp/backup CSVs or logs if needed
+# Optional: Ignore backup or log files
 *.log
 *.tmp
+
