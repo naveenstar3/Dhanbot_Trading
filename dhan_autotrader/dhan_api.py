@@ -60,11 +60,13 @@ def get_historical_price(symbol, minutes_ago=5):
         start = end - timedelta(minutes=minutes_ago + 1)
 
         data = yf.download(
-            tickers=f"{symbol}.NS",
-            period="1d",
-            interval="1m",
-            progress=False
+        tickers=f"{symbol}.NS",
+        period="1d",
+        interval="1m",
+        progress=False,
+        auto_adjust=True
         )
+
 
         if data.empty or "Close" not in data.columns:
             raise Exception("No data available")
@@ -78,6 +80,7 @@ def get_historical_price(symbol, minutes_ago=5):
         if filtered.empty:
             raise Exception("No historical data available")
 
+        # ✅ FIX HERE: no .iloc[0] needed after selecting last non-null Close
         close_price = filtered["Close"].dropna().iloc[-1]
         return round(float(close_price.iloc[0]), 2)
 

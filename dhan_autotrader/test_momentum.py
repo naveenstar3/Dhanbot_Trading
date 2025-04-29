@@ -1,16 +1,31 @@
 import csv
 import json
-from datetime import datetime
-from dhan_api import get_live_price, get_historical_price
+import dhanhq
 
-# Use local Dhan scrip master CSV path
-LOCAL_CSV_PATH = "D:/Downloads/Dhanbot/api-scrip-master.csv"
+# --- CONFIGURATIONS ---
+CONFIG_PATH = "D:/Downloads/Dhanbot/dhan_autotrader/dhan_config.json"
+CSV_MASTER_PATH = "D:/Downloads/Dhanbot/api-scrip-master.csv"
 
-print("🔍 Starting PSU Momentum Tester (No Buy Logic)")
+# Load credentials from JSON
+try:
+    with open(CONFIG_PATH, 'r') as f:
+        config = json.load(f)
+        CLIENT_ID = config["client_id"]
+        ACCESS_TOKEN = config["access_token"]
+except Exception as e:
+    print(f"⚠️ Error loading config: {e}")
+    exit()
+
+print("🔍 Starting PSU Momentum Tester (Official Intraday Data)")
+
+# Set credentials
+dhanhq.client_id = CLIENT_ID
+dhanhq.access_token = ACCESS_TOKEN
 
 valid_stocks = []
+
 try:
-    with open(LOCAL_CSV_PATH, newline='', encoding='utf-8') as f:
+    with open(CSV_MASTER_PATH, newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         print("Headers in CSV:", reader.fieldnames)
 
@@ -24,8 +39,27 @@ try:
 
             try:
                 symbol = row['SEM_TRADING_SYMBOL']
-                current_price = get_live_price(symbol)
-                price_5min_ago = get_historical_price(symbol, minutes_ago=5)
+                security_id = row['SEM_SECURITY_ID']
+
+                # Fetch intraday minute data (last 5 min candles)
+                data = dhanhq.intraday_minute_data(
+                    security_id=security_id,
+                    exchange_segment="NSE",
+                    instrument_type="EQUITY"
+                )
+
+                candles = data.get("data", [])
+
+                if len(candles) < 6:
+                    print(f"⚠️ Not enough candles for {symbol}")
+                    continue
+
+                # Extract current price and 5-min-ago close price
+                latest_candle = candles[-1]
+                candle_5min_ago = candles[-6]
+
+                current_price = float(latest_candle['close'])
+                price_5min_ago = float(candle_5min_ago['close'])
 
                 if price_5min_ago <= 0:
                     continue
@@ -38,13 +72,19 @@ try:
                     "price_5min_ago": price_5min_ago,
                     "momentum": momentum
                 })
+
             except Exception as e:
                 print(f"❗ Skipping {row.get('SEM_TRADING_SYMBOL', 'UNKNOWN')}: {e}")
 except Exception as e:
     print(f"⚠️ Error reading local CSV: {e}")
 
 valid_stocks.sort(key=lambda x: x["momentum"], reverse=True)
+
 print("\n📊 Momentum Ranking:")
 print("-----------------------------------------------")
-for stock in valid_stocks:
-    print(f"{stock['symbol']:<10} | Now: Rs.{stock['current_price']:<7} | 5min Ago: Rs.{stock['price_5min_ago']} | Momentum: {round(stock['momentum'], 2)}%")
+
+if not valid_stocks:
+    print("No PSU stocks with enough intraday momentum found today.")
+else:
+    for stock in valid_stocks:
+        print(f"{stock['symbol']:<10} | Now: Rs.{stock['current_price']:<7} | 5min Ago: Rs.{stock['price_5min_ago']} | Momentum: {round(stock['momentum'], 2)}%")
