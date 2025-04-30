@@ -57,17 +57,19 @@ def prepare_data():
         if data_5 is None or data_5.empty or data_15 is None or data_15.empty:
             continue
         try:
-            last_candle = data_5.iloc[-1]
-            open_price = float(last_candle['Open'])
-            close_price = float(last_candle['Close'])
-            volume_value = float(last_candle['Volume'])
+            if data_5['Open'].empty or data_5['Close'].empty or data_5['Volume'].empty:
+                continue
+            open_price = data_5['Open'].iloc[-1].item()
+            close_price = data_5['Close'].iloc[-1].item()
+            volume_value = data_5['Volume'].iloc[-1].item()
             change_pct_5m = round(((close_price - open_price) / open_price) * 100, 2)
 
             last_5_candles = data_15.tail(5)
             trend_strength = "Strong" if all(
-                last_5_candles['Close'].iloc[i] > last_5_candles['Open'].iloc[i] for i in range(len(last_5_candles))
+                last_5_candles['Close'].iloc[i].item() > last_5_candles['Open'].iloc[i].item()
+                    for i in range(len(last_5_candles))
             ) else "Weak"
-
+            
             record = {
                 "symbol": stock,
                 "5min_change_pct": change_pct_5m,

@@ -110,6 +110,15 @@ def force_exit():
             print(f"⚠️ Error fetching live price for {symbol}: {e}")
             updated_rows.append(row)
             continue
+            
+        # 🔍 Validate order inputs
+        if not security_id or quantity <= 0:
+            print(f"❌ Invalid order params: symbol={symbol}, security_id={security_id}, qty={quantity}")
+            updated_rows.append(row)
+            continue
+        
+        print(f"🧪 Placing SELL: {symbol}, ID={security_id}, Qty={quantity}")
+
 
         # ✅ Place forced sell order
         code, response = place_sell_order(security_id, symbol, quantity)

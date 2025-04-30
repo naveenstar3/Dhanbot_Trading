@@ -30,6 +30,24 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+# ✅ Calculate Dynamic Minimum Net Profit
+def get_dynamic_minimum_net_profit(capital):
+    """
+    Returns scaled minimum net profit:
+    - Minimum ₹5
+    - Scales as 0.1% of current capital
+    """
+    return max(5, round(capital * 0.001, 2))  # 0.1% of capital or ₹5, whichever is higher
+
+# ✅ Load dynamic stock list
+def load_dynamic_stocks():
+    try:
+        with open('D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.txt', 'r') as f:
+            return [line.strip().upper() for line in f if line.strip()]
+    except Exception as e:
+        print(f"⚠️ Error loading dynamic stock list: {e}")
+        return []
+
 # ✅ Load Dhan Master CSV into memory
 def load_dhan_master():
     dhan_map = {}
@@ -207,6 +225,7 @@ def run_autotrade():
         return
 
     capital = get_available_capital()
+    MINIMUM_NET_PROFIT_REQUIRED = get_dynamic_minimum_net_profit(capital)
 
     # ✅ Load dynamic stocks
     candidates = load_dynamic_stocks()
@@ -220,38 +239,66 @@ def run_autotrade():
         send_telegram_message("⚠️ No live momentum data fetched. Skipping today's trade.")
         return
 
-    # ✅ Ask GPT to pick safest stock
+   # ✅ Ask GPT to pick safest stock
     gpt_pick = ask_gpt_to_pick_stock(df)
+    
+    # ✅ Check if GPT explicitly said SKIP
     if gpt_pick == "SKIP":
         send_telegram_message("⚠️ GPT advised to SKIP today. No safe stock to buy.")
         return
-
-    print(f"✅ GPT Selected: {gpt_pick}")
-    send_telegram_message(f"✅ GPT Selected {gpt_pick} for today's buy.")
-
+    
+    # ✅ NEW: Capital-based Affordability Check
+    available_stocks = df["symbol"].tolist()
+    
+    def find_affordable_stock(available_stocks, capital):
+        for stock in available_stocks:
+            stock_price = get_live_price(stock)
+            if not stock_price or stock_price <= 0:
+                continue
+            qty = int(capital // stock_price)
+            if qty > 0:
+                return stock  # First affordable stock
+        return None
+    
+    # First check GPT pick affordability
+    picked_price = get_live_price(gpt_pick)
+    if picked_price and (capital // picked_price) >= 1:
+        final_pick = gpt_pick
+    else:
+        print(f"⚠️ GPT pick {gpt_pick} too expensive. Searching alternative...")
+        final_pick = find_affordable_stock(available_stocks, capital)
+    
+    if not final_pick:
+        send_telegram_message("⚠️ No affordable stocks found even after fallback. Skipping today.")
+        print("⚠️ No affordable stocks found. Skipping today's trade.")
+        return
+    
+    print(f"✅ Final Stock Selected: {final_pick}")
+    send_telegram_message(f"✅ Final Selected {final_pick} for today's buy.")
+    
     # ✅ Find securityId for selected stock
-    security_id = get_security_id(gpt_pick)
+    security_id = get_security_id(final_pick)
     if not security_id:
-        send_telegram_message(f"⚠️ Security ID not found for {gpt_pick}. Cannot place order.")
+        send_telegram_message(f"⚠️ Security ID not found for {final_pick}. Cannot place order.")
         return
-
+    
     # ✅ Fetch live price
-    current_price = get_live_price(gpt_pick)
+    current_price = get_live_price(final_pick)
     if not current_price or current_price <= 0:
-        send_telegram_message(f"⚠️ Live price unavailable for {gpt_pick}. Skipping.")
+        send_telegram_message(f"⚠️ Live price unavailable for {final_pick}. Skipping.")
         return
-
+    
     qty = int(capital // current_price)
     if qty <= 0:
-        send_telegram_message(f"⚠️ Insufficient capital to buy {gpt_pick}. Needed more funds.")
+        send_telegram_message(f"⚠️ Insufficient capital to buy {final_pick}. Needed more funds.")
         return
-
+    
     approx_cost = current_price * qty
     buffer_required = approx_cost * 1.05
     if buffer_required > capital:
-        send_telegram_message(f"⚠️ Skipping {gpt_pick}: Need ₹{round(buffer_required)} but have ₹{round(capital)}.")
+        send_telegram_message(f"⚠️ Skipping {final_pick}: Need ₹{round(buffer_required)} but have ₹{round(capital)}.")
         return
-
+    
     # ✅ Place BUY order
     payload = {
         "transactionType": "BUY",
@@ -260,7 +307,7 @@ def run_autotrade():
         "orderType": "MARKET",
         "validity": "DAY",
         "securityId": security_id,
-        "tradingSymbol": gpt_pick,
+        "tradingSymbol": final_pick,
         "quantity": qty,
         "price": 0,
         "disclosedQuantity": 0,
@@ -269,17 +316,25 @@ def run_autotrade():
         "triggerPrice": 0,
         "smartOrder": False
     }
-
+    
     code, buy_response = place_buy_order_with_retry(payload, retries=1)
-
+    
     if code == 200:
-        send_telegram_message(f"✅ Bought {gpt_pick} at approx ₹{current_price}, Qty: {qty}")
-        order_id = buy_response.get("order_id", "")
-        systime.sleep(3)
-        trade_book = get_trade_book()
-        matching_trades = [t for t in trade_book if t.get("order_id") == order_id]
+    send_telegram_message(f"✅ Bought {final_pick} at approx ₹{current_price}, Qty: {qty}")
+    order_id = buy_response.get("order_id", "")
+    systime.sleep(5)
+    trade_book = get_trade_book()
+    matching_trades = [t for t in trade_book if t.get("order_id") == order_id]
+    
+    if not matching_trades:
+        print(f"⚠️ No matching trade found for order_id={order_id}. Trade Book: {trade_book}")
+    else:
+        trade_status = matching_trades[0].get("status", "").upper()
+        print(f"🧾 Trade found. Status = {trade_status}")
 
-        if matching_trades and matching_trades[0]["status"].upper() == "TRADED":
+    if matching_trades:
+        trade_status = matching_trades[0].get("status", "").upper()
+        if trade_status in ["TRADED", "PENDING", "OPEN"]:
             timestamp = datetime.now().strftime("%m/%d/%Y %H:%M")
             target_pct = 0.7  # ✅ Fixed target 0.7%
             stop_pct = 0.4    # ✅ Fixed stoploss 0.4%
@@ -287,13 +342,14 @@ def run_autotrade():
             with open(PORTFOLIO_LOG, mode='a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow([
-                    timestamp, gpt_pick, security_id, qty,
-                    current_price, round(0, 2),  # dummy 0 for momentum
+                    timestamp, final_pick, security_id, qty,
+                    current_price, round(0, 2),  # dummy momentum
                     1, target_pct, stop_pct, '', 'HOLD', ''
                 ])
             send_telegram_message(f"🗒️ Trade logged with Target {target_pct}% / Stop {stop_pct}%")
+
     else:
-        send_telegram_message(f"❌ Buy order failed for {gpt_pick}: {buy_response}")
+        send_telegram_message(f"❌ Buy order failed for {final_pick}: {buy_response}")
 
 # ✅ Final Runner
 
