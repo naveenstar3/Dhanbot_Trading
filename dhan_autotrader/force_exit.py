@@ -10,6 +10,8 @@ import time as systime
 from dhanhq import DhanContext, dhanhq
 from dhan_api import get_live_price
 from config import *
+from utils_logger import log_bot_action
+
 
 # ✅ Load Dhan credentials
 with open("dhan_config.json") as f:
@@ -31,6 +33,22 @@ dhan = dhanhq(context)
 # ✅ Telegram Constants
 TELEGRAM_TOKEN = "7557430361:AAFZKf4KBL3fScf6C67quomwCrpVbZxQmdQ"
 TELEGRAM_CHAT_ID = "5086097664"
+
+# ✅ Bot Execution Logger
+def log_bot_action(script_name, action, status, message):
+    log_file = "bot_execution_log.csv"
+    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+    headers = ["timestamp", "script_name", "action", "status", "message"]
+
+    new_row = [now, script_name, action, status, message]
+
+    file_exists = os.path.exists(log_file)
+
+    with open(log_file, mode='a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(headers)
+        writer.writerow(new_row)
 
 # ✅ Telegram Notification Function
 def send_telegram_message(message):
@@ -139,11 +157,33 @@ def force_exit():
                 updated_rows.append(row)
                 print(f"✅ Force SOLD {symbol} at ₹{round(live_price,2)}")
                 send_telegram_message(f"✅ Force SOLD {symbol} at ₹{round(live_price,2)} (EOD Exit)")
+                log_bot_action("force_exit.py", "FORCED SELL", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} (EOD Exit)")
+                
+                # ✅ Trade Summary Alert
+                buy_price = float(row.get("buy_price", 0))
+                net_profit = estimate_net_profit(buy_price, live_price, quantity)
+                profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
+                profit_pct = round(((live_price - buy_price) / buy_price) * 100, 2)
+            
+                summary_msg = (
+                    f"📊 Forced Trade Summary ({datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')})\n"
+                    f"Stock: {symbol}\n"
+                    f"Buy Price: ₹{round(buy_price, 2)}\n"
+                    f"Sell Price: ₹{round(live_price, 2)}\n"
+                    f"Qty: {quantity}\n"
+                    f"Net Profit: ₹{round(net_profit, 2)}\n"
+                    f"Profit %: {profit_pct}%\n"
+                    f"Status: {profit_status}"
+                )
+                send_telegram_message(summary_msg)
+              
             else:
                 print(f"⚠️ Force sell order placed but not traded for {symbol}.")
+                log_bot_action("force_exit.py", "FORCED SELL", "⚠️ NOT TRADED", f"{symbol} - Order placed but not executed.")
                 updated_rows.append(row)
         else:
             print(f"❌ Force SELL failed for {symbol}: {response}")
+            log_bot_action("force_exit.py", "FORCED SELL", "❌ FAILED", f"{symbol} - API Error: {response}")
             updated_rows.append(row)
 
     if updated_rows:
@@ -153,6 +193,15 @@ def force_exit():
             writer.writeheader()
             writer.writerows(updated_rows)
         print("✅ Portfolio updated after force exit.")
+        
+    # 🔴 Final Check: Alert if any still HOLD
+    hold_stocks = [row for row in updated_rows if row.get("status", "").upper() != "SOLD"]
+    if hold_stocks:
+        msg = f"🚨 Final Check: {len(hold_stocks)} stock(s) still in HOLD\n"
+        for r in hold_stocks:
+            msg += f"Symbol: {r['symbol']}\n"
+        msg += "⚠️ Please check manually before next trade day."
+        send_telegram_message(msg)   
 
     print("🚨 Force Exit complete.")
 

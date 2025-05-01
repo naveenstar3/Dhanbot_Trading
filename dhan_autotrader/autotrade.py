@@ -8,6 +8,7 @@ import os
 from dhan_api import get_live_price, get_historical_price
 from config import *
 from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_pick_stock  # 🔥 Import inside function if needed
+from utils_logger import log_bot_action
 
 # ✅ Constants
 PORTFOLIO_LOG = "portfolio_log.csv"
@@ -29,6 +30,23 @@ HEADERS = {
     "client-id": config["client_id"],
     "Content-Type": "application/json"
 }
+
+# ✅ Bot Execution Logger
+def log_bot_action(script_name, action, status, message):
+    log_file = "bot_execution_log.csv"
+    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+    headers = ["timestamp", "script_name", "action", "status", "message"]
+
+    new_row = [now, script_name, action, status, message]
+
+    file_exists = os.path.exists(log_file)
+
+    with open(log_file, mode='a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(headers)
+        writer.writerow(new_row)
+
 
 # ✅ Calculate Dynamic Minimum Net Profit
 def get_dynamic_minimum_net_profit(capital):
@@ -211,8 +229,10 @@ def ml_momentum_predictor(momentum_5min, momentum_15min):
 # ✅ Part 4: AutoTrade Main Function
 
 def run_autotrade():
+    print("🔍 Checking if market is open...")
     if not is_market_open():
         print("⏳ Market not open yet.")
+        log_bot_action("autotrade.py", "market_status", "INFO", "Market closed today, skipping trading.")
         return
 
     if has_open_position():
@@ -320,12 +340,12 @@ def run_autotrade():
     code, buy_response = place_buy_order_with_retry(payload, retries=1)
     
     if code == 200:
-    send_telegram_message(f"✅ Bought {final_pick} at approx ₹{current_price}, Qty: {qty}")
-    order_id = buy_response.get("order_id", "")
-    systime.sleep(5)
-    trade_book = get_trade_book()
-    matching_trades = [t for t in trade_book if t.get("order_id") == order_id]
-    
+        send_telegram_message(f"✅ Bought {final_pick} at approx ₹{current_price}, Qty: {qty}")
+        log_bot_action("autotrade.py", "BUY attempt", "✅ Success", f"Bought {final_pick} @ ₹{round(current_price, 2)}")
+        order_id = buy_response.get("order_id", "")
+        systime.sleep(5)
+        trade_book = get_trade_book()
+        matching_trades = [t for t in trade_book if t.get("order_id") == order_id]
     if not matching_trades:
         print(f"⚠️ No matching trade found for order_id={order_id}. Trade Book: {trade_book}")
     else:

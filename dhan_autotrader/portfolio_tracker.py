@@ -8,6 +8,7 @@ import time as systime
 from dhanhq import DhanContext, dhanhq
 from dhan_api import get_live_price
 from config import *
+from utils_logger import log_bot_action
 
 # ✅ Trailing Exit Config
 LIVE_BUFFER_FILE = "live_trail_BUFFER.csv"
@@ -32,6 +33,22 @@ dhan = dhanhq(context)
 # ✅ Telegram Constants
 TELEGRAM_TOKEN = "7557430361:AAFZKf4KBL3fScf6C67quomwCrpVbZxQmdQ"
 TELEGRAM_CHAT_ID = "5086097664"
+
+# ✅ Bot Execution Logger
+def log_bot_action(script_name, action, status, message):
+    log_file = "bot_execution_log.csv"
+    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+    headers = ["timestamp", "script_name", "action", "status", "message"]
+
+    new_row = [now, script_name, action, status, message]
+
+    file_exists = os.path.exists(log_file)
+
+    with open(log_file, mode='a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(headers)
+        writer.writerow(new_row)
 
 def get_dynamic_minimum_net_profit(capital):
     """
@@ -273,8 +290,8 @@ def check_portfolio():
             reason = f"FORCED EXIT: Max ₹ loss {round(actual_loss,2)} > {round(max_rupee_loss,2)}"
             should_sell = True
         elif is_peak_exhausted(symbol, target_pct=target_pct):
-             reason = "SMART EXIT: Price exhausted near target multiple times"
-             should_sell = True
+            reason = "SMART EXIT: Price exhausted near target multiple times"
+            should_sell = True
 
         if should_sell and net_profit >= MINIMUM_NET_PROFIT_REQUIRED:
             code, response = place_sell_order(security_id, symbol, quantity)
@@ -290,12 +307,42 @@ def check_portfolio():
                     log_sell(symbol, security_id, quantity, live_price, reason)
                     print(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit,2)}")
                     send_telegram_message(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit,2)}")
+                    log_bot_action("portfolio_tracker.py", "SELL executed", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} | Reason: {reason}")
+
+                    # ✅ Trade Summary Alert
+                    profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
+                    profit_pct = round(((exit_price - buy_price) / buy_price) * 100, 2)
+
+                    summary_msg = (
+                        f"📊 Trade Summary ({datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')})\n"
+                        f"Stock: {symbol}\n"
+                        f"Buy Price: ₹{round(buy_price, 2)}\n"
+                        f"Sell Price: ₹{round(exit_price, 2)}\n"
+                        f"Qty: {quantity}\n"
+                        f"Net Profit: ₹{round(net_profit, 2)}\n"
+                        f"Profit %: {profit_pct}%\n"
+                        f"Status: {profit_status}"
+                    )
+                    send_telegram_message(summary_msg)
                 else:
                     print(f"⚠️ Sell order placed but NOT TRADED yet for {symbol}. Holding.")
             else:
                 print(f"❌ SELL failed for {symbol}: {response}")
         else:
-            print(f"⚠️ Holding {symbol}. Change% {round(change_pct,2)}%. Net Profit ₹{round(net_profit,2)}.")
+            hold_reason = ""
+            if not should_sell:
+                hold_reason = "🚫 Conditions not met: Target/Stop/Peak not triggered."
+            elif net_profit < MINIMUM_NET_PROFIT_REQUIRED:
+                hold_reason = (
+                    f"💸 Blocked by Net Profit Rule: ₹{round(net_profit,2)} < "
+                    f"₹{round(MINIMUM_NET_PROFIT_REQUIRED, 2)}"
+                )
+            else:
+                hold_reason = "❓ Unknown reason. Needs manual review."
+        
+            print(f"⚠️ HOLDING {symbol}. Change%: {round(change_pct,2)}%. "
+                f"Net Profit: ₹{round(net_profit,2)}. Reason: {hold_reason}")
+            log_bot_action("portfolio_tracker.py", "SELL skipped", "⚠️ HOLD", f"{symbol} | {hold_reason}")
 
         row.update({
             "live_price": round(live_price, 2),
