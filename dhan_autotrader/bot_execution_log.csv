@@ -298,3 +298,14 @@ timestamp,script_name,action,status,message
 2025-05-01 15:26:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-44.05 < ₹5
 2025-05-01 15:28:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-44.05 < ₹5
 2025-05-01 15:29:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-44.05 < ₹5
+2025-05-02 10:25:07,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-02 11:11:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-50.79 < ₹5
+2025-05-04 09:47:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
+2025-05-04 09:48:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
+2025-05-04 09:49:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
+2025-05-04 10:27:13,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
+2025-05-04 10:28:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
+2025-05-04 10:29:07,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
+2025-05-04 10:30:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
+2025-05-04 10:31:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
+2025-05-04 10:32:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
