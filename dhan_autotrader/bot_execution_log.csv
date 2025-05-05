@@ -504,3 +504,394 @@ timestamp,script_name,action,status,message
 2025-05-04 12:40:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
 2025-05-04 12:41:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
 2025-05-04 12:41:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-62.03 < ₹5
+2025-05-04 21:42:17,force_exit.py,FORCED SELL,❌ FAILED,"POWERGRID - API Error: {'status': 'failure', 'remarks': {'error_code': 'DH-905', 'error_type': 'Input_Exception', 'error_message': 'Missing required fields, bad values for parameters etc.'}, 'data': ''}"
+2025-05-05 09:18:05,force_exit.py,FORCED SELL,❌ FAILED,"POWERGRID - API Error: {'status': 'failure', 'remarks': {'error_code': 'DH-905', 'error_type': 'Input_Exception', 'error_message': 'Missing required fields, bad values for parameters etc.'}, 'data': ''}"
+2025-05-05 09:24:58,force_exit.py,FORCED SELL,❌ FAILED,"POWERGRID - API Error: {'status': 'failure', 'remarks': {'error_code': 'DH-905', 'error_type': 'Input_Exception', 'error_message': 'Invalid SecurityId'}, 'data': ''}"
+2025-05-05 09:30:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.71 < ₹5
+2025-05-05 09:31:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.36 < ₹5
+2025-05-05 09:31:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.36 < ₹5
+2025-05-05 09:32:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.61 < ₹5
+2025-05-05 09:32:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.41 < ₹5
+2025-05-05 09:33:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.86 < ₹5
+2025-05-05 09:33:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.86 < ₹5
+2025-05-05 09:34:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-40.0 < ₹5
+2025-05-05 09:34:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-40.0 < ₹5
+2025-05-05 09:35:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-38.21 < ₹5
+2025-05-05 09:35:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-38.21 < ₹5
+2025-05-05 09:36:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-37.31 < ₹5
+2025-05-05 09:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-37.31 < ₹5
+2025-05-05 09:36:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-35.51 < ₹5
+2025-05-05 09:37:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-35.51 < ₹5
+2025-05-05 09:38:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.36 < ₹5
+2025-05-05 09:38:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.36 < ₹5
+2025-05-05 09:38:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.86 < ₹5
+2025-05-05 09:39:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.86 < ₹5
+2025-05-05 09:39:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.86 < ₹5
+2025-05-05 09:40:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.86 < ₹5
+2025-05-05 09:41:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.41 < ₹5
+2025-05-05 09:41:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.41 < ₹5
+2025-05-05 09:42:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.41 < ₹5
+2025-05-05 09:42:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.41 < ₹5
+2025-05-05 09:42:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-35.96 < ₹5
+2025-05-05 09:43:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.41 < ₹5
+2025-05-05 09:43:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-35.96 < ₹5
+2025-05-05 09:44:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-35.96 < ₹5
+2025-05-05 09:46:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.91 < ₹5
+2025-05-05 09:46:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.91 < ₹5
+2025-05-05 09:47:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.71 < ₹5
+2025-05-05 09:47:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.71 < ₹5
+2025-05-05 09:49:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-37.76 < ₹5
+2025-05-05 09:49:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-37.76 < ₹5
+2025-05-05 09:50:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.61 < ₹5
+2025-05-05 09:50:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.61 < ₹5
+2025-05-05 09:50:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.61 < ₹5
+2025-05-05 09:51:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.61 < ₹5
+2025-05-05 09:52:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.71 < ₹5
+2025-05-05 09:52:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.26 < ₹5
+2025-05-05 09:52:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-35.51 < ₹5
+2025-05-05 09:53:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-35.96 < ₹5
+2025-05-05 09:55:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.91 < ₹5
+2025-05-05 09:56:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.26 < ₹5
+2025-05-05 09:56:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.26 < ₹5
+2025-05-05 09:58:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.01 < ₹5
+2025-05-05 09:58:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.01 < ₹5
+2025-05-05 09:59:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.46 < ₹5
+2025-05-05 09:59:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.46 < ₹5
+2025-05-05 10:00:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.01 < ₹5
+2025-05-05 10:00:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:01:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:01:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:02:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-29.66 < ₹5
+2025-05-05 10:02:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-29.66 < ₹5
+2025-05-05 10:02:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.91 < ₹5
+2025-05-05 10:03:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.91 < ₹5
+2025-05-05 10:04:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.71 < ₹5
+2025-05-05 10:05:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.71 < ₹5
+2025-05-05 10:05:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-35.96 < ₹5
+2025-05-05 10:06:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-36.86 < ₹5
+2025-05-05 10:06:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.61 < ₹5
+2025-05-05 10:07:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-35.51 < ₹5
+2025-05-05 10:08:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.61 < ₹5
+2025-05-05 10:08:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.81 < ₹5
+2025-05-05 10:09:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.81 < ₹5
+2025-05-05 10:09:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.81 < ₹5
+2025-05-05 10:11:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.81 < ₹5
+2025-05-05 10:11:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.36 < ₹5
+2025-05-05 10:12:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.71 < ₹5
+2025-05-05 10:12:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-33.71 < ₹5
+2025-05-05 10:13:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.16 < ₹5
+2025-05-05 10:13:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.16 < ₹5
+2025-05-05 10:13:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.61 < ₹5
+2025-05-05 10:14:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.61 < ₹5
+2025-05-05 10:15:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.81 < ₹5
+2025-05-05 10:15:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-34.16 < ₹5
+2025-05-05 10:15:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.36 < ₹5
+2025-05-05 10:16:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.36 < ₹5
+2025-05-05 10:16:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.81 < ₹5
+2025-05-05 10:17:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.81 < ₹5
+2025-05-05 10:17:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.36 < ₹5
+2025-05-05 10:18:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-32.36 < ₹5
+2025-05-05 10:20:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.46 < ₹5
+2025-05-05 10:20:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.46 < ₹5
+2025-05-05 10:20:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.46 < ₹5
+2025-05-05 10:21:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.01 < ₹5
+2025-05-05 10:22:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.46 < ₹5
+2025-05-05 10:22:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.46 < ₹5
+2025-05-05 10:23:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.01 < ₹5
+2025-05-05 10:23:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.01 < ₹5
+2025-05-05 10:24:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.46 < ₹5
+2025-05-05 10:24:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.46 < ₹5
+2025-05-05 10:25:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.91 < ₹5
+2025-05-05 10:26:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.91 < ₹5
+2025-05-05 10:27:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.91 < ₹5
+2025-05-05 10:27:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 💸 Blocked by Net Profit Rule: ₹-31.46 < ₹5
+2025-05-05 10:28:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:28:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:28:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:29:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:29:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:30:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:31:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:31:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:32:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:32:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:32:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:33:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:34:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:34:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:35:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:35:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:36:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:36:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:37:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:38:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:40:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:40:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:41:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:42:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:42:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:43:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:43:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:44:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:45:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:45:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:46:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:46:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:47:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:47:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:48:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:48:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:49:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:50:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:51:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:51:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:52:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:52:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:53:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:53:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:54:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:54:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:55:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:56:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:56:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:57:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:57:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:58:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:58:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:59:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 10:59:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:00:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:00:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:01:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:01:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:02:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:02:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:03:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:03:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:05:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:05:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:06:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:06:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:07:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:07:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:09:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:09:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:10:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:10:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:10:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:11:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:11:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:12:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:13:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:13:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:14:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:14:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:15:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:15:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:16:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:17:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:17:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:18:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:18:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:19:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:19:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:19:11,force_exit.py,FORCED SELL,❌ FAILED,"POWERGRID - API Error: {'status': 'failure', 'remarks': {'error_code': 'DH-905', 'error_type': 'Input_Exception', 'error_message': 'Invalid SecurityId'}, 'data': ''}"
+2025-05-05 11:20:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:20:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:21:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:21:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:22:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:22:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:22:59,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:23:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:25:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:25:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:26:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:26:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:27:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:27:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:28:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:28:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:29:00,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:29:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:30:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:31:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:33:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:34:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:37:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:40:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:41:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:42:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:43:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:44:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:45:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:46:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:47:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:48:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:49:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:50:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:51:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:52:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:53:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:54:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:55:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:56:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:57:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:58:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 11:59:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:01:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:02:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:03:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:04:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:06:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:07:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:08:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:09:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:10:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:11:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:12:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:13:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:15:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:16:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:17:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:18:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:19:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:20:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:21:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:22:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:23:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:24:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:25:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:26:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:27:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:28:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:29:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:30:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:31:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:33:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:34:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:39:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:40:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:41:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:42:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:43:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:45:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:47:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:48:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:49:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:50:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:52:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:54:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:55:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:56:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:57:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:58:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 12:59:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:00:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:01:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:02:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:03:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:04:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:05:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:06:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:07:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:08:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:09:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:10:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:12:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:13:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:14:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:15:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:16:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:17:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:18:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:19:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:20:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:21:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:22:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:23:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:24:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:25:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:26:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:27:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:28:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:29:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:30:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:31:10,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:32:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:33:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:34:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:36:24,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:40:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:41:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:42:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:43:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:44:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:45:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:46:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:47:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:50:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:51:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:52:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:53:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:54:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:55:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:56:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:57:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:58:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 13:59:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:00:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:01:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:02:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:03:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:04:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:05:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:06:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:07:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:08:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:09:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:10:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:11:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:12:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:13:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:14:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:15:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:16:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:17:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:18:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:19:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:21:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:22:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:23:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:23:12,force_exit.py,FORCED SELL,❌ FAILED,"POWERGRID - API Error: {'status': 'success', 'remarks': '', 'data': {'orderId': '2125050548264', 'orderStatus': 'TRANSIT'}}"
+2025-05-05 14:24:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:25:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:26:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:27:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:28:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:29:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:30:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:31:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:32:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:33:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:34:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:40:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-05 14:41:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.

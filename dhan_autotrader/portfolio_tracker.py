@@ -130,24 +130,24 @@ def estimate_net_profit(buy_price, sell_price, quantity):
     return net_profit
 
 # ✅ Place sell order (Handles TEST_MODE internally)
-def place_sell_order(security_id, symbol, quantity):
+def place_sell_order(security_id, symbol, quantity, exchange_segment="NSE_EQ"):
     if TEST_MODE:
         print(f"🛠️ [TEST MODE] Simulating SELL order for {symbol}")
         return 200, {"order_id": "TEST_ORDER_ID_SELL"}
-    else:
-        try:
-            response = dhan.place_order(
-                security_id=security_id,
-                exchange_segment="NSE",
-                transaction_type="SELL",
-                quantity=quantity,
-                order_type="MARKET",
-                product_type="CNC",
-                price=0
-            )
-            return 200, response
-        except Exception as e:
-            return 500, {"error": str(e)}
+    try:
+        seg = dhan.NSE if exchange_segment.upper() == "NSE_EQ" else dhan.BSE
+        response = dhan.place_order(
+            security_id=security_id,
+            exchange_segment=seg,
+            transaction_type=dhan.SELL,
+            quantity=quantity,
+            order_type=dhan.MARKET,
+            product_type=dhan.CNC,
+            price=0
+        )
+        return 200, response
+    except Exception as e:
+        return 500, {"error": str(e)}
 
 # ✅ Fetch Trade Book
 def get_trade_book():
@@ -294,14 +294,24 @@ def check_portfolio():
             should_sell = True
 
         if should_sell and net_profit >= MINIMUM_NET_PROFIT_REQUIRED:
-            code, response = place_sell_order(security_id, symbol, quantity)
+            exchange_segment = "NSE_EQ"
+            code, response = place_sell_order(security_id, symbol, quantity, exchange_segment)
             if code == 200 and "order_id" in response:
-                systime.sleep(2)
                 order_id = response["order_id"]
-                trade_book = get_trade_book()
-                matching_trades = [trade for trade in trade_book if trade.get("order_id") == order_id]
+                max_retries = 5
+                trade_status = None
+                matching_trades = []
 
-                if matching_trades and matching_trades[0]["status"].upper() == "TRADED":
+                for _ in range(max_retries):
+                    trade_book = get_trade_book()
+                    matching_trades = [trade for trade in trade_book if trade.get("order_id") == order_id]
+                    if matching_trades:
+                        trade_status = matching_trades[0].get("status", "").upper()
+                        if trade_status == "TRADED":
+                            break
+                    systime.sleep(2)
+
+                if trade_status == "TRADED":
                     status = "SOLD"
                     exit_price = live_price
                     log_sell(symbol, security_id, quantity, live_price, reason)
@@ -309,10 +319,9 @@ def check_portfolio():
                     send_telegram_message(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit,2)}")
                     log_bot_action("portfolio_tracker.py", "SELL executed", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} | Reason: {reason}")
 
-                    # ✅ Trade Summary Alert
+                    # Summary
                     profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
                     profit_pct = round(((exit_price - buy_price) / buy_price) * 100, 2)
-
                     summary_msg = (
                         f"📊 Trade Summary ({datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')})\n"
                         f"Stock: {symbol}\n"
