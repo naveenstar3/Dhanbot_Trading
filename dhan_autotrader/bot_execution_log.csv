@@ -895,3 +895,10 @@ timestamp,script_name,action,status,message
 2025-05-05 14:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
 2025-05-05 14:40:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
 2025-05-05 14:41:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,POWERGRID | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-06 10:05:15,autotrade.py,startup,STARTED,AutoTrade script started.
+2025-05-06 10:06:49,autotrade.py,startup,STARTED,AutoTrade script started.
+2025-05-06 10:08:59,autotrade.py,end,NO TRADE,No stock bought today.
+2025-05-06 10:16:18,autotrade.py,startup,STARTED,AutoTrade script started.
+2025-05-06 10:18:20,autotrade.py,end,NO TRADE,No stock bought today.
+2025-05-06 10:24:17,autotrade.py,startup,STARTED,AutoTrade script started.
+2025-05-06 10:27:32,autotrade.py,end,NO TRADE,No stock bought today.

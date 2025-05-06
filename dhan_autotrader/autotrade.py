@@ -34,7 +34,7 @@ HEADERS = {
 # ✅ Bot Execution Logger
 def log_bot_action(script_name, action, status, message):
     log_file = "bot_execution_log.csv"
-    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
     headers = ["timestamp", "script_name", "action", "status", "message"]
 
     new_row = [now, script_name, action, status, message]
@@ -131,6 +131,7 @@ def has_open_position():
                         entry_date = datetime.strptime(ts_str, "%m/%d/%Y %H:%M").date()
                         if entry_date == today:
                             return True
+                            log_bot_action("autotrade.py", "HOLD check", "INFO", "Open position already exists. Skipping buy.")
                     except:
                         continue
     except FileNotFoundError:
@@ -229,6 +230,7 @@ def ml_momentum_predictor(momentum_5min, momentum_15min):
 # ✅ Part 4: AutoTrade Main Function
 
 def run_autotrade():
+    log_bot_action("autotrade.py", "startup", "STARTED", "AutoTrade script started.")
     print("🔍 Checking if market is open...")
     if not is_market_open():
         print("⏳ Market not open yet.")
@@ -265,6 +267,7 @@ def run_autotrade():
     # ✅ Check if GPT explicitly said SKIP
     if gpt_pick == "SKIP":
         send_telegram_message("⚠️ GPT advised to SKIP today. No safe stock to buy.")
+        log_bot_action("autotrade.py", "gpt_decision", "SKIP", "GPT advised to skip trading.")
         return
     
     # ✅ NEW: Capital-based Affordability Check
@@ -290,6 +293,7 @@ def run_autotrade():
     
     if not final_pick:
         send_telegram_message("⚠️ No affordable stocks found even after fallback. Skipping today.")
+        log_bot_action("autotrade.py", "stock_pick", "❌ SKIPPED", "No affordable stock found.")
         print("⚠️ No affordable stocks found. Skipping today's trade.")
         return
     
@@ -339,10 +343,11 @@ def run_autotrade():
     
     code, buy_response = place_buy_order_with_retry(payload, retries=1)
     
+    matching_trades = []
     if code == 200:
         send_telegram_message(f"✅ Bought {final_pick} at approx ₹{current_price}, Qty: {qty}")
         log_bot_action("autotrade.py", "BUY attempt", "✅ Success", f"Bought {final_pick} @ ₹{round(current_price, 2)}")
-        order_id = buy_response.get("order_id", "")
+        order_id = buy_response.get("orderId", "")
         systime.sleep(5)
         trade_book = get_trade_book()
         matching_trades = [t for t in trade_book if t.get("order_id") == order_id]
@@ -372,7 +377,9 @@ def run_autotrade():
         send_telegram_message(f"❌ Buy order failed for {final_pick}: {buy_response}")
 
 # ✅ Final Runner
-
 if __name__ == "__main__":
     dhan_symbol_map = load_dhan_master()
     run_autotrade()
+    
+    if not has_open_position():  # means no trade was executed
+        log_bot_action("autotrade.py", "end", "NO TRADE", "No stock bought today.")

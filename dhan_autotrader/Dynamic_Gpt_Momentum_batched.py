@@ -1,3 +1,14 @@
+
+from itertools import islice
+
+def batched(iterable, size):
+    it = iter(iterable)
+    while True:
+        batch = list(islice(it, size))
+        if not batch:
+            break
+        yield batch
+
 # 📄 File: Dynamic_Gpt_Momentum.py
 
 import pandas as pd
@@ -8,7 +19,6 @@ import pytz
 import json
 import os
 import time as systime
-
 
 # ✅ Load config.json (OpenAI Key inside)
 with open('D:/Downloads/Dhanbot/dhan_autotrader/config.json', 'r') as f:
@@ -32,10 +42,6 @@ def fetch_candle_data(symbol):
     try:
         now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
         start = now - datetime.timedelta(days=2)
-        
-        # First delay to avoid back-to-back calls
-        systime.sleep(1.2)
-
         data_5min = yf.download(
             tickers=f"{symbol}.NS",
             start=start.strftime('%Y-%m-%d'),
@@ -43,9 +49,6 @@ def fetch_candle_data(symbol):
             progress=False,
             auto_adjust=True
         )
-
-        systime.sleep(1.2)  # Second delay between 5m and 15m
-
         data_15min = yf.download(
             tickers=f"{symbol}.NS",
             start=start.strftime('%Y-%m-%d'),
@@ -53,7 +56,6 @@ def fetch_candle_data(symbol):
             progress=False,
             auto_adjust=True
         )
-
         return data_5min, data_15min
     except Exception as e:
         print(f"⚠️ Error fetching {symbol}: {e}")
