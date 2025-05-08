@@ -1,14 +1,3 @@
-
-from itertools import islice
-
-def batched(iterable, size):
-    it = iter(iterable)
-    while True:
-        batch = list(islice(it, size))
-        if not batch:
-            break
-        yield batch
-
 # 📄 File: Dynamic_Gpt_Momentum.py
 
 import pandas as pd
@@ -19,17 +8,11 @@ import pytz
 import json
 import os
 import time as systime
-import csv
-import requests
 
 
 # ✅ Load config.json (OpenAI Key inside)
 with open('D:/Downloads/Dhanbot/dhan_autotrader/config.json', 'r') as f:
     config = json.load(f)
-
-# ✅ Patch missing client_id to avoid KeyError
-if "client_id" not in config or not config["client_id"]:
-    config["client_id"] = "101123227287"
 
 OPENAI_API_KEY = config["openai_api_key"]
 
@@ -44,86 +27,38 @@ def load_dynamic_stocks():
 
 STOCKS_TO_WATCH = load_dynamic_stocks()
 
-def get_security_id(symbol):
-    try:
-        master_path = "D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv"
-        with open(master_path, newline='') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                for key in ["SM_SYMBOL_NAME", "SEM_CUSTOM_SYMBOL", "SEM_TRADING_SYMBOL"]:
-                    if row.get(key) and row[key].strip().upper() == symbol.strip().upper():
-                        return row["SEM_SMST_SECURITY_ID"]
-    except Exception as e:
-        print(f"⚠️ Failed to fetch security ID for {symbol}: {e}")
-    return None
-
 # ✅ Fetch Recent 5-min and 15-min Candles
 def fetch_candle_data(symbol):
     try:
-        security_id = get_security_id(symbol)
-        if not security_id:
-            print(f"⚠️ No security ID found for {symbol}")
-            return None, None
-
-        headers = {
-            "access-token": config["access_token"],
-            "client-id": config["client_id"],
-            "Content-Type": "application/json"
-        }
-
-        url = "https://api.dhan.co/v2/charts/intraday"
-        now = datetime.datetime.now()
-        from_date = (now - datetime.timedelta(days=2)).strftime('%Y-%m-%d')
-        to_date = now.strftime('%Y-%m-%d')
-
-        def fetch(interval):
-            payload = {
-                   "securityId": security_id,
-                   "exchangeSegment": "NSE_EQ",
-                   "instrument": "EQUITY",
-                   "interval": interval,
-                   "oi": False,
-                   "fromDate": from_date,
-                   "toDate": to_date
-               }
-            print(f"📤 Sending request for {symbol} [{interval}] with payload: {payload}")  
-            res = requests.post(url, headers=headers, json=payload)
-            
-            if res.status_code != 200:
-                print(f"❌ API request failed for {symbol} [{interval}] - Status: {res.status_code}")
-                print(f"🔎 Response text: {res.text}")
-                return None
-       
-            try:
-                response_json = res.json()
-                if "data" not in response_json or not response_json["data"]:
-                    print(f"⚠️ Empty or missing data in response for {symbol} [{interval}]")
-                    print(f"🔎 Full response: {response_json}")
-                    return None
-                data = pd.DataFrame(response_json["data"])
-                if data.empty:
-                    return None               
-                data.rename(columns={"open": "Open", "close": "Close", "volume": "Volume"}, inplace=True)
-                return data
-            except Exception as e:
-                print(f"⚠️ Failed parsing response for {symbol} [{interval}]: {e}")
-                return None
-
-        data_1 = fetch("1MIN")
-        if data_1 is not None:
-            used_data = data_1
-            used_interval = "1MIN"
-        else:
-            used_data = fetch("5MIN")
-            used_interval = "5MIN" if used_data is not None else "None"
-
-        print(f"✅ Used {used_interval} data for {symbol}")
-        return used_data, fetch("15MIN")
-
-    except Exception as e:
-        print(f"⚠️ Error fetching OHLC for {symbol}: {e}")
-        return None, None
+        now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+        start = now - datetime.timedelta(days=2)
         
+        # First delay to avoid back-to-back calls
+        systime.sleep(1.2)
+
+        data_5min = yf.download(
+            tickers=f"{symbol}.NS",
+            start=start.strftime('%Y-%m-%d'),
+            interval="5m",
+            progress=False,
+            auto_adjust=True
+        )
+
+        systime.sleep(1.2)  # Second delay between 5m and 15m
+
+        data_15min = yf.download(
+            tickers=f"{symbol}.NS",
+            start=start.strftime('%Y-%m-%d'),
+            interval="15m",
+            progress=False,
+            auto_adjust=True
+        )
+
+        return data_5min, data_15min
+    except Exception as e:
+        print(f"⚠️ Error fetching {symbol}: {e}")
+        return None, None
+
 # ✅ Prepare Live Intraday Data
 def prepare_data():
     records = []
@@ -149,8 +84,7 @@ def prepare_data():
                 "symbol": stock,
                 "5min_change_pct": change_pct_5m,
                 "volume_value": volume_value,
-                "trend_strength": trend_strength,
-                "interval_used": used_interval
+                "trend_strength": trend_strength
             }
             records.append(record)
             systime.sleep(1.5)
