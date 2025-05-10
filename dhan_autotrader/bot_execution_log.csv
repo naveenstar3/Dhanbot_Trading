@@ -908,3 +908,8 @@ timestamp,script_name,action,status,message
 2025-05-07 09:32:52,autotrade.py,end,NO TRADE,No stock bought today.
 2025-05-08 09:25:05,autotrade.py,startup,STARTED,AutoTrade script started.
 2025-05-08 09:25:29,autotrade.py,end,NO TRADE,No stock bought today.
+2025-05-09 17:53:50,autotrade.py,startup,STARTED,AutoTrade script started.
+2025-05-09 17:53:50,autotrade.py,market_status,INFO,"Market closed today, skipping trading."
+2025-05-09 17:53:50,autotrade.py,end,NO TRADE,No stock bought today.
+2025-05-10 10:48:18,autotrade.py,startup,STARTED,AutoTrade script started.
+2025-05-10 10:53:42,autotrade.py,end,NO TRADE,No stock bought today.
