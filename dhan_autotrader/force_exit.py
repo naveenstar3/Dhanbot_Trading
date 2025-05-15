@@ -1,3 +1,4 @@
+
 # 📂 force_exit.py — Final Version (Cleaned & Verified)
 
 import csv
@@ -80,6 +81,20 @@ def get_trade_book():
             print(f"⚠️ Exception during trade_book fetch: {e}")
             return []
 
+def estimate_net_profit(buy_price, sell_price, quantity):
+    gross_profit = (sell_price - buy_price) * quantity
+
+    brokerage_total = BROKERAGE_PER_ORDER * 2  # buy + sell
+    gst_on_brokerage = brokerage_total * (GST_PERCENTAGE / 100)
+    stt_sell = sell_price * quantity * (STT_PERCENTAGE / 100)
+    exchg_txn_charge = (buy_price + sell_price) * quantity * (EXCHANGE_TXN_CHARGE_PERCENTAGE / 100)
+    sebi_charge = (buy_price + sell_price) * quantity * (SEBI_CHARGE_PERCENTAGE / 100)
+
+    total_charges = brokerage_total + gst_on_brokerage + stt_sell + exchg_txn_charge + sebi_charge + DP_CHARGE_PER_SELL
+
+    net_profit = gross_profit - total_charges
+    return net_profit
+
 def force_exit():
     print("🚨 Starting Forced Exit check...")
 
@@ -153,7 +168,7 @@ def force_exit():
                 log_bot_action("force_exit.py", "FORCED SELL", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} (EOD Exit)")
 
                 buy_price = float(row.get("buy_price", 0))
-                net_profit = (live_price - buy_price) * quantity
+                net_profit = estimate_net_profit(buy_price, live_price, quantity)
                 profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
                 profit_pct = round(((live_price - buy_price) / buy_price) * 100, 2)
 

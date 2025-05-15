@@ -124,6 +124,33 @@ def fetch_candle_data(symbol):
         print(f"⚠️ Error fetching OHLC for {symbol}: {e}")
         return None, None
         
+def get_delivery_percentage(symbol):
+    try:
+        url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        session = requests.Session()
+        session.get("https://www.nseindia.com", headers=headers)
+        response = session.get(url, headers=headers)
+        data = response.json()
+        dp = data["securityWiseDP"]
+        delivery_qty = int(dp["deliveredQuantity"])
+        traded_qty = int(dp["tradedQuantity"])
+        if traded_qty == 0:
+            return 0
+        return round((delivery_qty / traded_qty) * 100, 2)
+    except Exception as e:
+        print(f"⚠️ Delivery % fetch failed for {symbol}: {e}")
+        return 0
+
+def calculate_rsi(close_prices, period=14):
+    delta = close_prices.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+        
 # ✅ Prepare Live Intraday Data
 def prepare_data():
     records = []
@@ -132,25 +159,44 @@ def prepare_data():
         if data_5 is None or data_5.empty or data_15 is None or data_15.empty:
             continue
         try:
-            if data_5['Open'].empty or data_5['Close'].empty or data_5['Volume'].empty:
-                continue
-            open_price = data_5['Open'].iloc[-1].item()
-            close_price = data_5['Close'].iloc[-1].item()
-            volume_value = data_5['Volume'].iloc[-1].item()
+            open_price = data_5['Open'].iloc[-1]
+            close_price = data_5['Close'].iloc[-1]
+            volume_value = data_5['Volume'].iloc[-1]
             change_pct_5m = round(((close_price - open_price) / open_price) * 100, 2)
 
             last_5_candles = data_15.tail(5)
             trend_strength = "Strong" if all(
-                last_5_candles['Close'].iloc[i].item() > last_5_candles['Open'].iloc[i].item()
-                    for i in range(len(last_5_candles))
+                last_5_candles['Close'].iloc[i] > last_5_candles['Open'].iloc[i]
+                for i in range(len(last_5_candles))
             ) else "Weak"
-            
+
+            # Gap-up check
+            prev_close = data_5['Close'].iloc[-2]
+            gap_pct = round(((open_price - prev_close) / prev_close) * 100, 2)
+
+            # RSI Calculation
+            rsi_series = calculate_rsi(data_5['Close'])
+            rsi = round(rsi_series.iloc[-1], 2) if not rsi_series.empty else 0
+
+            # Delivery %
+            delivery = get_delivery_percentage(stock)
+
+            # Momentum Score (custom ML style)
+            momentum_score = round((change_pct_5m * 0.6 + gap_pct * 0.2 + delivery * 0.2), 2)
+
+            if delivery < 30 or rsi > 70 or gap_pct > 5:
+                print(f"❌ Filtered {stock}: Delivery={delivery}%, RSI={rsi}, Gap={gap_pct}%")
+                continue
+
             record = {
                 "symbol": stock,
                 "5min_change_pct": change_pct_5m,
-                "volume_value": volume_value,
+                "gap_pct": gap_pct,
+                "delivery_pct": delivery,
+                "rsi": rsi,
                 "trend_strength": trend_strength,
-                "interval_used": used_interval
+                "momentum_score": momentum_score,
+                "volume_value": volume_value
             }
             records.append(record)
             systime.sleep(1.5)
@@ -165,20 +211,22 @@ def ask_gpt_to_pick_stock(df):
     openai.api_key = OPENAI_API_KEY
     try:
         prompt = f"""
-You are an expert intraday stock trading advisor.
-Analyze the following stock data carefully:
+You are a smart intraday momentum advisor.
+
+Analyze the following stock data:
 
 {df.to_string(index=False)}
 
 Rules:
-- Prefer 'Strong' trend_strength
-- Prefer 5min_change_pct > 0.20%
-- Volume must be meaningful (volume_value > 500000 ideally)
-- Avoid 'Weak' stocks even if % is high
-- If all stocks are risky, reply "SKIP".
+- Strong trend_strength is preferred
+- delivery_pct must be ≥ 30
+- RSI must be < 70
+- Avoid gap_pct > 5%
+- Prefer high momentum_score
+- Avoid if 5min_change_pct < 0.2
+- If all risky, reply "SKIP"
 
-Pick exactly one safest stock to BUY.
-Reply strictly with stock symbol (example: INFY) or "SKIP".
+Reply with ONE stock symbol to buy, or "SKIP"
 """
         response = openai.chat.completions.create(
             model="gpt-4o",

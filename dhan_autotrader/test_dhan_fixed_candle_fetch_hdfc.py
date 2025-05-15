@@ -3,7 +3,7 @@ import requests
 import datetime
 
 # Constants
-ACCESS_TOKEN = "************"
+ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzQ4MDcyMDEzLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwNjg1NzM1OSJ9.ISl7D5ixliWbjnpWQwSXOXJToLpJ8FEGCIIwZTCKPCk6pOGnrO74jQa1SvZpsHhAm7tC1vjwnK1tH8vXaqoQaQ"
 CLIENT_ID = "1106857359"
 
 HEADERS = {
@@ -19,12 +19,12 @@ payload = {
     "instrument": "EQUITY",
     "interval": "5",  # 5-min candle
     "oi": False,
-    "fromDate": "2025-03-01",
-    "toDate": "2025-05-13"
+    "fromDate": "2025-05-06",
+    "toDate": "2025-05-08"
 }
 
 def fetch_intraday_data():
-    url = "https://api.dhan.co/market/intraday"
+    url = "https://api.dhan.co/v2/charts/intraday"
     print("🔍 Fetching intraday 5-min candle data...")
     response = requests.post(url, headers=HEADERS, json=payload)
     

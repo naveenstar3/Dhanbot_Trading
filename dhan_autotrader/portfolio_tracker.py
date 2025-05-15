@@ -207,12 +207,33 @@ def should_exit_early(symbol, current_price):
         if now.hour >= 14 and now.minute >= 45:
             if (peak_change - current_change) >= 0.4:
                 return True
+
+        # ✅ RSI check using Dhan historical API
+        from dhan_api import get_historical_price
+        security_id = get_security_id(symbol)
+        candles = get_historical_price(security_id, interval="5m", limit=30)
+        if candles:
+            import pandas as pd
+            df = pd.DataFrame(candles)
+            rsi_series = calculate_rsi(df['close'])
+            if not rsi_series.empty and rsi_series.iloc[-1] > 70:
+                print(f"⚠️ RSI triggered exit: {symbol} has RSI {round(rsi_series.iloc[-1], 2)}")
+                return True
+
         return False
 
     except Exception as e:
         print(f"⚠️ Error in early exit check for {symbol}: {e}")
         return False
 
+def calculate_rsi(close_prices, period=14):
+    delta = close_prices.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
 
 # ✅ Main Portfolio Evaluation
 def check_portfolio():

@@ -1,5 +1,6 @@
 
 import requests
+import datetime
 
 # Constants
 ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzQ4MDcyMDEzLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwNjg1NzM1OSJ9.ISl7D5ixliWbjnpWQwSXOXJToLpJ8FEGCIIwZTCKPCk6pOGnrO74jQa1SvZpsHhAm7tC1vjwnK1tH8vXaqoQaQ"
@@ -11,22 +12,21 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-# RELIANCE = 2885, replace with other IDs as needed
 payload = {
-    "securityId": "2885",
+    "securityId": "1333",
     "exchangeSegment": "NSE_EQ",
     "instrument": "EQUITY",
-    "interval": "5MIN",
-    "oi": False,
-    "fromDate": "2025-03-01",
-    "toDate": "2025-05-13"
-}
+    "interval": "1",
+    "oi": "false",
+    "fromDate": "2024-09-11 09:30:00",
+    "toDate": "2024-09-15 13:00:00"
+    }
 
 def fetch_intraday_data():
     url = "https://api.dhan.co/v2/charts/intraday"
     print("🔍 Fetching intraday 5-min candle data...")
     response = requests.post(url, headers=HEADERS, json=payload)
-
+    
     if response.status_code == 200:
         data = response.json()
         candles = data.get("data", [])

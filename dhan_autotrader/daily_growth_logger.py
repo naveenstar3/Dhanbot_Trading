@@ -26,6 +26,23 @@ def estimate_net_profit(buy_price, sell_price, quantity):
     net_profit = gross_profit - total_charges
     return net_profit
 
+# ✅ Check if today is 1st trading day of the month
+def is_first_trading_day():
+    today = datetime.now()
+    if today.day != 1:
+        return False
+
+    try:
+        with open(PORTFOLIO_LOG, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get("status", "").strip().upper() == "SOLD":
+                    return True
+    except:
+        return False
+
+    return False
+
 # ✅ Main function to update growth_log
 def update_growth_log():
     today = datetime.now().strftime("%Y-%m-%d")
@@ -68,6 +85,11 @@ def update_growth_log():
     if not trade_found:
         print("⏹️ No trades closed today. Skipping growth log update.")
         return
+
+    # 💸 Deduct monthly subscription on first trading day
+    if is_first_trading_day():
+        print("💸 Deducting ₹588.82 for monthly subscription (first trading day)")
+        total_realized_profit -= 588.82
 
     total_realized_profit = round(total_realized_profit, 2)
     capital_after_exit = starting_capital
