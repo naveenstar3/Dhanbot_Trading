@@ -1,6 +1,8 @@
 import subprocess
 import datetime
 import glob
+from utils_logger import log_bot_action
+
 
 def push_to_github(file_patterns):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -28,11 +30,13 @@ def push_to_github(file_patterns):
 
         if "nothing to commit" in commit_result.stdout.lower():
             print("⚠️ No new changes detected. Nothing to push.")
+            log_bot_action("git_sync.py", "Git Push", "⚠️ SKIPPED", "No new file changes")
             return
 
         print("🚀 Pushing to GitHub...")
         subprocess.run(["git", "push"], check=True)
         print(f"✅ Git push successful for: {files_to_push}")
+        log_bot_action("git_sync.py", "Git Push", "✅ COMPLETE", f"{len(files_to_push)} file(s) pushed")
 
     except subprocess.CalledProcessError as e:
         print(f"❌ Git command failed: {e}")

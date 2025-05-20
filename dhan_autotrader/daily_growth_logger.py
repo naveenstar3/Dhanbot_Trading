@@ -2,6 +2,7 @@ import csv
 import json
 from datetime import datetime
 from config import *
+from utils_logger import log_bot_action
 
 # ✅ Load Dhan credentials
 with open("dhan_config.json") as f:
@@ -83,6 +84,7 @@ def update_growth_log():
                 print(f"✅ Sold {symbol}: Net Profit ₹{round(net_profit,2)} after charges")
 
     if not trade_found:
+        log_bot_action("daily_growth_logger.py", "Growth Log Skipped", "⏹️ NO TRADE", "No SELL trade found for today")
         print("⏹️ No trades closed today. Skipping growth log update.")
         return
 
@@ -128,7 +130,8 @@ def update_growth_log():
             f.write(str(capital_after_exit))
     except Exception as e:
         print(f"❌ Error updating current_capital.csv: {e}")
-
+        
+    log_bot_action("daily_growth_logger.py", "Growth Log Update", "✅ COMPLETE", f"Profit: ₹{total_realized_profit} | Capital: ₹{capital_after_exit}")
     print("✅ Growth Log updated successfully.")
 
 if __name__ == "__main__":

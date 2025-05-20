@@ -21,6 +21,7 @@ import os
 import time as systime
 import csv
 import requests
+from utils_logger import log_bot_action
 
 
 # ✅ Load config.json (OpenAI Key inside)
@@ -153,6 +154,7 @@ def calculate_rsi(close_prices, period=14):
         
 # ✅ Prepare Live Intraday Data
 def prepare_data():
+    log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "START", "Preparing momentum + delivery + RSI")
     records = []
     for stock in STOCKS_TO_WATCH:
         data_5, data_15 = fetch_candle_data(stock)
@@ -203,9 +205,16 @@ def prepare_data():
         except Exception as e:
             print(f"⚠️ Error processing {stock}: {e}")
             continue
+       
     df = pd.DataFrame(records)
-    return df
 
+    if df.empty:
+        log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "❌ EMPTY", "No stocks passed filters")
+    else:
+        log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "✅ COMPLETE", f"{len(df)} stocks processed")
+    
+    return df
+    
 # ✅ Ask GPT to Pick Best Stock
 def ask_gpt_to_pick_stock(df):
     openai.api_key = OPENAI_API_KEY
@@ -233,6 +242,10 @@ Reply with ONE stock symbol to buy, or "SKIP"
             messages=[{"role": "user", "content": prompt}]
         )
         decision = response.choices[0].message.content.strip().upper()
+        if decision == "SKIP":
+            log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_pick_stock", "⚠️ GPT SKIP", "GPT advised to skip")
+        else:
+            log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_pick_stock", "✅ SELECT", f"GPT selected: {decision}")       
         return decision
     except Exception as e:
         print(f"⚠️ Error with GPT selection: {e}")

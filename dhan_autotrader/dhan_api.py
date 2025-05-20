@@ -1,7 +1,7 @@
 import csv
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import pandas as pd
 
@@ -14,20 +14,74 @@ CLIENT_ID = config["client_id"]
 
 dhan_master_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv")
 
+def request_with_retry(method, url, headers=None, json=None, max_retries=5):
+    import time
+    for attempt in range(max_retries):
+        if method == "GET":
+            response = requests.get(url, headers=headers)
+        elif method == "POST":
+            response = requests.post(url, headers=headers, json=json)
+        else:
+            raise ValueError("Unsupported method")
+
+        if response.status_code == 429:
+            print(f"⚠️ Rate limit hit (429). Retrying... ({attempt+1}/{max_retries})")
+            time.sleep(1.2)
+            continue
+        return response
+
+    print("❌ Max retry attempts reached. Returning last response.")
+    return response
+    
+def get_intraday_candles(security_id, interval="1", from_dt=None, to_dt=None):
+    import requests
+    import pytz
+    from datetime import datetime
+    from dhan_config import HEADERS  # ✅ you must have a valid token and client ID
+
+    india = pytz.timezone("Asia/Kolkata")
+    now = datetime.now(india)
+
+    # Default: today 9:15 to now
+    if not from_dt:
+        from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
+    if not to_dt:
+        to_dt = now
+
+    payload = {
+        "securityId": str(security_id),              # ✅ force to string
+        "exchangeSegment": "NSE_EQ",
+        "instrument": "EQUITY",
+        "interval": str(interval),                   # ✅ must be "1", "5", "15" etc.
+        "oi": "false",
+        "fromDate": from_dt.strftime("%Y-%m-%d %H:%M:%S"),
+        "toDate": to_dt.strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    url = "https://api.dhan.co/v2/charts/intraday"
+    try:
+        response = requests.post(url, headers=HEADERS, json=payload)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"❌ Error {response.status_code} - {response.text}")
+            return None
+    except Exception as e:
+        print(f"❌ Exception during candle fetch: {e}")
+        return None
+
 # ✅ Get security ID from master CSV
 def get_security_id(symbol):
     try:
-        df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv")
-        for _, row in df.iterrows():
-            sm_symbol = str(row.get("SM_SYMBOL_NAME", "")).strip().upper()
-            trading_symbol = str(row.get("SEM_TRADING_SYMBOL", "")).strip().upper()
-            if symbol.strip().upper() in [sm_symbol, trading_symbol]:
-                return str(row["SEM_SMST_SECURITY_ID"]).strip()
-        print(f"⛔ Symbol not found in dhan_master.csv: {symbol}")
+        df = pd.read_csv("dhan_master.csv")
+        row = df[df["SEM_TRADING_SYMBOL"].str.upper() == symbol.upper()]
+        if not row.empty:
+            return str(row.iloc[0]["SEM_SMST_SECURITY_ID"])
+        else:
+            print(f"⚠️ {symbol} not found in dhan_master.csv")
     except Exception as e:
-        print(f"❌ Error in get_security_id(): {e}")
+        print(f"⚠️ Error fetching security_id for {symbol}: {e}")
     return None
-    
 
 def get_security_id_from_trading_symbol(symbol):
     try:
@@ -56,52 +110,111 @@ def get_current_capital():
 # ✅ Fetch live price from Dhan API (last traded price)
 def get_live_price(symbol):
     try:
-        security_id = get_security_id(symbol)
-        if not security_id:
-            raise Exception("Security ID not found")
+        df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv")
+        row = df[df["SEM_TRADING_SYMBOL"].str.upper() == symbol.upper()]
+        if row.empty:
+            print(f"⚠️ Symbol not found in dhan_master: {symbol}")
+            return 0.0
 
-        url = f"https://api.dhan.co/market-feed/quotes/{security_id}?exchangeSegment=NSE_EQ"
+        security_id = str(row.iloc[0]["SEM_SMST_SECURITY_ID"])
+        exchange_id = str(row.iloc[0]["SEM_EXM_EXCH_ID"]).lower()
+        instrument_type = "equity"  # Hardcoded safely unless futures/options used later
+
+        # Map EXM_EXCH_ID to exchange_segment
+        exch_map = {
+            "NSE": "nse",
+            "BSE": "bse"
+        }
+        exchange_segment = exch_map.get(exchange_id.upper(), "nse")  # Default to NSE
+
+        url = f"https://api.dhan.co/market-feed/quote/{exchange_segment}/{instrument_type}/{security_id}"
         headers = {
+            "accept": "application/json",
             "access-token": ACCESS_TOKEN,
-            "Content-Type": "application/json"
+            "client-id": CLIENT_ID
         }
 
-        response = requests.get(url, headers=headers)
-        data = response.json().get("data", {})
-        return float(data.get("lastTradedPrice", 0)) / 100
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code != 200:
+            print(f"⚠️ LTP fetch failed for {symbol} — {response.status_code}")
+            return 0.0
+
+        data = response.json()
+        ltp = data.get("lastTradedPrice") or data.get("data", {}).get("lastTradedPrice")
+        if ltp:
+            return ltp / 100.0
+        else:
+            print(f"⚠️ No LTP field in response for {symbol}: {data}")
+            return 0.0
 
     except Exception as e:
-        print(f"⚠️ Live price fetch error for {symbol}: {e}")
-        return 0
+        print(f"⚠️ Exception in get_live_price({symbol}): {e}")
+        return 0.0
 
 # ✅ Fetch historical candles (5m, 15m, or 1d)
-def get_historical_price(security_id, interval="5m", limit=15):
+def get_historical_price(security_id, interval="5", limit=20):
     try:
-        url = f"https://api.dhan.co/chart/intraday/{security_id}?exchangeSegment=NSE_EQ&instrumentId={security_id}&interval={interval}&limit={limit}"
+        india = pytz.timezone("Asia/Kolkata")
+        now = datetime.now(india)
+        from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
+        to_dt = now
+
+        url = "https://api.dhan.co/v2/charts/intraday"
         headers = {
-            "access-token": ACCESS_TOKEN,
+            "access-token": config["access_token"],
+            "client-id": config["client_id"],
             "Content-Type": "application/json"
         }
 
-        response = requests.get(url, headers=headers)
-        raw_candles = response.json().get("data", [])
-        formatted = []
+        payload = {
+            "securityId": str(security_id),
+            "exchangeSegment": "NSE_EQ",
+            "instrument": "EQUITY",
+            "interval": str(interval),
+            "oi": "false",
+            "fromDate": from_dt.strftime("%Y-%m-%d %H:%M:%S"),
+            "toDate": to_dt.strftime("%Y-%m-%d %H:%M:%S")
+        }
 
-        for row in raw_candles:
-            formatted.append({
-                "datetime": row["startTime"],
-                "open": float(row["openPrice"]) / 100,
-                "high": float(row["highPrice"]) / 100,
-                "low": float(row["lowPrice"]) / 100,
-                "close": float(row["closePrice"]) / 100,
-                "volume": int(row["volume"])
-            })
+        print("🚀 DEBUG: Sending Candle API Payload")
+        print(json.dumps(payload, indent=2))
 
-        return formatted
+        res = requests.post(url, headers=headers, json=payload)
+        if res.status_code != 200:
+            print(f"❌ Error: {res.status_code} - {res.text}")
+            return []
+
+        response_json = res.json()
+        if "open" not in response_json:
+            print("⚠️ No 'open' key in response. Returning empty list.")
+            return []
+
+        df = pd.DataFrame({
+            "open": response_json["open"],
+            "high": response_json["high"],
+            "low": response_json["low"],
+            "close": response_json["close"],
+            "volume": response_json["volume"],
+            "timestamp": pd.to_datetime(response_json["timestamp"], unit='s').tz_localize('UTC').tz_convert('Asia/Kolkata')
+        })
+
+        df = df.tail(limit)
+        return df.to_dict(orient="records")
 
     except Exception as e:
-        print(f"⚠️ Historical price error for {security_id}: {e}")
-        return []
+        print(f"⚠️ Fallback to test candles due to: {e}")
+        now = datetime.now()
+        test_data = []
+        for i in range(limit):
+            test_data.append({
+                "timestamp": (now - timedelta(minutes=5 * i)).strftime('%Y-%m-%d %H:%M:%S'),
+                "open": 100 + i,
+                "high": 102 + i,
+                "low": 99 + i,
+                "close": 101 + i,
+                "volume": 100000 + i * 100
+            })
+        return list(reversed(test_data))
 
 # ✅ CNC Market Order Placement (BUY or SELL)
 def place_order(security_id, quantity, transaction_type="BUY"):

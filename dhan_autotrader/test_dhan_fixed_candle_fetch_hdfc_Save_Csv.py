@@ -22,8 +22,8 @@ payload = {
     "instrument": "EQUITY",
     "interval": "1",  # 1-min candles
     "oi": "false",
-    "fromDate": "2025-05-12 09:30:00",
-    "toDate": "2025-05-13 15:30:00"
+    "fromDate": "2025-05-19 09:30:00",
+    "toDate": "2025-05-19 15:30:00"
 }
 
 def fetch_and_save_intraday_csv():

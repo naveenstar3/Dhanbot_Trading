@@ -6,7 +6,7 @@ import os
 import pytz
 import time as systime
 from dhanhq import DhanContext, dhanhq
-from dhan_api import get_live_price
+from dhan_api import get_live_price, get_intraday_candles
 from config import *
 from utils_logger import log_bot_action
 
@@ -211,7 +211,13 @@ def should_exit_early(symbol, current_price):
         # ✅ RSI check using Dhan historical API
         from dhan_api import get_historical_price
         security_id = get_security_id(symbol)
-        candles = get_historical_price(security_id, interval="5m", limit=30)
+        raw_data = get_intraday_candles(security_id, interval="5")
+        if raw_data and "close" in raw_data:
+            import pandas as pd
+            df = pd.DataFrame({
+                "close": raw_data["close"]
+            })
+            rsi_series = calculate_rsi(df["close"])
         if candles:
             import pandas as pd
             df = pd.DataFrame(candles)

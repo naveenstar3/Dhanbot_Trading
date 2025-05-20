@@ -1,53 +1,56 @@
 import requests
+import json
 import datetime
-import logging
+import pytz
 
-# ✅ Setup logging (as requested by Dhan support)
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+# Load credentials directly from dhan_config.json
+with open("dhan_config.json", "r") as file:
+    config = json.load(file)
 
-# Constants
-ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzQ4MDcyMDEzLCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwNjg1NzM1OSJ9.ISl7D5ixliWbjnpWQwSXOXJToLpJ8FEGCIIwZTCKPCk6pOGnrO74jQa1SvZpsHhAm7tC1vjwnK1tH8vXaqoQaQ"
-CLIENT_ID = "1106857359"
+access_token = config["access_token"]
+client_id = config["client_id"]
 
-HEADERS = {
-    "access-token": ACCESS_TOKEN,
-    "client-id": CLIENT_ID,
+# Fixed parameters for testing HDFC
+security_id = "1333"  # HDFCBANK security ID (known working)
+exchange_segment = "NSE_EQ"
+instrument = "EQUITY"
+interval = "15"
+oi = "false"
+
+# Generate candle time range
+ist = pytz.timezone("Asia/Kolkata")
+now = datetime.datetime.now(ist)
+from_time = now.replace(hour=9, minute=15, second=0, microsecond=0)
+to_time = now.strftime("%Y-%m-%d %H:%M:%S")
+from_time_str = from_time.strftime("%Y-%m-%d %H:%M:%S")
+
+# Prepare request
+url = "https://api.dhan.co/v2/charts/intraday"
+headers = {
+    "access-token": access_token,
+    "client-id": client_id,
     "Content-Type": "application/json"
 }
-
 payload = {
-    "securityId": "1333",  # Replace with a valid known ID if needed
-    "exchangeSegment": "NSE_EQ",
-    "instrument": "EQUITY",
-    "interval": "1",
-    "oi": "false",
-    "fromDate": "2025-05-12 09:30:00",
-    "toDate": "2025-05-13 13:00:00"
+    "securityId": security_id,
+    "exchangeSegment": exchange_segment,
+    "instrument": instrument,
+    "interval": interval,
+    "oi": oi,
+    "fromDate": from_time_str,
+    "toDate": to_time
 }
 
-def fetch_intraday_data():
-    url = "https://api.dhan.co/v2/charts/intraday"
-    logging.info("🔍 Fetching intraday 5-min candle data...")
-    logging.debug(f"Request URL: {url}")
-    logging.debug(f"Request Headers: {HEADERS}")
-    logging.debug(f"Request Payload: {payload}")
+print("🚀 Sending payload:")
+print(json.dumps(payload, indent=2))
 
-    try:
-        response = requests.post(url, headers=HEADERS, json=payload)
-        logging.debug(f"Response Status: {response.status_code}")
-        logging.debug(f"Response Body: {response.text}")
+# Execute request
+response = requests.post(url, headers=headers, json=payload)
 
-        if response.status_code == 200:
-            data = response.json()
-            candles = data.get("data", [])
-            print(f"✅ Received {len(candles)} candles.")
-            for row in candles[:5]:
-                print(row)
-        else:
-            print(f"❌ Error {response.status_code}: {response.text}")
-
-    except Exception as e:
-        logging.exception("❌ Exception while fetching candle data:")
-
-if __name__ == "__main__":
-    fetch_intraday_data()
+# Show result
+if response.status_code == 200:
+    print("✅ Success")
+    print(json.dumps(response.json(), indent=2))
+else:
+    print(f"❌ Error: {response.status_code}")
+    print(response.text)
