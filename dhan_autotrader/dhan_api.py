@@ -97,15 +97,18 @@ def get_security_id_from_trading_symbol(symbol):
 
 def get_current_capital():
     try:
-        df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv")
-        if "capital" in df.columns and not df.empty:
-            return float(df["capital"].iloc[0])
-        else:
-            print("⚠️ current_capital.csv missing 'capital' column or empty.")
-            return 0
+        path = "D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv"
+        df = pd.read_csv(path, header=None)
+
+        capital = float(df.iloc[0, 0])
+        if capital <= 0:
+            raise ValueError("Capital must be greater than 0")
+
+        return capital
+
     except Exception as e:
-        print(f"⚠️ Failed to load capital: {e}")
-        return 0
+        print(f"❌ Error reading current_capital.csv: {e}")
+        raise SystemExit("🛑 Halting: current_capital.csv must contain a valid capital value in A1")
 
 # ✅ Fetch live price from Dhan API (last traded price)
 def get_live_price(symbol):
