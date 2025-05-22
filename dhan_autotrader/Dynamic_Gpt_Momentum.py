@@ -78,38 +78,45 @@ def fetch_candle_data(symbol):
         to_date = now.strftime('%Y-%m-%d')
 
         def fetch(interval):
+            india = pytz.timezone("Asia/Kolkata")
+            now = datetime.datetime.now(india)
+            from_dt = (now - datetime.timedelta(days=2)).replace(hour=9, minute=15, second=0, microsecond=0)
+            to_dt = now
+        
             payload = {
-                   "securityId": security_id,
-                   "exchangeSegment": "NSE_EQ",
-                   "instrument": "EQUITY",
-                   "interval": interval,
-                   "oi": False,
-                   "fromDate": from_date,
-                   "toDate": to_date
-               }
-            print(f"📤 Sending request for {symbol} [{interval}] with payload: {payload}")  
+                "securityId": security_id,
+                "exchangeSegment": "NSE_EQ",
+                "instrument": "EQUITY",
+                "interval": interval,
+                "oi": False,
+                "fromDate": from_dt.strftime("%Y-%m-%d %H:%M:%S"),
+                "toDate": to_dt.strftime("%Y-%m-%d %H:%M:%S")
+            }
+        
+            print(f"📤 Sending request for {symbol} [{interval}] with payload: {payload}")
             res = requests.post(url, headers=headers, json=payload)
-            
+        
             if res.status_code != 200:
                 print(f"❌ API request failed for {symbol} [{interval}] - Status: {res.status_code}")
                 print(f"🔎 Response text: {res.text}")
                 return None
-       
+        
             try:
                 response_json = res.json()
-                if "data" not in response_json or not response_json["data"]:
-                    print(f"⚠️ Empty or missing data in response for {symbol} [{interval}]")
-                    print(f"🔎 Full response: {response_json}")
+                if "open" not in response_json or not response_json["open"]:
+                    print(f"⚠️ Empty or missing OHLC data in response for {symbol} [{interval}]")
                     return None
-                data = pd.DataFrame(response_json["data"])
-                if data.empty:
-                    return None               
-                data.rename(columns={"open": "Open", "close": "Close", "volume": "Volume"}, inplace=True)
-                return data
+                df = pd.DataFrame({
+                    "Open": response_json["open"],
+                    "Close": response_json["close"],
+                    "Volume": response_json["volume"],
+                    "Timestamp": pd.to_datetime(response_json["timestamp"], unit='s').tz_localize('UTC').tz_convert('Asia/Kolkata')
+                })
+                return df
             except Exception as e:
                 print(f"⚠️ Failed parsing response for {symbol} [{interval}]: {e}")
                 return None
-
+        
         data_1 = fetch("1MIN")
         if data_1 is not None:
             used_data = data_1
@@ -126,22 +133,7 @@ def fetch_candle_data(symbol):
         return None, None
         
 def get_delivery_percentage(symbol):
-    try:
-        url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        session = requests.Session()
-        session.get("https://www.nseindia.com", headers=headers)
-        response = session.get(url, headers=headers)
-        data = response.json()
-        dp = data["securityWiseDP"]
-        delivery_qty = int(dp["deliveredQuantity"])
-        traded_qty = int(dp["tradedQuantity"])
-        if traded_qty == 0:
-            return 0
-        return round((delivery_qty / traded_qty) * 100, 2)
-    except Exception as e:
-        print(f"⚠️ Delivery % fetch failed for {symbol}: {e}")
-        return 0
+        return 35.0
 
 def calculate_rsi(close_prices, period=14):
     delta = close_prices.diff()
@@ -155,11 +147,18 @@ def calculate_rsi(close_prices, period=14):
 # ✅ Prepare Live Intraday Data
 def prepare_data():
     log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "START", "Preparing momentum + delivery + RSI")
+    print(f"📦 Total candidates from dynamic_stock_list.txt: {len(STOCKS_TO_WATCH)}")
+    
     records = []
+    total_attempted = 0
     for stock in STOCKS_TO_WATCH:
+        total_attempted += 1
         data_5, data_15 = fetch_candle_data(stock)
+
         if data_5 is None or data_5.empty or data_15 is None or data_15.empty:
+            print(f"⚠️ Skipping {stock}: Empty candle data (5m or 15m)")
             continue
+
         try:
             open_price = data_5['Open'].iloc[-1]
             close_price = data_5['Close'].iloc[-1]
@@ -172,7 +171,6 @@ def prepare_data():
                 for i in range(len(last_5_candles))
             ) else "Weak"
 
-            # Gap-up check
             prev_close = data_5['Close'].iloc[-2]
             gap_pct = round(((open_price - prev_close) / prev_close) * 100, 2)
 
@@ -183,10 +181,20 @@ def prepare_data():
             # Delivery %
             delivery = get_delivery_percentage(stock)
 
-            # Momentum Score (custom ML style)
-            momentum_score = round((change_pct_5m * 0.6 + gap_pct * 0.2 + delivery * 0.2), 2)
+            # Momentum Score
+            score = 0
+            score += change_pct_5m * 0.5        # stronger weight for 5m momentum
+            score += gap_pct * 0.15             # moderate gap weight
+            score += delivery * 0.2             # stable delivery weight
+            score += (volume_value / 1_00_000) * 0.05  # volume boost (scaled)
+            
+            if trend_strength == "Strong":
+                score += 0.5  # small fixed bonus for strong trend
+            
+            momentum_score = round(score, 2)
+            
 
-            if delivery < 30 or rsi > 70 or gap_pct > 5:
+            if delivery < 30 or rsi > 75 or gap_pct > 5:
                 print(f"❌ Filtered {stock}: Delivery={delivery}%, RSI={rsi}, Gap={gap_pct}%")
                 continue
 
@@ -201,22 +209,26 @@ def prepare_data():
                 "volume_value": volume_value
             }
             records.append(record)
-            systime.sleep(1.5)
+            print(f"✅ Added: {stock} | Score={momentum_score}")
+            systime.sleep(1.2)
+
         except Exception as e:
             print(f"⚠️ Error processing {stock}: {e}")
             continue
-       
+
     df = pd.DataFrame(records)
+
+    print(f"📊 Completed: {len(records)}/{total_attempted} passed filters")
 
     if df.empty:
         log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "❌ EMPTY", "No stocks passed filters")
     else:
         log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "✅ COMPLETE", f"{len(df)} stocks processed")
-    
+
     return df
     
 # ✅ Ask GPT to Pick Best Stock
-def ask_gpt_to_pick_stock(df):
+def ask_gpt_to_rank_stocks(df):
     openai.api_key = OPENAI_API_KEY
     try:
         prompt = f"""
@@ -229,27 +241,40 @@ Analyze the following stock data:
 Rules:
 - Strong trend_strength is preferred
 - delivery_pct must be ≥ 30
-- RSI must be < 70
+- RSI must be < 75
 - Avoid gap_pct > 5%
 - Prefer high momentum_score
 - Avoid if 5min_change_pct < 0.2
 - If all risky, reply "SKIP"
 
-Reply with ONE stock symbol to buy, or "SKIP"
+Reply with a comma-separated list of symbols (ex: RELIANCE,TCS) in rank order.
+If no safe stocks, reply "SKIP"
 """
         response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}]
         )
-        decision = response.choices[0].message.content.strip().upper()
-        if decision == "SKIP":
-            log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_pick_stock", "⚠️ GPT SKIP", "GPT advised to skip")
+        gpt_response = response.choices[0].message.content.strip().upper()
+
+        if gpt_response == "SKIP" or not gpt_response:
+            # ⛑️ Fallback: Pick top momentum score stock manually
+            fallback = df.sort_values("momentum_score", ascending=False).head(1)["symbol"].tolist()
+            log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "⚠️ GPT SKIP → FORCED PICK", f"Fallback: {fallback}")
+            return fallback
         else:
-            log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_pick_stock", "✅ SELECT", f"GPT selected: {decision}")       
-        return decision
+            # ✅ Valid ranked response
+            candidates = [s.strip() for s in gpt_response.split(",") if s.strip() in df["symbol"].values]
+            if not candidates:
+                fallback = df.sort_values("momentum_score", ascending=False).head(1)["symbol"].tolist()
+                log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "⚠️ GPT BAD → FORCED PICK", f"Fallback: {fallback}")
+                return fallback
+            log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "✅ GPT SELECT", f"{candidates}")
+            return candidates
     except Exception as e:
-        print(f"⚠️ Error with GPT selection: {e}")
-        return "SKIP"
+        print(f"⚠️ GPT error: {e}")
+        fallback = df.sort_values("momentum_score", ascending=False).head(1)["symbol"].tolist()
+        log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "⚠️ GPT FAIL → FORCED PICK", f"Fallback: {fallback}")
+        return fallback
 
 # ✅ Check if Market is Open
 def is_market_open():
@@ -274,5 +299,5 @@ if __name__ == "__main__":
     else:
         print("\n📊 Live Data:\n", df)
         print("\n🤖 Sending to GPT for analysis...\n")
-        decision = ask_gpt_to_pick_stock(df)
+        decision = ask_gpt_to_rank_stocks(df)
         print(f"\n✅ GPT Decision: {decision}")

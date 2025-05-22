@@ -155,12 +155,21 @@ def get_live_price(symbol):
         return 0.0
 
 # ✅ Fetch historical candles (5m, 15m, or 1d)
-def get_historical_price(security_id, interval="5", limit=20):
+def get_historical_price(security_id, interval="5", limit=20, from_date=None, to_date=None):
     try:
         india = pytz.timezone("Asia/Kolkata")
         now = datetime.now(india)
-        from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
-        to_dt = now
+
+        # Default to today's 9:15 to now if not provided
+        if from_date is None:
+            from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
+        else:
+            from_dt = datetime.strptime(from_date, "%Y-%m-%d %H:%M:%S")
+
+        if to_date is None:
+            to_dt = now
+        else:
+            to_dt = datetime.strptime(to_date, "%Y-%m-%d %H:%M:%S")
 
         url = "https://api.dhan.co/v2/charts/intraday"
         headers = {
@@ -178,9 +187,6 @@ def get_historical_price(security_id, interval="5", limit=20):
             "fromDate": from_dt.strftime("%Y-%m-%d %H:%M:%S"),
             "toDate": to_dt.strftime("%Y-%m-%d %H:%M:%S")
         }
-
-        print("🚀 DEBUG: Sending Candle API Payload")
-        print(json.dumps(payload, indent=2))
 
         res = requests.post(url, headers=headers, json=payload)
         if res.status_code != 200:
@@ -201,7 +207,9 @@ def get_historical_price(security_id, interval="5", limit=20):
             "timestamp": pd.to_datetime(response_json["timestamp"], unit='s').tz_localize('UTC').tz_convert('Asia/Kolkata')
         })
 
-        df = df.tail(limit)
+        if limit:
+            df = df.tail(limit)
+
         return df.to_dict(orient="records")
 
     except Exception as e:

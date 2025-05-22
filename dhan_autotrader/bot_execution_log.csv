@@ -86,3 +86,23 @@ timestamp,script_name,action,status,message
 2025-05-21 09:25:03,autotrade.py,startup,STARTED,AutoTrade script started.
 2025-05-21 09:25:04,autotrade.py,end,NO TRADE,No stock bought today.
 2025-05-21 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹-37.36 | Capital: ₹3000.0
+2025-05-21 16:00:06,git_sync.py,Git Push,✅ COMPLETE,33 file(s) pushed
+2025-05-21 22:07:47,dynamic_stock_generator.py,Stock List Updated,✅ COMPLETE,0 stocks saved
+2025-05-21 23:51:58,dynamic_stock_generator.py,Stock List Updated,✅ COMPLETE,9 stocks saved
+2025-05-22 09:16:02,autotrade.py,startup,STARTED,AutoTrade script started.
+2025-05-22 09:16:02,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI
+2025-05-22 09:16:06,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-05-22 09:16:06,autotrade.py,end,NO TRADE,No stock bought today.
+2025-05-22 10:08:45,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI
+2025-05-22 10:08:53,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-05-22 10:25:11,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI
+2025-05-22 10:25:20,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,5 stocks processed
+2025-05-22 10:25:23,Dynamic_Gpt_Momentum.py,ask_gpt_to_pick_stock,⚠️ GPT SKIP,GPT advised to skip
+2025-05-22 11:13:01,dynamic_stock_generator.py,Stock List Updated,✅ COMPLETE,7 stocks saved
+2025-05-22 11:25:41,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI
+2025-05-22 11:25:50,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,5 stocks processed
+2025-05-22 11:25:53,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP,No safe options
+2025-05-22 11:35:28,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI
+2025-05-22 11:35:38,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,6 stocks processed
+2025-05-22 11:35:41,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,Fallback: ['GTPL']
+2025-05-22 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹-37.36 | Capital: ₹3000.0
