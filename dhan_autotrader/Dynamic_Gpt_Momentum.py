@@ -14,7 +14,6 @@ def batched(iterable, size):
 import pandas as pd
 import openai
 import yfinance as yf
-import datetime
 import pytz
 import json
 import os
@@ -22,25 +21,31 @@ import time as systime
 import csv
 import requests
 from utils_logger import log_bot_action
+import datetime as dt
 
 
+now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
 # ✅ Load config.json (OpenAI Key inside)
 with open('D:/Downloads/Dhanbot/dhan_autotrader/config.json', 'r') as f:
     config = json.load(f)
-
-# ✅ Patch missing client_id to avoid KeyError
-if "client_id" not in config or not config["client_id"]:
-    config["client_id"] = "101123227287"
 
 OPENAI_API_KEY = config["openai_api_key"]
 
 # ✅ Load Dynamic Stock List
 def load_dynamic_stocks():
+    import csv
     try:
-        with open('D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.txt', 'r') as f:
-            return [line.strip().upper() for line in f if line.strip()]
+        result = []
+        with open('D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv', newline='') as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                if len(row) == 2:
+                    symbol = row[0].strip().upper()
+                    secid = row[1].strip()
+                    result.append((symbol, secid))
+        return result
     except Exception as e:
-        print(f"⚠️ Error loading dynamic stock list: {e}")
+        print(f"⚠️ Error loading dynamic_stock_list.csv: {e}")
         return []
 
 STOCKS_TO_WATCH = load_dynamic_stocks()
@@ -73,14 +78,14 @@ def fetch_candle_data(symbol):
         }
 
         url = "https://api.dhan.co/v2/charts/intraday"
-        now = datetime.datetime.now()
-        from_date = (now - datetime.timedelta(days=2)).strftime('%Y-%m-%d')
+        now = dt.datetime.now()
+        from_date = (now - dt.timedelta(days=2)).strftime('%Y-%m-%d')
         to_date = now.strftime('%Y-%m-%d')
 
         def fetch(interval):
             india = pytz.timezone("Asia/Kolkata")
-            now = datetime.datetime.now(india)
-            from_dt = (now - datetime.timedelta(days=2)).replace(hour=9, minute=15, second=0, microsecond=0)
+            now = dt.datetime.now(india)
+            from_dt = (now - dt.timedelta(days=2)).replace(hour=9, minute=15, second=0, microsecond=0)
             to_dt = now
         
             payload = {
@@ -232,23 +237,21 @@ def ask_gpt_to_rank_stocks(df):
     openai.api_key = OPENAI_API_KEY
     try:
         prompt = f"""
-You are a smart intraday momentum advisor.
+Today is {now} IST.
+The following stock data has already been strictly filtered for affordability, momentum, RSI, and delivery safety.
 
-Analyze the following stock data:
+Your job is to pick the **best of the remaining safe stocks** for intraday trade today.
+
+Data:
 
 {df.to_string(index=False)}
 
-Rules:
-- Strong trend_strength is preferred
-- delivery_pct must be ≥ 30
-- RSI must be < 75
-- Avoid gap_pct > 5%
-- Prefer high momentum_score
-- Avoid if 5min_change_pct < 0.2
-- If all risky, reply "SKIP"
-
-Reply with a comma-separated list of symbols (ex: RELIANCE,TCS) in rank order.
-If no safe stocks, reply "SKIP"
+Instructions:
+- Do not reject all stocks unless they are clearly extremely weak
+- Prefer high momentum_score, delivery ≥ 30, RSI < 75, and positive trend_strength
+- Avoid if 5min_change_pct is deeply negative, else PICK the top few
+- Reply with a comma-separated list of symbols (ex: RELIANCE,TCS)
+- If truly nothing is tradable, reply "SKIP"
 """
         response = openai.chat.completions.create(
             model="gpt-4o",
@@ -278,7 +281,7 @@ If no safe stocks, reply "SKIP"
 
 # ✅ Check if Market is Open
 def is_market_open():
-    now = datetime.datetime.now(pytz.timezone('Asia/Kolkata'))
+    now = dt.datetime.now(pytz.timezone('Asia/Kolkata'))
     if now.weekday() >= 5:
         return False
     if now.hour < 9 or (now.hour == 9 and now.minute < 15):

@@ -1,56 +1,68 @@
 import requests
-import json
 import datetime
-import pytz
+import logging
+import pandas as pd
+import json
+import os
 
-# Load credentials directly from dhan_config.json
-with open("dhan_config.json", "r") as file:
-    config = json.load(file)
+# ✅ Load config.json
+config_path = "D:/Downloads/Dhanbot/dhan_autotrader/config.json"
+with open(config_path, 'r') as f:
+    config = json.load(f)
 
-access_token = config["access_token"]
-client_id = config["client_id"]
+ACCESS_TOKEN = config["access_token"]
+CLIENT_ID = config["client_id"]
 
-# Fixed parameters for testing HDFC
-security_id = "1333"  # HDFCBANK security ID (known working)
-exchange_segment = "NSE_EQ"
-instrument = "EQUITY"
-interval = "15"
-oi = "false"
-
-# Generate candle time range
-ist = pytz.timezone("Asia/Kolkata")
-now = datetime.datetime.now(ist)
-from_time = now.replace(hour=9, minute=15, second=0, microsecond=0)
-to_time = now.strftime("%Y-%m-%d %H:%M:%S")
-from_time_str = from_time.strftime("%Y-%m-%d %H:%M:%S")
-
-# Prepare request
-url = "https://api.dhan.co/v2/charts/intraday"
-headers = {
-    "access-token": access_token,
-    "client-id": client_id,
+HEADERS = {
+    "access-token": ACCESS_TOKEN,
+    "client-id": CLIENT_ID,
     "Content-Type": "application/json"
 }
-payload = {
-    "securityId": security_id,
-    "exchangeSegment": exchange_segment,
-    "instrument": instrument,
-    "interval": interval,
-    "oi": oi,
-    "fromDate": from_time_str,
-    "toDate": to_time
-}
 
-print("🚀 Sending payload:")
-print(json.dumps(payload, indent=2))
+# ✅ Logging setup
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Execute request
-response = requests.post(url, headers=headers, json=payload)
+def get_now_window(minutes=5):
+    now = datetime.datetime.now()
+    to_time = now.replace(second=0, microsecond=0)
+    from_time = to_time - datetime.timedelta(minutes=minutes)
+    return from_time.strftime("%Y-%m-%d %H:%M:%S"), to_time.strftime("%Y-%m-%d %H:%M:%S")
 
-# Show result
-if response.status_code == 200:
-    print("✅ Success")
-    print(json.dumps(response.json(), indent=2))
-else:
-    print(f"❌ Error: {response.status_code}")
-    print(response.text)
+def fetch_hdfcbank_5min():
+    from_time, to_time = get_now_window(5)
+    payload = {
+        "securityId": "1333",  # HDFCBANK
+        "exchangeSegment": "NSE_EQ",
+        "instrument": "EQUITY",
+        "interval": "5",  # 5-min candles
+        "oi": "false",
+        "fromDate": from_time,
+        "toDate": to_time
+    }
+
+    logging.info(f"🔍 Fetching 5-min candle for HDFCBANK from {from_time} → {to_time}")
+    try:
+        url = "https://api.dhan.co/v2/charts/intraday"
+        response = requests.post(url, headers=HEADERS, json=payload)
+
+        if response.status_code == 200:
+            data = response.json()
+            if "close" in data and data["close"]:
+                df = pd.DataFrame({
+                    "timestamp": pd.to_datetime(data["timestamp"], unit="s", utc=True).tz_convert("Asia/Kolkata"),
+                    "open": data["open"],
+                    "high": data["high"],
+                    "low": data["low"],
+                    "close": data["close"],
+                    "volume": data["volume"]
+                })
+                print(df)
+            else:
+                print("⚠️ No candle data found.")
+        else:
+            print(f"❌ Error {response.status_code}: {response.text}")
+    except Exception as e:
+        print(f"❌ Exception occurred: {str(e)}")
+
+if __name__ == "__main__":
+    fetch_hdfcbank_5min()

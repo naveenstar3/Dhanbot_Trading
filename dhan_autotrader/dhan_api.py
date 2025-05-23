@@ -113,6 +113,12 @@ def get_current_capital():
 # ✅ Fetch live price from Dhan API (last traded price)
 def get_live_price(symbol):
     try:
+        # Load token safely
+        with open("D:/Downloads/Dhanbot/dhan_autotrader/config.json", "r") as f:
+            config = json.load(f)
+        access_token = config["access_token"]
+        client_id = config["client_id"]
+
         df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv")
         row = df[df["SEM_TRADING_SYMBOL"].str.upper() == symbol.upper()]
         if row.empty:
@@ -120,21 +126,19 @@ def get_live_price(symbol):
             return 0.0
 
         security_id = str(row.iloc[0]["SEM_SMST_SECURITY_ID"])
-        exchange_id = str(row.iloc[0]["SEM_EXM_EXCH_ID"]).lower()
-        instrument_type = "equity"  # Hardcoded safely unless futures/options used later
+        exchange_id = str(row.iloc[0]["SEM_EXM_EXCH_ID"]).upper()
 
-        # Map EXM_EXCH_ID to exchange_segment
         exch_map = {
             "NSE": "nse",
             "BSE": "bse"
         }
-        exchange_segment = exch_map.get(exchange_id.upper(), "nse")  # Default to NSE
+        exchange_segment = exch_map.get(exchange_id, "nse")
 
-        url = f"https://api.dhan.co/market-feed/quote/{exchange_segment}/{instrument_type}/{security_id}"
+        url = f"https://api.dhan.co/market-feed/quote/{exchange_segment}/equity/{security_id}"
         headers = {
             "accept": "application/json",
-            "access-token": ACCESS_TOKEN,
-            "client-id": CLIENT_ID
+            "access-token": access_token,
+            "client-id": client_id
         }
 
         response = requests.get(url, headers=headers, timeout=5)
@@ -153,7 +157,7 @@ def get_live_price(symbol):
     except Exception as e:
         print(f"⚠️ Exception in get_live_price({symbol}): {e}")
         return 0.0
-
+        
 # ✅ Fetch historical candles (5m, 15m, or 1d)
 def get_historical_price(security_id, interval="5", limit=20, from_date=None, to_date=None):
     try:

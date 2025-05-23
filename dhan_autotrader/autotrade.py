@@ -4,10 +4,11 @@ import requests
 from datetime import datetime, time
 import pytz
 import time as systime
+import pandas as pd
 import os
 from dhan_api import get_live_price, get_historical_price
 from config import *
-from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_pick_stock  # 🔥 Import inside function if needed
+from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_rank_stocks  # 🔥 Import inside function if needed
 from utils_logger import log_bot_action
 
 # ✅ Constants
@@ -57,14 +58,25 @@ def get_dynamic_minimum_net_profit(capital):
     """
     return max(5, round(capital * 0.001, 2))  # 0.1% of capital or ₹5, whichever is higher
 
-# ✅ Load dynamic stock list
-def load_dynamic_stocks():
-    try:
-        with open('D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.txt', 'r') as f:
-            return [line.strip().upper() for line in f if line.strip()]
-    except Exception as e:
-        print(f"⚠️ Error loading dynamic stock list: {e}")
-        return []
+# ✅ Load valid symbols from dynamic_stock_list.txt
+def load_dynamic_stocks(filepath="D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"):
+    df = pd.read_csv(filepath)
+    return list(zip(df["symbol"], df["security_id"]))
+
+# ✅ Create mapping from dhan_master.csv for ONLY required symbols
+def build_dhan_symbol_map(valid_symbols):
+    master = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv")
+    map_dict = {}
+    for _, row in master.iterrows():
+        sym = str(row["SEM_TRADING_SYMBOL"]).strip().upper()
+        secid = str(row["SEM_SMST_SECURITY_ID"]).strip()
+        if sym in valid_symbols:
+            map_dict[sym] = secid
+    return map_dict
+
+# ✅ Prepare once globally before trade starts
+valid_symbols = load_dynamic_stocks()
+dhan_symbol_map = build_dhan_symbol_map(valid_symbols)
 
 # ✅ Load Dhan Master CSV into memory
 def load_dhan_master():
@@ -262,14 +274,26 @@ def run_autotrade():
         return
 
    # ✅ Ask GPT to pick safest stock
-    gpt_pick = ask_gpt_to_pick_stock(df)
+    gpt_pick = ask_gpt_to_rank_stocks(df)
     
-    # ✅ Check if GPT explicitly said SKIP
+    # ✅ Unpack single item from GPT response list if needed
+    if isinstance(gpt_pick, list):
+        if len(gpt_pick) == 0:
+            send_telegram_message("⚠️ GPT returned an empty list. No stock to trade.")
+            log_bot_action("autotrade.py", "gpt_response", "EMPTY", "GPT returned empty list.")
+            return
+        gpt_pick = gpt_pick[0]
+    
+    # ✅ Check if GPT explicitly said SKIP   
     if gpt_pick == "SKIP":
         send_telegram_message("⚠️ GPT advised to SKIP today. No safe stock to buy.")
         log_bot_action("autotrade.py", "gpt_decision", "SKIP", "GPT advised to skip trading.")
         return
     
+    buy_symbol = gpt_pick.upper() if isinstance(gpt_pick, str) else None
+    if not buy_symbol:
+        send_telegram_message("⚠️ No valid stock picked for buying. Skipping.")
+        return
     # ✅ NEW: Capital-based Affordability Check
     available_stocks = df["symbol"].tolist()
     
@@ -378,7 +402,7 @@ def run_autotrade():
 
 # ✅ Final Runner
 if __name__ == "__main__":
-    dhan_symbol_map = load_dhan_master()
+    dhan_symbol_map = {symbol: get_security_id(symbol) for symbol in load_dynamic_stocks()}
     run_autotrade()
     
     if not has_open_position():  # means no trade was executed

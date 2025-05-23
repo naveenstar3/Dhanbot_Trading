@@ -1,3 +1,5 @@
 date,total_scanned,affordable,technical_passed,volume_passed,sentiment_passed,rsi_passed,final_selected
 2025-05-21,2754,2480,388,332,332,275,275
 2025-05-22,2754,2460,87,17,17,11,7
+2025-05-23,2623,1755,SKIPPED,SKIPPED,SKIPPED,SKIPPED,10
+2025-05-23,2534,491,SKIPPED,SKIPPED,SKIPPED,SKIPPED,10
