@@ -152,7 +152,7 @@ def calculate_rsi(close_prices, period=14):
 # ✅ Prepare Live Intraday Data
 def prepare_data():
     log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "START", "Preparing momentum + delivery + RSI")
-    print(f"📦 Total candidates from dynamic_stock_list.txt: {len(STOCKS_TO_WATCH)}")
+    print(f"📦 Total candidates from dynamic_stock_list.csv: {len(STOCKS_TO_WATCH)}")
     
     records = []
     total_attempted = 0
@@ -238,21 +238,20 @@ def ask_gpt_to_rank_stocks(df):
     try:
         prompt = f"""
 Today is {now} IST.
-The following stock data has already been strictly filtered for affordability, momentum, RSI, and delivery safety.
-
-Your job is to pick the **best of the remaining safe stocks** for intraday trade today.
+You are given filtered stock data for potential intraday trades. Your job is to rank the top 5–10 candidates based on momentum, delivery, RSI, and trend strength.
 
 Data:
 
 {df.to_string(index=False)}
 
 Instructions:
-- Do not reject all stocks unless they are clearly extremely weak
-- Prefer high momentum_score, delivery ≥ 30, RSI < 75, and positive trend_strength
-- Avoid if 5min_change_pct is deeply negative, else PICK the top few
-- Reply with a comma-separated list of symbols (ex: RELIANCE,TCS)
-- If truly nothing is tradable, reply "SKIP"
+- Rank symbols from best to least preferred (max 10)
+- Prefer: high momentum_score, strong trend_strength, delivery ≥ 30, RSI < 70
+- Avoid symbols with deeply negative 5min_change_pct or RSI > 75
+- Respond with a comma-separated list of symbols (e.g., RELIANCE,TCS,INFY,...)
+- If no symbols qualify, respond with "SKIP"
 """
+
         response = openai.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}]
@@ -260,22 +259,23 @@ Instructions:
         gpt_response = response.choices[0].message.content.strip().upper()
 
         if gpt_response == "SKIP" or not gpt_response:
-            # ⛑️ Fallback: Pick top momentum score stock manually
-            fallback = df.sort_values("momentum_score", ascending=False).head(1)["symbol"].tolist()
+            fallback = df.sort_values("momentum_score", ascending=False).head(5)["symbol"].tolist()
             log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "⚠️ GPT SKIP → FORCED PICK", f"Fallback: {fallback}")
             return fallback
-        else:
-            # ✅ Valid ranked response
-            candidates = [s.strip() for s in gpt_response.split(",") if s.strip() in df["symbol"].values]
-            if not candidates:
-                fallback = df.sort_values("momentum_score", ascending=False).head(1)["symbol"].tolist()
-                log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "⚠️ GPT BAD → FORCED PICK", f"Fallback: {fallback}")
-                return fallback
-            log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "✅ GPT SELECT", f"{candidates}")
-            return candidates
+
+        candidates = [s.strip() for s in gpt_response.split(",") if s.strip() in df["symbol"].values]
+
+        if not candidates:
+            fallback = df.sort_values("momentum_score", ascending=False).head(5)["symbol"].tolist()
+            log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "⚠️ GPT BAD → FORCED PICK", f"Fallback: {fallback}")
+            return fallback
+
+        log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "✅ GPT RANKED", f"{candidates}")
+        return candidates
+
     except Exception as e:
         print(f"⚠️ GPT error: {e}")
-        fallback = df.sort_values("momentum_score", ascending=False).head(1)["symbol"].tolist()
+        fallback = df.sort_values("momentum_score", ascending=False).head(5)["symbol"].tolist()
         log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "⚠️ GPT FAIL → FORCED PICK", f"Fallback: {fallback}")
         return fallback
 

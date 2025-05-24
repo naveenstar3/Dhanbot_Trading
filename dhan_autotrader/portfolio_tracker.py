@@ -9,16 +9,21 @@ from dhanhq import DhanContext, dhanhq
 from dhan_api import get_live_price, get_intraday_candles
 from config import *
 from utils_logger import log_bot_action
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from utils_safety import safe_read_csv
+
 
 # ✅ Trailing Exit Config
 LIVE_BUFFER_FILE = "live_trail_BUFFER.csv"
 
 # ✅ Load Dhan credentials
-with open("dhan_config.json") as f:
+with open("config.json") as f:
     config_data = json.load(f)
 
 ACCESS_TOKEN = config_data["access_token"]
 CLIENT_ID = config_data["client_id"]
+TELEGRAM_TOKEN = config_data.get("telegram_token")
+TELEGRAM_CHAT_ID = config_data.get("telegram_chat_id")
 
 HEADERS = {
     "access-token": ACCESS_TOKEN,
@@ -29,10 +34,6 @@ HEADERS = {
 # ✅ Initialize Dhan SDK
 context = DhanContext(CLIENT_ID, ACCESS_TOKEN)
 dhan = dhanhq(context)
-
-# ✅ Telegram Constants
-TELEGRAM_TOKEN = "7557430361:AAFZKf4KBL3fScf6C67quomwCrpVbZxQmdQ"
-TELEGRAM_CHAT_ID = "5086097664"
 
 # ✅ Bot Execution Logger
 def log_bot_action(script_name, action, status, message):
@@ -263,136 +264,132 @@ def check_portfolio():
         print("📁 Created new portfolio_log.csv with headers only.")
         return
 
-    with open(PORTFOLIO_LOG, newline="") as f:
-        reader = csv.DictReader(f)
-        existing_rows = list(reader)
-
-    updated_rows = []
-
-    for row in existing_rows:
+    from utils_safety import safe_read_csv
+    raw_lines = safe_read_csv(PORTFOLIO_LOG)
+    reader = csv.DictReader(raw_lines)
+    existing_rows = list(reader)
+    
+    def process_sell_logic(row):
         if row.get("status") == "SOLD":
-            updated_rows.append(row)
-            continue
-
-        symbol = row["symbol"]
-        security_id = str(row["security_id"]).strip()
-        buy_price = float(row["buy_price"])
-        quantity = int(row["quantity"])
-        target_pct = float(row.get("target_pct", 1.5))
-        stop_pct = float(row.get("stop_pct", 1))
+            return row
 
         try:
+            symbol = row["symbol"]
+            security_id = str(row["security_id"]).strip()
+            buy_price = float(row["buy_price"])
+            quantity = int(row["quantity"])
+            target_pct = float(row.get("target_pct", 1.5))
+            stop_pct = float(row.get("stop_pct", 1))
+
             live_price = get_live_price(symbol)
-        except Exception as e:
-            print(f"⚠️ Skipping {symbol}: {e}")
-            updated_rows.append(row)
-            continue
+            change_pct = ((live_price - buy_price) / buy_price) * 100
+            log_live_trail(symbol, live_price, change_pct)
 
-        change_pct = ((live_price - buy_price) / buy_price) * 100
-        log_live_trail(symbol, live_price, change_pct)
+            status = row.get("status", "HOLD")
+            exit_price = row.get("exit_price", "")
+            now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M")
 
-        status = row.get("status", "HOLD")
-        exit_price = row.get("exit_price", "")
+            net_profit = estimate_net_profit(buy_price, live_price, quantity)
+            capital_in_stock = buy_price * quantity
+            MINIMUM_NET_PROFIT_REQUIRED = get_dynamic_minimum_net_profit(capital_in_stock)
+            max_rupee_loss = capital_in_stock * 0.004
+            actual_loss = (buy_price - live_price) * quantity
 
-        # ✅ Net profit and scalable forced exit logic
-        net_profit = estimate_net_profit(buy_price, live_price, quantity)
-        capital_in_stock = buy_price * quantity
-        MINIMUM_NET_PROFIT_REQUIRED = get_dynamic_minimum_net_profit(capital_in_stock)
-        max_rupee_loss = capital_in_stock * 0.004  # 0.4% max allowed
-        actual_loss = (buy_price - live_price) * quantity
+            reason = ""
+            should_sell = False
 
-        reason = ""
-        should_sell = False
+            if change_pct >= target_pct:
+                reason = "TARGET HIT"
+                should_sell = True
+            elif change_pct <= -stop_pct:
+                reason = "STOP LOSS"
+                should_sell = True
+            elif should_exit_early(symbol, live_price):
+                reason = "SMART EXIT: Dropped from peak after 2:45 PM"
+                should_sell = True
+            elif actual_loss >= max_rupee_loss:
+                reason = f"FORCED EXIT: Max ₹ loss {round(actual_loss, 2)} > {round(max_rupee_loss, 2)}"
+                should_sell = True
+            elif is_peak_exhausted(symbol, target_pct=target_pct):
+                reason = "SMART EXIT: Price exhausted near target multiple times"
+                should_sell = True
 
-        if change_pct >= target_pct:
-            reason = "TARGET HIT"
-            should_sell = True
-        elif change_pct <= -stop_pct:
-            reason = "STOP LOSS"
-            should_sell = True
-        elif should_exit_early(symbol, live_price):
-            reason = "SMART EXIT: Dropped from peak after 2:45 PM"
-            should_sell = True
-        elif actual_loss >= max_rupee_loss:
-            reason = f"FORCED EXIT: Max ₹ loss {round(actual_loss,2)} > {round(max_rupee_loss,2)}"
-            should_sell = True
-        elif is_peak_exhausted(symbol, target_pct=target_pct):
-            reason = "SMART EXIT: Price exhausted near target multiple times"
-            should_sell = True
+            if should_sell and net_profit >= MINIMUM_NET_PROFIT_REQUIRED:
+                exchange_segment = "NSE_EQ"
+                code, response = place_sell_order(security_id, symbol, quantity, exchange_segment)
+                if code == 200 and "order_id" in response:
+                    order_id = response["order_id"]
+                    trade_status = None
+                    for _ in range(5):
+                        trade_book = get_trade_book()
+                        matching_trades = [t for t in trade_book if t.get("order_id") == order_id]
+                        if matching_trades:
+                            trade_status = matching_trades[0].get("status", "").upper()
+                            if trade_status == "TRADED":
+                                break
+                        systime.sleep(2)
 
-        if should_sell and net_profit >= MINIMUM_NET_PROFIT_REQUIRED:
-            exchange_segment = "NSE_EQ"
-            code, response = place_sell_order(security_id, symbol, quantity, exchange_segment)
-            if code == 200 and "order_id" in response:
-                order_id = response["order_id"]
-                max_retries = 5
-                trade_status = None
-                matching_trades = []
+                    if trade_status == "TRADED":
+                        status = "SOLD"
+                        exit_price = live_price
+                        log_sell(symbol, security_id, quantity, live_price, reason)
+                        print(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
+                        send_telegram_message(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
+                        log_bot_action("portfolio_tracker.py", "SELL executed", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} | Reason: {reason}")
 
-                for _ in range(max_retries):
-                    trade_book = get_trade_book()
-                    matching_trades = [trade for trade in trade_book if trade.get("order_id") == order_id]
-                    if matching_trades:
-                        trade_status = matching_trades[0].get("status", "").upper()
-                        if trade_status == "TRADED":
-                            break
-                    systime.sleep(2)
-
-                if trade_status == "TRADED":
-                    status = "SOLD"
-                    exit_price = live_price
-                    log_sell(symbol, security_id, quantity, live_price, reason)
-                    print(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit,2)}")
-                    send_telegram_message(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit,2)}")
-                    log_bot_action("portfolio_tracker.py", "SELL executed", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} | Reason: {reason}")
-
-                    # Summary
-                    profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
-                    profit_pct = round(((exit_price - buy_price) / buy_price) * 100, 2)
-                    summary_msg = (
-                        f"📊 Trade Summary ({datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')})\n"
-                        f"Stock: {symbol}\n"
-                        f"Buy Price: ₹{round(buy_price, 2)}\n"
-                        f"Sell Price: ₹{round(exit_price, 2)}\n"
-                        f"Qty: {quantity}\n"
-                        f"Net Profit: ₹{round(net_profit, 2)}\n"
-                        f"Profit %: {profit_pct}%\n"
-                        f"Status: {profit_status}"
-                    )
-                    send_telegram_message(summary_msg)
+                        profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
+                        profit_pct = round(((exit_price - buy_price) / buy_price) * 100, 2)
+                        summary_msg = (
+                            f"📊 Trade Summary ({now})\n"
+                            f"Stock: {symbol}\n"
+                            f"Buy Price: ₹{round(buy_price, 2)}\n"
+                            f"Sell Price: ₹{round(exit_price, 2)}\n"
+                            f"Qty: {quantity}\n"
+                            f"Net Profit: ₹{round(net_profit, 2)}\n"
+                            f"Profit %: {profit_pct}%\n"
+                            f"Status: {profit_status}"
+                        )
+                        send_telegram_message(summary_msg)
+                    else:
+                        print(f"⚠️ Sell order placed but NOT TRADED yet for {symbol}. Holding.")
                 else:
-                    print(f"⚠️ Sell order placed but NOT TRADED yet for {symbol}. Holding.")
+                    print(f"❌ SELL failed for {symbol}: {response}")
             else:
-                print(f"❌ SELL failed for {symbol}: {response}")
-        else:
-            hold_reason = ""
-            if not should_sell:
-                hold_reason = "🚫 Conditions not met: Target/Stop/Peak not triggered."
-            elif net_profit < MINIMUM_NET_PROFIT_REQUIRED:
-                hold_reason = (
-                    f"💸 Blocked by Net Profit Rule: ₹{round(net_profit,2)} < "
-                    f"₹{round(MINIMUM_NET_PROFIT_REQUIRED, 2)}"
-                )
-            else:
-                hold_reason = "❓ Unknown reason. Needs manual review."
-        
-            print(f"⚠️ HOLDING {symbol}. Change%: {round(change_pct,2)}%. "
-                f"Net Profit: ₹{round(net_profit,2)}. Reason: {hold_reason}")
-            log_bot_action("portfolio_tracker.py", "SELL skipped", "⚠️ HOLD", f"{symbol} | {hold_reason}")
+                hold_reason = ""
+                if not should_sell:
+                    hold_reason = "🚫 Conditions not met: Target/Stop/Peak not triggered."
+                elif net_profit < MINIMUM_NET_PROFIT_REQUIRED:
+                    hold_reason = (
+                        f"💸 Blocked by Net Profit Rule: ₹{round(net_profit, 2)} < ₹{round(MINIMUM_NET_PROFIT_REQUIRED, 2)}"
+                    )
+                else:
+                    hold_reason = "❓ Unknown reason. Needs manual review."
 
-        row.update({
-            "live_price": round(live_price, 2),
-            "change_pct": round(change_pct, 2),
-            "last_checked": now,
-            "status": status,
-            "exit_price": exit_price
-        })
-        updated_rows.append(row)
+                print(f"⚠️ HOLDING {symbol}. Change%: {round(change_pct, 2)}%. "
+                      f"Net Profit: ₹{round(net_profit, 2)}. Reason: {hold_reason}")
+                log_bot_action("portfolio_tracker.py", "SELL skipped", "⚠️ HOLD", f"{symbol} | {hold_reason}")
+
+            row.update({
+                "live_price": round(live_price, 2),
+                "change_pct": round(change_pct, 2),
+                "last_checked": now,
+                "status": status,
+                "exit_price": exit_price
+            })
+            return row
+
+        except Exception as e:
+            print(f"⚠️ Error processing {row.get('symbol')}: {e}")
+            return row
+
+    # ✅ Execute all in parallel
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        results = list(executor.map(process_sell_logic, existing_rows))
+        updated_rows = [r for r in results if r]
 
     if updated_rows:
         with open(PORTFOLIO_LOG, "w", newline="", encoding="utf-8") as f:
-            fieldnames = headers
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
             writer.writerows(updated_rows)
         print("✅ Portfolio updated.")
@@ -400,4 +397,8 @@ def check_portfolio():
         print("⚠️ No rows processed.")
 
 if __name__ == "__main__":
-    check_portfolio()
+    if os.path.exists("emergency_exit.txt"):
+        send_telegram_message("⛔ Emergency Exit active. Skipping HOLD monitoring.")
+        log_bot_action("portfolio_tracker.py", "SKIPPED", "EMERGENCY EXIT", "Monitoring skipped due to emergency exit.")
+    else:
+        check_portfolio()

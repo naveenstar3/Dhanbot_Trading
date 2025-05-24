@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from config import *
 from utils_logger import log_bot_action
+from utils_safety import safe_read_csv
 
 # ✅ Load Dhan credentials
 with open("dhan_config.json") as f:
@@ -34,11 +35,11 @@ def is_first_trading_day():
         return False
 
     try:
-        with open(PORTFOLIO_LOG, newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row.get("status", "").strip().upper() == "SOLD":
-                    return True
+        raw_lines = safe_read_csv(PORTFOLIO_LOG)
+        reader = csv.DictReader(raw_lines)
+        for row in reader:      
+            if row.get("status", "").strip().upper() == "SOLD":
+                return True
     except:
         return False
 
@@ -50,8 +51,8 @@ def update_growth_log():
     starting_capital = 0
 
     try:
-        with open(CURRENT_CAPITAL_FILE, "r") as f:
-            starting_capital = float(f.read().strip())
+        raw_lines = safe_read_csv(CURRENT_CAPITAL_FILE)
+        starting_capital = float(raw_lines[0].strip())
     except:
         starting_capital = float(input("Enter starting capital: "))
         with open(CURRENT_CAPITAL_FILE, "w") as f:
@@ -59,9 +60,9 @@ def update_growth_log():
 
     # Read portfolio_log to find today's SELL trades
     try:
-        with open(PORTFOLIO_LOG, newline="") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
+        raw_lines = safe_read_csv(PORTFOLIO_LOG)
+        reader = csv.DictReader(raw_lines)
+        rows = list(reader)
     except FileNotFoundError:
         print("⚠️ portfolio_log.csv not found.")
         return
@@ -135,4 +136,8 @@ def update_growth_log():
     print("✅ Growth Log updated successfully.")
 
 if __name__ == "__main__":
-    update_growth_log()
+    if os.path.exists("emergency_exit.txt"):
+        send_telegram_message("ℹ️ Emergency day. Skipping growth log.")
+        log_bot_action("daily_growth_logger.py", "SKIPPED", "EMERGENCY EXIT", "Logging skipped due to emergency.")
+    else:
+        update_growth_log()

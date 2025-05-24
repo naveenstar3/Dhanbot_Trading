@@ -181,7 +181,7 @@ def get_affordable_symbols(master_list):
 def save_final_stock_list(stocks, filepath):
     df = pd.DataFrame(stocks, columns=["symbol", "security_id", "momentum"])
     df.to_csv(filepath, index=False)
-    log_bot_action("dynamic_stock_generator.py", "Stock List Updated", "✅ COMPLETE", f"{len(stocks)} stocks saved")
+    log_bot_action("dynamic_stock_generator.py", "Stock List Updated", "✅ SAVED", f"{len(stocks)} stocks saved to CSV")
     print(f"✅ Final {len(stocks)} stocks saved to {filepath}")
 
 # ✅ Save filter summary
@@ -206,9 +206,10 @@ def run_dynamic_stock_selection():
         return
 
     master_path = "D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv"
-    output_file = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.txt"
+    output_file = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
 
-    master_list = load_dhan_master(master_path)
+    # master_list = load_dhan_master(master_path)
+    master_list = [("GODREJCP", "10099")]
     affordable_ids = get_affordable_symbols(master_list)
 
     if not affordable_ids:
@@ -216,16 +217,18 @@ def run_dynamic_stock_selection():
         return
 
     affordable_ids = sorted(affordable_ids, key=lambda x: x[2], reverse=True)
-    final_stocks = [symbol for symbol, _, _ in affordable_ids][:FINAL_STOCK_LIMIT]
+    final_stocks = affordable_ids[:FINAL_STOCK_LIMIT]
+    output_file = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
+    save_final_stock_list(final_stocks, output_file)    
 
     filter_stats = {
         "total_scanned": len(master_list),
         "affordable": len(affordable_ids),
-        "technical_passed": "SKIPPED",
+        "technical_passed": len([x for x in affordable_ids if x[2] > 0]),
         "volume_passed": "SKIPPED",
         "sentiment_passed": "SKIPPED",
         "rsi_passed": "SKIPPED",
-        "dynamic_list_selected": len(open(output_file).read().strip().splitlines())
+        "dynamic_list_selected": len(open(output_file).read().strip().splitlines()) - 1
     }
     save_filter_summary(filter_stats)
     log_bot_action("dynamic_stock_generator.py", "run_dynamic_stock_selection", "✅ FINISHED", f"Affordable={len(affordable_ids)}, Final={len(final_stocks)}")

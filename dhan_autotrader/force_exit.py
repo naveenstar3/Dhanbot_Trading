@@ -12,19 +12,19 @@ from dhanhq import DhanContext, dhanhq
 from dhan_api import get_live_price
 from config import *
 from utils_logger import log_bot_action
+from utils_safety import safe_read_csv
 
 # ✅ Load Dhan credentials
-with open("dhan_config.json") as f:
+with open("config.json") as f:
     config_data = json.load(f)
 
 ACCESS_TOKEN = config_data["access_token"]
 CLIENT_ID = config_data["client_id"]
+TELEGRAM_TOKEN = config_data.get("telegram_token")
+TELEGRAM_CHAT_ID = config_data.get("telegram_chat_id")
 
 context = DhanContext(CLIENT_ID, ACCESS_TOKEN)
 dhan = dhanhq(context)
-
-TELEGRAM_TOKEN = "7557430361:AAFZKf4KBL3fScf6C67quomwCrpVbZxQmdQ"
-TELEGRAM_CHAT_ID = "5086097664"
 
 def log_bot_action(script_name, action, status, message):
     log_file = "bot_execution_log.csv"
@@ -102,8 +102,9 @@ def force_exit():
         print("⚠️ No portfolio_log.csv found or empty. Skipping force exit.")
         return
 
-    with open(PORTFOLIO_LOG, newline="") as f:
-        reader = csv.DictReader(f)
+        from utils_safety import safe_read_csv
+        raw_lines = safe_read_csv(PORTFOLIO_LOG)
+        reader = csv.DictReader(raw_lines)        
         existing_rows = list(reader)
 
     now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M")
@@ -206,8 +207,39 @@ def force_exit():
             msg += f"Symbol: {r['symbol']}\n"
         msg += "⚠️ Please check manually before next trade day."
         send_telegram_message(msg)
-
+        # ✅ Capital Sync After Forced Exit
+        try:
+            total_profit = 0
+            with open("sell_log.csv", newline="") as f:
+                rows = list(csv.DictReader(f))
+                for row in rows:
+                    if row["reason"].strip().upper() == "FORCE EXIT":
+                        try:
+                            qty = int(row["qty"])
+                            sell_price = float(row["sell_price"])
+                            entry_price = float(row["entry_price"])
+                            profit = (sell_price - entry_price) * qty
+                            total_profit += profit
+                        except:
+                            continue
+        
+            with open("current_capital.csv", "r") as f:
+                current_cap = float(f.read().strip())
+        
+            new_cap = round(current_cap + total_profit, 2)
+            with open("current_capital.csv", "w") as f:
+                f.write(str(new_cap))
+        
+            log_bot_action("force_exit.py", "CAPITAL SYNC", "✅ DONE", f"Capital updated to ₹{new_cap} after forced exit.")
+        except Exception as e:
+            log_bot_action("force_exit.py", "CAPITAL SYNC", "❌ ERROR", str(e))
+            send_telegram_message(f"❌ Capital sync failed in force_exit.py: {e}")
+        
     print("🚨 Force Exit complete.")
 
 if __name__ == "__main__":
-    force_exit()
+    if os.path.exists("emergency_exit.txt"):
+        send_telegram_message("⛔ Emergency Exit active. Skipping force sell.")
+        log_bot_action("force_exit.py", "SKIPPED", "EMERGENCY EXIT", "Force sell skipped due to emergency.")
+    else:
+        force_exit()

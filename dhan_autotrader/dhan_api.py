@@ -4,6 +4,8 @@ import json
 from datetime import datetime, timedelta
 import pytz
 import pandas as pd
+import functools
+import time  # Ensure this is present
 
 # ✅ Load Dhan credentials from config
 with open("D:/Downloads/Dhanbot/dhan_autotrader/dhan_config.json") as f:
@@ -13,6 +15,21 @@ ACCESS_TOKEN = config["access_token"]
 CLIENT_ID = config["client_id"]
 
 dhan_master_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv")
+
+def retry(max_attempts=3, delay=2):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if attempt < max_attempts - 1:
+                        time.sleep(delay)
+                    else:
+                        raise e
+        return wrapper
+    return decorator
 
 def request_with_retry(method, url, headers=None, json=None, max_retries=5):
     import time
@@ -111,6 +128,8 @@ def get_current_capital():
         raise SystemExit("🛑 Halting: current_capital.csv must contain a valid capital value in A1")
 
 # ✅ Fetch live price from Dhan API (last traded price)
+
+@retry(max_attempts=3, delay=2)
 def get_live_price(symbol):
     try:
         # Load token safely
