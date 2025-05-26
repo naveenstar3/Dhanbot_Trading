@@ -12,14 +12,23 @@ def safe_read_csv(filepath):
         with open(filepath, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
+        # Allow single-line float file (e.g., current_capital.csv)
+        if len(lines) == 1 and lines[0].strip().replace(".", "", 1).isdigit():
+            return lines
+
+        # Enforce minimum 2 lines for proper CSV (header + data)
         if len(lines) < 2:
             raise ValueError(f"Corrupt or empty file: {filepath}")
 
         return lines
+
     except Exception as e:
         backup_path = filepath + f".bak_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         shutil.copy(filepath, backup_path)
-        raise RuntimeError(f"⚠️ CSV Health Check Failed: {filepath}\nBackup saved at: {backup_path}\nError: {e}")
+        raise RuntimeError(
+            f"⚠️ CSV Health Check Failed: {filepath}\n"
+            f"Backup saved at: {backup_path}\nError: {e}"
+        )
         
 def retry(max_attempts=3, delay=2):
     def decorator(func):

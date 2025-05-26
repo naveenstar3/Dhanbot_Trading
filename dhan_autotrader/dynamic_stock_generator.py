@@ -8,6 +8,8 @@ import time as systime
 from dhan_api import get_security_id, get_current_capital
 from utils_logger import log_bot_action
 from datetime import datetime, timedelta
+import datetime as dt
+
 
 # === Credentials and Headers ===
 with open('D:/Downloads/Dhanbot/dhan_autotrader/config.json', 'r') as f:
@@ -34,8 +36,13 @@ def is_market_closed():
 def fetch_latest_price(symbol, security_id):
     now = datetime.now()
     if PREMARKET_MODE or now.hour < 9 or now.hour >= 16:
-        from_time = (now - timedelta(days=1)).replace(hour=15, minute=20, second=0, microsecond=0)
-        to_time = from_time + timedelta(minutes=5)
+        india = pytz.timezone("Asia/Kolkata")
+        prev_day = dt.datetime.now(india) - dt.timedelta(days=1)
+        while prev_day.weekday() >= 5:  # Skip Sat/Sun
+            prev_day -= dt.timedelta(days=1)
+    
+        from_time = prev_day.replace(hour=15, minute=20, second=0, microsecond=0)
+        to_time = from_time + dt.timedelta(minutes=5)    
     else:
         from_time = now - timedelta(minutes=5)
         to_time = now
@@ -53,8 +60,12 @@ def fetch_latest_price(symbol, security_id):
     try:
         resp = requests.post("https://api.dhan.co/v2/charts/intraday", headers=HEADERS, json=payload)
         if resp.status_code == 429:
+            print(f"⏳ Rate limit hit for {symbol}")
             log_bot_action("dynamic_stock_generator.py", "PriceFetch", "❌ 429 Rate Limit", f"{symbol} - Rate limit hit")
             return 429
+        elif resp.status_code != 200:
+            print(f"❌ API failed for {symbol}: {resp.status_code} | {resp.text}")
+            return None
         elif resp.status_code == 200:
             data = resp.json()
             closes = data.get("close", [])
@@ -97,22 +108,20 @@ def get_affordable_symbols(master_list):
     for idx, (symbol, secid) in enumerate(master_list, start=1):
         if not secid.isdigit() or len(secid) < 3:
             continue
-
+    
         price = fetch_latest_price(symbol, secid)
-        if price is None:
-            unavailable.append(symbol)
-            continue
-        elif price == 429:
+        systime.sleep(0.5)  # ✅ Add delay after each fetch
+    
+        if price is None or price == 429:
             unavailable.append(symbol)
             continue
         elif price > capital:
             print(f"⛔ Skipped {symbol} ({idx}/{len(master_list)}) — ₹{price} > ₹{capital}")
             continue
-
-        # ✅ Simplified: No momentum check, just affordability
-        affordable.append((symbol, secid, 0.0))  # Momentum set to 0 (handled later)
+    
+        affordable.append((symbol, secid, 0.0))
         print(f"✅ Added {symbol} ({idx}/{len(master_list)})")
-
+    
         systime.sleep(0.5)
 
     print(f"📊 Final affordable: {len(affordable)} | Unavailable: {len(unavailable)}")
@@ -152,7 +161,18 @@ def run_dynamic_stock_selection():
         print("🚨 No affordable stocks found. Exiting.")
         return
 
-    final_stocks = affordable_ids[:FINAL_STOCK_LIMIT]
+    # ✅ Load volume filter data
+    volume_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/nse_avg_volume.csv")
+    volume_dict = dict(zip(volume_df["symbol"], volume_df["avg_volume"]))
+    
+    # ✅ Apply volume filter
+    filtered = []
+    for symbol, secid, _ in affordable_ids:
+        if volume_dict.get(symbol, 0) >= 200000:  # ✅ You can adjust this threshold
+            filtered.append((symbol, secid, 0.0))
+    
+    final_stocks = filtered[:FINAL_STOCK_LIMIT]
+    
     save_final_stock_list(final_stocks, output_file)
 
     filter_stats = {

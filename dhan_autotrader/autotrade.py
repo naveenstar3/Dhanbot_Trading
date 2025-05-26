@@ -7,13 +7,18 @@ import time as systime
 import pandas as pd
 import os
 from dhan_api import get_live_price, get_historical_price
-from config import *
 from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_rank_stocks
 from utils_logger import log_bot_action
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from utils_safety import safe_read_csv
 
+
+
+# ✅ Load Dhan credentials
+with open("D:/Downloads/Dhanbot/dhan_autotrader/config.json", "r") as f:
+    config = json.load(f)
+    
 # ✅ Constants
 PORTFOLIO_LOG = "portfolio_log.csv"
 LIVE_LOG = "live_prices_log.csv"
@@ -22,14 +27,12 @@ GROWTH_LOG = "growth_log.csv"
 BASE_URL = "https://api.dhan.co/orders"
 TRADE_BOOK_URL = "https://api.dhan.co/trade-book"
 trade_executed = False
-
-# ✅ Load Dhan credentials
-with open("config.json") as f:
-    config = json.load(f)
+ACCESS_TOKEN = config["access_token"]
+CLIENT_ID = config["client_id"]
 
 HEADERS = {
-    "access-token": config["access_token"],
-    "client-id": config["client_id"],
+    "access-token": ACCESS_TOKEN,
+    "client-id": CLIENT_ID,
     "Content-Type": "application/json"
 }
 
@@ -57,6 +60,8 @@ def is_market_open():
 def get_available_capital():
     try:
         raw_lines = safe_read_csv(CURRENT_CAPITAL_FILE)
+        if not raw_lines or not raw_lines[0].strip().replace('.', '', 1).isdigit():
+            raise ValueError(f"Corrupt or empty file: {CURRENT_CAPITAL_FILE}")
         base_capital = float(raw_lines[0].strip())
     except Exception as e:
         print(f"⚠️ Failed to read capital file: {e}")

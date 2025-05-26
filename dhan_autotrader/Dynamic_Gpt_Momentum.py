@@ -22,7 +22,7 @@ import csv
 import requests
 from utils_logger import log_bot_action
 import datetime as dt
-
+import time
 
 now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
 # ✅ Load config.json (OpenAI Key inside)
@@ -33,19 +33,17 @@ OPENAI_API_KEY = config["openai_api_key"]
 
 # ✅ Load Dynamic Stock List
 def load_dynamic_stocks():
-    import csv
     try:
-        result = []
+        stocks = []
         with open('D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv', newline='') as csvfile:
-            reader = csv.reader(csvfile)
+            reader = csv.DictReader(csvfile)
             for row in reader:
-                if len(row) == 2:
-                    symbol = row[0].strip().upper()
-                    secid = row[1].strip()
-                    result.append((symbol, secid))
-        return result
+                symbol = row["symbol"].strip().upper()
+                secid = row["security_id"].strip()
+                stocks.append((symbol, secid))
+        return stocks
     except Exception as e:
-        print(f"⚠️ Error loading dynamic_stock_list.csv: {e}")
+        print(f"⚠️ Error loading stock list: {e}")
         return []
 
 STOCKS_TO_WATCH = load_dynamic_stocks()
@@ -64,9 +62,11 @@ def get_security_id(symbol):
     return None
 
 # ✅ Fetch Recent 5-min and 15-min Candles
-def fetch_candle_data(symbol):
+def fetch_candle_data(symbol, security_id=None):
     try:
-        security_id = get_security_id(symbol)
+        if not security_id:
+            security_id = get_security_id(symbol)
+
         if not security_id:
             print(f"⚠️ No security ID found for {symbol}")
             return None, None
@@ -151,18 +151,21 @@ def calculate_rsi(close_prices, period=14):
 def prepare_data():
     log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "START", "Preparing momentum + delivery + RSI + 15min")
     print(f"📦 Total candidates from dynamic_stock_list.csv: {len(STOCKS_TO_WATCH)}")
-    
+
     records = []
     total_attempted = 0
-    for stock in STOCKS_TO_WATCH:
-        total_attempted += 1
-        data_5, data_15 = fetch_candle_data(stock)
 
-        if data_5 is None or data_5.empty or data_15 is None or data_15.empty:
-            print(f"⚠️ Skipping {stock}: Empty candle data (5m or 15m)")
-            continue
+    for symbol, secid in STOCKS_TO_WATCH:
+        total_attempted += 1
 
         try:
+            data_5, data_15 = fetch_candle_data(symbol, secid)
+            time.sleep(0.6)  # Throttle API requests to prevent rate limiting
+
+            if data_5 is None or data_5.empty or data_15 is None or data_15.empty:
+                print(f"⚠️ Skipping {symbol}: Empty candle data (5m or 15m)")
+                continue
+
             # --- 5m Metrics
             open_price = data_5['Open'].iloc[-1]
             close_price = data_5['Close'].iloc[-1]
@@ -189,7 +192,7 @@ def prepare_data():
             rsi = round(rsi_series.iloc[-1], 2) if not rsi_series.empty else 0
 
             # --- Delivery %
-            delivery = get_delivery_percentage(stock)
+            delivery = get_delivery_percentage(symbol)
 
             # --- Momentum Score (Hybrid)
             score = (
@@ -204,12 +207,12 @@ def prepare_data():
 
             # --- Filter Conditions
             if delivery < 30 or rsi > 68 or gap_pct > 5 or change_pct_5m < 0.3 or change_pct_15m < 0.2:
-                print(f"❌ Filtered {stock}: Delivery={delivery}%, RSI={rsi}, Gap={gap_pct}%")
+                print(f"❌ Filtered {symbol}: Delivery={delivery}%, RSI={rsi}, Gap={gap_pct}%")
                 continue
 
             # --- Final Record
             record = {
-                "symbol": stock,
+                "symbol": symbol,
                 "5min_change_pct": change_pct_5m,
                 "15min_change_pct": change_pct_15m,
                 "gap_pct": gap_pct,
@@ -220,11 +223,11 @@ def prepare_data():
                 "volume_value": volume_value
             }
             records.append(record)
-            print(f"✅ Added: {stock} | Score={momentum_score}")
-            systime.sleep(1.2)
+            print(f"✅ Added: {symbol} | Score={momentum_score}")
+            systime.sleep(1.2)  # Existing pacing logic
 
         except Exception as e:
-            print(f"⚠️ Error processing {stock}: {e}")
+            print(f"⚠️ Error processing {symbol}: {e}")
             continue
 
     df = pd.DataFrame(records)
