@@ -5,7 +5,9 @@ from datetime import datetime, timedelta
 import pytz
 import pandas as pd
 import functools
-import time  # Ensure this is present
+import time
+from utils_safety import retry
+
 
 # ✅ Load Dhan credentials from config
 with open("D:/Downloads/Dhanbot/dhan_autotrader/dhan_config.json") as f:

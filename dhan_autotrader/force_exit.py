@@ -101,12 +101,12 @@ def force_exit():
     if not os.path.exists(PORTFOLIO_LOG) or os.stat(PORTFOLIO_LOG).st_size == 0:
         print("⚠️ No portfolio_log.csv found or empty. Skipping force exit.")
         return
-
-        from utils_safety import safe_read_csv
-        raw_lines = safe_read_csv(PORTFOLIO_LOG)
-        reader = csv.DictReader(raw_lines)        
-        existing_rows = list(reader)
-
+    
+    # ✅ Correct placement outside the return block
+    raw_lines = safe_read_csv(PORTFOLIO_LOG)
+    reader = csv.DictReader(raw_lines)        
+    existing_rows = list(reader)
+    
     now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M")
     headers = reader.fieldnames if reader.fieldnames else []
     updated_rows = []

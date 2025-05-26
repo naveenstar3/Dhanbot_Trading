@@ -6,12 +6,13 @@ import os
 import pytz
 import time as systime
 from dhanhq import DhanContext, dhanhq
-from dhan_api import get_live_price, get_intraday_candles
+from dhan_api import get_live_price, get_intraday_candles, get_historical_price, get_security_id
 from config import *
 from utils_logger import log_bot_action
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils_safety import safe_read_csv
-
+import pandas as pd
+import portalocker 
 
 # ✅ Trailing Exit Config
 LIVE_BUFFER_FILE = "live_trail_BUFFER.csv"
@@ -50,6 +51,21 @@ def log_bot_action(script_name, action, status, message):
         if not file_exists:
             writer.writerow(headers)
         writer.writerow(new_row)
+        
+def monitor_hold_positions():
+    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+    if now.hour == 15 and now.minute >= 0 and now.minute < 5:  # Trigger at 3:00–3:04 PM
+        if not os.path.exists(PORTFOLIO_LOG):
+            return
+        with open(PORTFOLIO_LOG, newline="") as f:
+            reader = csv.DictReader(f)
+            hold_stocks = [row["symbol"] for row in reader if row["status"].upper() == "HOLD"]
+        
+        if hold_stocks:
+            msg = f"⏳ {len(hold_stocks)} stock(s) still HOLD at 3:00 PM: {', '.join(hold_stocks)}"
+            print(msg)
+            send_telegram_message(msg)
+            log_bot_action("portfolio_tracker.py", "3PM check", "⚠️ HOLDING", msg)
 
 def get_dynamic_minimum_net_profit(capital):
     """
@@ -93,12 +109,12 @@ def is_peak_exhausted(symbol, target_pct=0.07, grace_band=0.01, min_retries=5):
         print(f"⚠️ Error in peak exhaustion check for {symbol}: {e}")
     return False
     
-
 def log_live_trail(symbol, live_price, change_pct):
-    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
-    with open(LIVE_BUFFER_FILE, mode='a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow([now, symbol, round(live_price, 2), round(change_pct, 2)])
+    with portalocker.Lock(LIVE_BUFFER_FILE, timeout=5):
+        now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+        with open(LIVE_BUFFER_FILE, mode='a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([now, symbol, round(live_price, 2), round(change_pct, 2)])
 
 # ✅ Telegram Notification Function
 def send_telegram_message(message):
@@ -212,20 +228,15 @@ def should_exit_early(symbol, current_price):
         # ✅ RSI check using Dhan historical API
         from dhan_api import get_historical_price
         security_id = get_security_id(symbol)
-        raw_data = get_intraday_candles(security_id, interval="5")
-        if raw_data and "close" in raw_data:
-            import pandas as pd
-            df = pd.DataFrame({
-                "close": raw_data["close"]
-            })
-            rsi_series = calculate_rsi(df["close"])
-        if candles:
-            import pandas as pd
-            df = pd.DataFrame(candles)
-            rsi_series = calculate_rsi(df['close'])
-            if not rsi_series.empty and rsi_series.iloc[-1] > 70:
-                print(f"⚠️ RSI triggered exit: {symbol} has RSI {round(rsi_series.iloc[-1], 2)}")
-                return True
+        raw_data = get_historical_price(security_id, interval="15")
+        if not raw_data or "close" not in raw_data:
+            return False
+        
+        df = pd.DataFrame({"close": raw_data["close"]})
+        rsi_series = calculate_rsi(df['close'])
+        if not rsi_series.empty and rsi_series.iloc[-1] > 70:
+            print(f"⚠️ RSI triggered exit: {symbol} has RSI {round(rsi_series.iloc[-1], 2)}")
+            return True
 
         return False
 
@@ -244,6 +255,7 @@ def calculate_rsi(close_prices, period=14):
 
 # ✅ Main Portfolio Evaluation
 def check_portfolio():
+    monitor_hold_positions()
     ist_now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
     if ist_now.hour == 9 and ist_now.minute <= 30 and os.path.exists(LIVE_BUFFER_FILE):
         os.remove(LIVE_BUFFER_FILE)
@@ -282,6 +294,9 @@ def check_portfolio():
             stop_pct = float(row.get("stop_pct", 1))
 
             live_price = get_live_price(symbol)
+            if live_price is None:
+                print(f"⚠️ Failed to get live price for {symbol}")
+                return row
             change_pct = ((live_price - buy_price) / buy_price) * 100
             log_live_trail(symbol, live_price, change_pct)
 
@@ -383,7 +398,7 @@ def check_portfolio():
             return row
 
     # ✅ Execute all in parallel
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         results = list(executor.map(process_sell_logic, existing_rows))
         updated_rows = [r for r in results if r]
 

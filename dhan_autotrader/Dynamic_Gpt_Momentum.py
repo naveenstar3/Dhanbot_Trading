@@ -78,16 +78,12 @@ def fetch_candle_data(symbol):
         }
 
         url = "https://api.dhan.co/v2/charts/intraday"
-        now = dt.datetime.now()
-        from_date = (now - dt.timedelta(days=2)).strftime('%Y-%m-%d')
-        to_date = now.strftime('%Y-%m-%d')
+        india = pytz.timezone("Asia/Kolkata")
+        now = dt.datetime.now(india)
+        from_dt = (now - dt.timedelta(days=2)).replace(hour=9, minute=15, second=0, microsecond=0)
+        to_dt = now
 
         def fetch(interval):
-            india = pytz.timezone("Asia/Kolkata")
-            now = dt.datetime.now(india)
-            from_dt = (now - dt.timedelta(days=2)).replace(hour=9, minute=15, second=0, microsecond=0)
-            to_dt = now
-        
             payload = {
                 "securityId": security_id,
                 "exchangeSegment": "NSE_EQ",
@@ -97,15 +93,15 @@ def fetch_candle_data(symbol):
                 "fromDate": from_dt.strftime("%Y-%m-%d %H:%M:%S"),
                 "toDate": to_dt.strftime("%Y-%m-%d %H:%M:%S")
             }
-        
+
             print(f"📤 Sending request for {symbol} [{interval}] with payload: {payload}")
             res = requests.post(url, headers=headers, json=payload)
-        
+
             if res.status_code != 200:
                 print(f"❌ API request failed for {symbol} [{interval}] - Status: {res.status_code}")
                 print(f"🔎 Response text: {res.text}")
                 return None
-        
+
             try:
                 response_json = res.json()
                 if "open" not in response_json or not response_json["open"]:
@@ -115,23 +111,25 @@ def fetch_candle_data(symbol):
                     "Open": response_json["open"],
                     "Close": response_json["close"],
                     "Volume": response_json["volume"],
-                    "Timestamp": pd.to_datetime(response_json["timestamp"], unit='s').tz_localize('UTC').tz_convert('Asia/Kolkata')
+                    "Timestamp": pd.to_datetime(response_json["timestamp"], unit='s')
+                                    .tz_localize('UTC')
+                                    .tz_convert('Asia/Kolkata')
                 })
                 return df
             except Exception as e:
                 print(f"⚠️ Failed parsing response for {symbol} [{interval}]: {e}")
                 return None
-        
-        data_1 = fetch("1MIN")
-        if data_1 is not None:
-            used_data = data_1
-            used_interval = "1MIN"
-        else:
-            used_data = fetch("5MIN")
-            used_interval = "5MIN" if used_data is not None else "None"
 
-        print(f"✅ Used {used_interval} data for {symbol}")
-        return used_data, fetch("15MIN")
+        # ✅ Only use 5MIN + 15MIN (no 1MIN fallback)
+        data_5 = fetch("5MIN")
+        data_15 = fetch("15MIN")
+
+        if data_5 is not None:
+            print(f"✅ Used 5MIN + 15MIN data for {symbol}")
+        else:
+            print(f"❌ No 5MIN data available for {symbol}")
+
+        return data_5, data_15
 
     except Exception as e:
         print(f"⚠️ Error fetching OHLC for {symbol}: {e}")
@@ -151,7 +149,7 @@ def calculate_rsi(close_prices, period=14):
         
 # ✅ Prepare Live Intraday Data
 def prepare_data():
-    log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "START", "Preparing momentum + delivery + RSI")
+    log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "START", "Preparing momentum + delivery + RSI + 15min")
     print(f"📦 Total candidates from dynamic_stock_list.csv: {len(STOCKS_TO_WATCH)}")
     
     records = []
@@ -165,10 +163,16 @@ def prepare_data():
             continue
 
         try:
+            # --- 5m Metrics
             open_price = data_5['Open'].iloc[-1]
             close_price = data_5['Close'].iloc[-1]
             volume_value = data_5['Volume'].iloc[-1]
             change_pct_5m = round(((close_price - open_price) / open_price) * 100, 2)
+
+            # --- 15m Metrics
+            prev_close_15 = data_15['Close'].iloc[-2] if len(data_15) > 1 else data_15['Close'].iloc[-1]
+            close_15 = data_15['Close'].iloc[-1]
+            change_pct_15m = round(((close_15 - prev_close_15) / prev_close_15) * 100, 2)
 
             last_5_candles = data_15.tail(5)
             trend_strength = "Strong" if all(
@@ -176,36 +180,38 @@ def prepare_data():
                 for i in range(len(last_5_candles))
             ) else "Weak"
 
-            prev_close = data_5['Close'].iloc[-2]
-            gap_pct = round(((open_price - prev_close) / prev_close) * 100, 2)
+            # --- Gap %
+            prev_close_5 = data_5['Close'].iloc[-2]
+            gap_pct = round(((open_price - prev_close_5) / prev_close_5) * 100, 2)
 
-            # RSI Calculation
-            rsi_series = calculate_rsi(data_5['Close'])
+            # --- RSI
+            rsi_series = calculate_rsi(data_15['Close'])
             rsi = round(rsi_series.iloc[-1], 2) if not rsi_series.empty else 0
 
-            # Delivery %
+            # --- Delivery %
             delivery = get_delivery_percentage(stock)
 
-            # Momentum Score
-            score = 0
-            score += change_pct_5m * 0.5        # stronger weight for 5m momentum
-            score += gap_pct * 0.15             # moderate gap weight
-            score += delivery * 0.2             # stable delivery weight
-            score += (volume_value / 1_00_000) * 0.05  # volume boost (scaled)
-            
-            if trend_strength == "Strong":
-                score += 0.5  # small fixed bonus for strong trend
-            
+            # --- Momentum Score (Hybrid)
+            score = (
+                change_pct_5m * 0.5 +
+                change_pct_15m * 0.3 +
+                gap_pct * 0.15 +
+                delivery * 0.2 +
+                (volume_value / 100000) * 0.05 +
+                (1.0 if trend_strength == "Strong" else 0)
+            )
             momentum_score = round(score, 2)
-            
 
-            if delivery < 30 or rsi > 75 or gap_pct > 5:
+            # --- Filter Conditions
+            if delivery < 30 or rsi > 68 or gap_pct > 5 or change_pct_5m < 0.3 or change_pct_15m < 0.2:
                 print(f"❌ Filtered {stock}: Delivery={delivery}%, RSI={rsi}, Gap={gap_pct}%")
                 continue
 
+            # --- Final Record
             record = {
                 "symbol": stock,
                 "5min_change_pct": change_pct_5m,
+                "15min_change_pct": change_pct_15m,
                 "gap_pct": gap_pct,
                 "delivery_pct": delivery,
                 "rsi": rsi,
@@ -222,7 +228,6 @@ def prepare_data():
             continue
 
     df = pd.DataFrame(records)
-
     print(f"📊 Completed: {len(records)}/{total_attempted} passed filters")
 
     if df.empty:
@@ -232,24 +237,30 @@ def prepare_data():
 
     return df
     
-# ✅ Ask GPT to Pick Best Stock
+# ✅ Ask GPT to Pick Best Stock (Hybrid Momentum + Safety Filters)
 def ask_gpt_to_rank_stocks(df):
     openai.api_key = OPENAI_API_KEY
     try:
         prompt = f"""
-Today is {now} IST.
-You are given filtered stock data for potential intraday trades. Your job is to rank the top 5–10 candidates based on momentum, delivery, RSI, and trend strength.
+📅 Today is {now} IST.
 
-Data:
+You are an intraday stock advisor. Analyze the filtered candidates below using strict hybrid momentum criteria.
+
+Stock Data:
 
 {df.to_string(index=False)}
 
-Instructions:
-- Rank symbols from best to least preferred (max 10)
-- Prefer: high momentum_score, strong trend_strength, delivery ≥ 30, RSI < 70
-- Avoid symbols with deeply negative 5min_change_pct or RSI > 75
-- Respond with a comma-separated list of symbols (e.g., RELIANCE,TCS,INFY,...)
-- If no symbols qualify, respond with "SKIP"
+📌 Instructions:
+- Rank stocks (up to 10) using:
+    • 5min_change_pct > 0.5%
+    • 15min_change_pct > 0.3%
+    • RSI < 68
+    • delivery_pct ≥ 30
+    • trend_strength must be "Strong"
+    • volume_value > ₹5L
+- Prefer higher momentum_score
+- Format: RELIANCE, TCS, INFY, ...
+- If **none** qualify, respond only with: SKIP
 """
 
         response = openai.chat.completions.create(
@@ -278,7 +289,7 @@ Instructions:
         fallback = df.sort_values("momentum_score", ascending=False).head(5)["symbol"].tolist()
         log_bot_action("Dynamic_Gpt_Momentum.py", "ask_gpt_to_rank_stocks", "⚠️ GPT FAIL → FORCED PICK", f"Fallback: {fallback}")
         return fallback
-
+        
 # ✅ Check if Market is Open
 def is_market_open():
     now = dt.datetime.now(pytz.timezone('Asia/Kolkata'))

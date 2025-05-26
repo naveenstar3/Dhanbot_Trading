@@ -6,7 +6,7 @@ import pytz
 import time as systime
 import pandas as pd
 import os
-from dhan_api import get_live_price
+from dhan_api import get_live_price, get_historical_price
 from config import *
 from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_rank_stocks
 from utils_logger import log_bot_action
@@ -58,7 +58,8 @@ def get_available_capital():
     try:
         raw_lines = safe_read_csv(CURRENT_CAPITAL_FILE)
         base_capital = float(raw_lines[0].strip())
-    except:
+    except Exception as e:
+        print(f"⚠️ Failed to read capital file: {e}")
         base_capital = float(input("Enter your starting capital: "))
         with open(CURRENT_CAPITAL_FILE, "w") as f:
             f.write(str(base_capital))
@@ -66,12 +67,12 @@ def get_available_capital():
     try:
         raw_lines = safe_read_csv(GROWTH_LOG)
         rows = list(csv.DictReader(raw_lines))
-            if rows:
-                last_growth = float(rows[-1].get("profits_realized", 0))
-                if last_growth >= 5:
-                    base_capital += last_growth
-    except:
-        pass
+        if rows:
+            last_growth = float(rows[-1].get("profits_realized", 0))
+            if last_growth >= 5:
+                base_capital += last_growth
+    except Exception as e:
+        print(f"⚠️ Skipping growth file update: {e}")
 
     return base_capital
 
@@ -81,18 +82,18 @@ def get_dynamic_minimum_net_profit(capital):
 def has_open_position():
     today = datetime.now().date()
     try:
-        from utils_safety import safe_read_csv
         raw_lines = safe_read_csv(PORTFOLIO_LOG)
-        reader = csv.DictReader(raw_lines)       
-            for row in reader:
-                if row.get("status", "").upper() != "SOLD":
-                    ts_str = row.get("timestamp", "")
-                    try:
-                        entry_date = datetime.strptime(ts_str, "%m/%d/%Y %H:%M").date()
-                        if entry_date == today:
-                            return True
-                    except:
-                        continue
+        reader = csv.DictReader(raw_lines)
+        for row in reader:
+            if row.get("status", "").upper() != "SOLD":
+                ts_str = row.get("timestamp", "")
+                try:
+                    entry_date = datetime.strptime(ts_str, "%m/%d/%Y %H:%M").date()
+                    if entry_date == today:
+                        return True
+                except:
+                    continue
+        
     except FileNotFoundError:
         return False
     return False
@@ -133,24 +134,24 @@ def should_trigger_buy(symbol, high_15min, capital):
         return False, 0, 0
 
 def place_buy_order(symbol, security_id, price, qty):
-buffer_price = round(price * 1.002, 2)  # 0.2% buffer for limit buy
+    buffer_price = round(price * 1.002, 2)  # 0.2% buffer for limit buy
     payload = {
         "transactionType": "BUY",
         "exchangeSegment": "NSE_EQ",
         "productType": "CNC",
-        "orderType": "LIMIT",  # ✅ Changed from MARKET
+        "orderType": "LIMIT",
         "validity": "DAY",
         "securityId": security_id,
         "tradingSymbol": symbol,
         "quantity": qty,
-        "price": buffer_price,  # ✅ Use buffered limit price
+        "price": buffer_price,
         "disclosedQuantity": 0,
         "afterMarketOrder": False,
         "amoTime": "OPEN",
         "triggerPrice": 0,
         "smartOrder": False
     }
-    
+
     try:
         response = requests.post(BASE_URL, headers=HEADERS, json=payload)
         if response.status_code == 200:
