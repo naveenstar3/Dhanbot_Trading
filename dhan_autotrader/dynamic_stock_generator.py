@@ -9,6 +9,7 @@ from dhan_api import get_security_id, get_current_capital
 from utils_logger import log_bot_action
 from datetime import datetime, timedelta
 import datetime as dt
+import sys
 
 
 # === Credentials and Headers ===
@@ -145,6 +146,11 @@ def save_filter_summary(stats):
         f.write(f"{date},{row}\n")
 
 def run_dynamic_stock_selection():
+    test_security_id = None
+    if len(sys.argv) > 1:
+        test_security_id = str(sys.argv[1]).strip()
+        print(f"🔬 Test Mode: Single Security ID = {test_security_id}")
+
     print("🚀 Starting dynamic stock selection..." + (" (PRE-MARKET MODE)" if PREMARKET_MODE else ""))
     
     if is_market_closed():
@@ -155,6 +161,13 @@ def run_dynamic_stock_selection():
     output_file = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
 
     master_list = load_dhan_master(master_path)
+
+    if test_security_id:
+        master_list = [entry for entry in master_list if entry[1] == test_security_id]
+        if not master_list:
+            print(f"❌ Security ID {test_security_id} not found in dhan_master.csv")
+            return
+
     affordable_ids = get_affordable_symbols(master_list)
 
     if not affordable_ids:
@@ -162,14 +175,52 @@ def run_dynamic_stock_selection():
         return
 
     # ✅ Load volume filter data
-    volume_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/nse_avg_volume.csv")
-    volume_dict = dict(zip(volume_df["symbol"], volume_df["avg_volume"]))
-    
-    # ✅ Apply volume filter
+    print("📊 Fetching 1-min intraday data (last 5d)...")
+
     filtered = []
+    end = datetime.now()
+    start = end - timedelta(days=5)
+    from_date = start.strftime('%Y-%m-%d') + " 09:30:00"
+    to_date = end.strftime('%Y-%m-%d') + " 15:30:00"
+    
     for symbol, secid, _ in affordable_ids:
-        if volume_dict.get(symbol, 0) >= 200000:  # ✅ You can adjust this threshold
-            filtered.append((symbol, secid, 0.0))
+        payload = {
+            "securityId": secid,
+            "exchangeSegment": "NSE_EQ",
+            "instrument": "EQUITY",
+            "interval": "1",
+            "oi": "false",
+            "fromDate": from_date,
+            "toDate": to_date
+        }
+    
+        try:
+            resp = requests.post("https://api.dhan.co/v2/charts/intraday", headers=HEADERS, json=payload)
+            data = resp.json()
+            if not all(k in data for k in ["volume", "timestamp"]):
+                print(f"[{symbol}] ❌ No EOD data.")
+                continue
+    
+            df = pd.DataFrame({
+                "timestamp": pd.to_datetime(data["timestamp"], unit="s"),
+                "volume": data["volume"]
+            })
+            df["date"] = df["timestamp"].dt.date
+            volume_by_day = df.groupby("date")["volume"].sum()
+            avg_volume = int(volume_by_day.tail(5).mean())
+    
+            if avg_volume >= 200000:
+                filtered.append((symbol, secid, 0.0))
+                print(f"[{symbol}] ✅ Avg Vol = {avg_volume}")
+            else:
+                print(f"[{symbol}] ⛔ Low Vol = {avg_volume}")
+    
+            systime.sleep(0.5)
+    
+        except Exception as e:
+            print(f"[{symbol}] ❌ Error: {e}")
+            continue
+    
     
     final_stocks = filtered[:FINAL_STOCK_LIMIT]
     

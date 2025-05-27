@@ -7,14 +7,24 @@ import pandas as pd
 import functools
 import time
 from utils_safety import retry
+import datetime as dt
+
 
 
 # ✅ Load Dhan credentials from config
-with open("D:/Downloads/Dhanbot/dhan_autotrader/dhan_config.json") as f:
+with open("D:/Downloads/Dhanbot/dhan_autotrader/config.json") as f:
     config = json.load(f)
 
 ACCESS_TOKEN = config["access_token"]
 CLIENT_ID = config["client_id"]
+
+session = requests.Session()
+session.headers.update({
+    "access-token": ACCESS_TOKEN,
+    "client-id": CLIENT_ID,
+    "Content-Type": "application/json"
+})
+
 
 dhan_master_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv")
 
@@ -79,7 +89,7 @@ def get_intraday_candles(security_id, interval="1", from_dt=None, to_dt=None):
 
     url = "https://api.dhan.co/v2/charts/intraday"
     try:
-        response = requests.post(url, headers=HEADERS, json=payload)
+        response = session.post(url, json=payload)
         if response.status_code == 200:
             return response.json()
         else:
@@ -132,52 +142,47 @@ def get_current_capital():
 # ✅ Fetch live price from Dhan API (last traded price)
 
 @retry(max_attempts=3, delay=2)
-def get_live_price(symbol):
+def get_live_price(symbol, security_id, premarket=False):
+    now = datetime.now()
+    if premarket or now.hour < 9 or now.hour >= 16:
+        india = pytz.timezone("Asia/Kolkata")
+        prev_day = dt.datetime.now(india) - dt.timedelta(days=1)
+        while prev_day.weekday() >= 5:  # Skip Sat/Sun
+            prev_day -= dt.timedelta(days=1)
+
+        from_time = prev_day.replace(hour=15, minute=20, second=0, microsecond=0)
+        to_time = from_time + dt.timedelta(minutes=5)
+    else:
+        from_time = now - timedelta(minutes=5)
+        to_time = now
+
+    payload = {
+        "securityId": security_id,
+        "exchangeSegment": "NSE_EQ",
+        "instrument": "EQUITY",
+        "interval": "1",
+        "oi": False,
+        "fromDate": from_time.strftime("%Y-%m-%d %H:%M:%S"),
+        "toDate": to_time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    print(f"📌 DEBUG: In fetch_latest_price() for {symbol}")
     try:
-        # Load token safely
-        with open("D:/Downloads/Dhanbot/dhan_autotrader/config.json", "r") as f:
-            config = json.load(f)
-        access_token = config["access_token"]
-        client_id = config["client_id"]
-
-        df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv")
-        row = df[df["SEM_TRADING_SYMBOL"].str.upper() == symbol.upper()]
-        if row.empty:
-            print(f"⚠️ Symbol not found in dhan_master: {symbol}")
-            return 0.0
-
-        security_id = str(row.iloc[0]["SEM_SMST_SECURITY_ID"])
-        exchange_id = str(row.iloc[0]["SEM_EXM_EXCH_ID"]).upper()
-
-        exch_map = {
-            "NSE": "nse",
-            "BSE": "bse"
-        }
-        exchange_segment = exch_map.get(exchange_id, "nse")
-
-        url = f"https://api.dhan.co/market-feed/quote/{exchange_segment}/equity/{security_id}"
-        headers = {
-            "accept": "application/json",
-            "access-token": access_token,
-            "client-id": client_id
-        }
-
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code != 200:
-            print(f"⚠️ LTP fetch failed for {symbol} — {response.status_code}")
-            return 0.0
-
-        data = response.json()
-        ltp = data.get("lastTradedPrice") or data.get("data", {}).get("lastTradedPrice")
-        if ltp:
-            return ltp / 100.0
-        else:
-            print(f"⚠️ No LTP field in response for {symbol}: {data}")
-            return 0.0
-
+        resp = session.post("https://api.dhan.co/v2/charts/intraday", json=payload)
+        if resp.status_code == 429:
+            print(f"⏳ Rate limit hit for {symbol}")
+            log_bot_action("dynamic_stock_generator.py", "PriceFetch", "❌ 429 Rate Limit", f"{symbol} - Rate limit hit")
+            return 429
+        elif resp.status_code != 200:
+            print(f"❌ API failed for {symbol}: {resp.status_code} | {resp.text}")
+            return None
+        elif resp.status_code == 200:
+            data = resp.json()
+            closes = data.get("close", [])
+            return float(closes[-1]) if closes else None
     except Exception as e:
-        print(f"⚠️ Exception in get_live_price({symbol}): {e}")
-        return 0.0
+        print(f"⚠️ {symbol} LTP fetch error: {e}")
+    return None
         
 # ✅ Fetch historical candles (5m, 15m, or 1d)
 def get_historical_price(security_id, interval="5", limit=20, from_date=None, to_date=None):
@@ -213,7 +218,7 @@ def get_historical_price(security_id, interval="5", limit=20, from_date=None, to
             "toDate": to_dt.strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        res = requests.post(url, headers=headers, json=payload)
+        res = session.post(url, json=payload)
         if res.status_code != 200:
             print(f"❌ Error: {res.status_code} - {res.text}")
             return []
@@ -278,7 +283,7 @@ def place_order(security_id, quantity, transaction_type="BUY"):
     }
 
     try:
-        response = requests.post(url, headers=headers, json=payload)
+        response = session.post(url, json=payload)
         json_resp = response.json()
         if response.status_code == 200:
             print(f"✅ Order {transaction_type} placed successfully for ID: {security_id}")

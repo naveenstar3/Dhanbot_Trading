@@ -225,8 +225,14 @@ def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map):
     if not triggered:
         return
 
-    score = price  # Or use a custom score logic if you want strongest gain potential
-
+    # Use GPT ranking score: higher rank = higher score
+    try:
+        rank_score = 100 - ranked_stocks.index(symbol)
+    except ValueError:
+        rank_score = 0  # Symbol not ranked by GPT
+    
+    score = rank_score
+    
     with trade_lock:
         if best_candidate is None or score > best_candidate["score"]:
             best_candidate = {
