@@ -7,8 +7,8 @@ from utils_logger import log_bot_action
 from utils_safety import safe_read_csv
 
 # ✅ Load Dhan credentials
-with open("dhan_config.json") as f:
-    config_data = json.load(f)
+with open('D:/Downloads/Dhanbot/dhan_autotrader/config.json', 'r') as f:
+    config = json.load(f)
 
 PORTFOLIO_LOG = "portfolio_log.csv"
 GROWTH_LOG = "growth_log.csv"

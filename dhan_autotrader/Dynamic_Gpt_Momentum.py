@@ -22,7 +22,9 @@ import csv
 import requests
 from utils_logger import log_bot_action
 import datetime as dt
+from textblob import TextBlob
 import time
+from datetime import datetime, timedelta
 
 now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
 # ✅ Load config.json (OpenAI Key inside)
@@ -60,6 +62,67 @@ def get_security_id(symbol):
     except Exception as e:
         print(f"⚠️ Failed to fetch security ID for {symbol}: {e}")
     return None
+
+def is_positive_sentiment(symbol, api_key):
+    """
+    Fetch recent news articles for the stock and evaluate average sentiment.
+    Applies API call throttling and respects a 50-call rate limit.
+    """
+    # Global API call limiter
+    global sentiment_call_count
+    if 'sentiment_call_count' not in globals():
+        sentiment_call_count = 0
+
+    if sentiment_call_count >= 50:
+        print(f"⛔ Sentiment skipped for {symbol} due to 50-request limit. Treated as neutral/pass.")
+        return True
+
+    to_date = datetime.now()
+    from_date = to_date - timedelta(days=3)
+    from_date_str = from_date.strftime('%Y-%m-%d')
+    to_date_str = to_date.strftime('%Y-%m-%d')
+
+    url = (
+        f"https://newsapi.org/v2/everything?"
+        f"q={symbol}&"
+        f"from={from_date_str}&"
+        f"to={to_date_str}&"
+        f"language=en&"
+        f"sortBy=relevancy&"
+        f"apiKey={api_key}"
+    )
+
+    try:
+        response = requests.get(url)
+        data = response.json()
+
+        # ✅ Count only successful API hits
+        sentiment_call_count += 1
+        time.sleep(0.2)
+
+        if data.get("status") != "ok":
+            print(f"⚠️ News API error for {symbol}: {data}")
+            return True  # Fail open
+
+        articles = data.get("articles", [])
+        if not articles:
+            print(f"⚠️ No news articles found for {symbol}. Treating as neutral.")
+            return True  # ✅ Allow it if no news
+
+        sentiments = []
+        for article in articles:
+            content = f"{article.get('title', '')} {article.get('description', '')}"
+            blob = TextBlob(content)
+            sentiments.append(blob.sentiment.polarity)
+
+        avg_sentiment = sum(sentiments) / len(sentiments)
+        print(f"📰 {symbol} - Avg Sentiment Polarity: {avg_sentiment:.2f}")
+        return avg_sentiment >= 0.05
+
+    except Exception as e:
+        print(f"❌ News fetch error for {symbol}: {e}")
+        return False
+
 
 # ✅ Fetch Recent 5-min and 15-min Candles
 def fetch_candle_data(symbol, security_id=None):
@@ -156,6 +219,11 @@ def prepare_data():
     total_attempted = 0
 
     for symbol, secid in STOCKS_TO_WATCH:
+        # ✅ Apply sentiment filter before expensive API calls
+        if not is_positive_sentiment(symbol, config.get("news_api_key", "")):
+            print(f"❌ Skipping {symbol}: Negative news sentiment")
+            continue
+        
         total_attempted += 1
 
         try:
@@ -206,10 +274,27 @@ def prepare_data():
             momentum_score = round(score, 2)
 
             # --- Filter Conditions
-            if delivery < 30 or rsi > 68 or gap_pct > 5 or change_pct_5m < 0.3 or change_pct_15m < 0.2:
-                print(f"❌ Filtered {symbol}: Delivery={delivery}%, RSI={rsi}, Gap={gap_pct}%")
-                continue
+            reason = []
+            if delivery < 30:
+                reason.append(f"Delivery={delivery}%")
+            if rsi > 68:
+                reason.append(f"RSI={rsi:.2f}")
+            if gap_pct > 5:
+                reason.append(f"Gap={gap_pct:.2f}%")
+            if change_pct_5m < 0.2:
+                reason.append(f"5m={change_pct_5m:.2f}%")
+            if change_pct_15m < 0.1:
+                reason.append(f"15m={change_pct_15m:.2f}%")
+            
+            print(f"{total_attempted}/{len(STOCKS_TO_WATCH)} ❌ Skipped {symbol}: " + ", ".join(reason))
 
+            # ⚠️ Soft Fallback Logic: If no strong pass, allow weak momentum pass to prevent 0-stock exit
+            if change_pct_5m >= 0.05 and change_pct_15m >= 0.03 and rsi < 70 and delivery >= 30:
+                print(f"⚠️ Soft pass {symbol} due to fallback conditions")
+            else:
+                continue
+            
+                    
             # --- Final Record
             record = {
                 "symbol": symbol,
@@ -223,7 +308,7 @@ def prepare_data():
                 "volume_value": volume_value
             }
             records.append(record)
-            print(f"✅ Added: {symbol} | Score={momentum_score}")
+            print(f"{total_attempted}/{len(STOCKS_TO_WATCH)} ✅ Added: {symbol} | Score={momentum_score}")
             systime.sleep(1.2)  # Existing pacing logic
 
         except Exception as e:
@@ -238,7 +323,11 @@ def prepare_data():
     else:
         log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "✅ COMPLETE", f"{len(df)} stocks processed")
 
+    df.to_csv("D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv", index=False)
+    print(f"📁 Exported: Today_Trade_Stocks.csv with {len(df)} records.")
+    
     return df
+
     
 # ✅ Ask GPT to Pick Best Stock (Hybrid Momentum + Safety Filters)
 def ask_gpt_to_rank_stocks(df):

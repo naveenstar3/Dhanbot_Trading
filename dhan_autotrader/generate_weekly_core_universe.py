@@ -9,6 +9,7 @@ import datetime as dt
 from utils_logger import log_bot_action 
 
 PREMARKET_MODE = True 
+start_time = datetime.now()
 
 # === Load config for credentials ===
 with open("D:/Downloads/Dhanbot/dhan_autotrader/config.json", "r") as f:
@@ -156,13 +157,44 @@ for idx, (symbol, secid) in enumerate(filtered, 1):
         affordable_count += 1
         print(f"✅ Affordable — ₹{ltp}")
 
+        # Step 3: Calculate 5-day ATR
+        ohlc_payload = {
+            "securityId": secid,
+            "exchangeSegment": "NSE_EQ",
+            "instrument": "EQUITY",
+            "interval": "1DAY",
+            "oi": False,
+            "fromDate": from_date,
+            "toDate": to_date
+        }
+    
+        atr = 0.0
+        try:
+            ohlc_resp = requests.post("https://api.dhan.co/v2/charts/intraday", headers=HEADERS, json=ohlc_payload)
+            if ohlc_resp.status_code == 200:
+                ohlc_data = ohlc_resp.json()
+                if all(k in ohlc_data for k in ["high", "low", "close"]):
+                    highs = pd.Series(ohlc_data["high"])
+                    lows = pd.Series(ohlc_data["low"])
+                    closes = pd.Series(ohlc_data["close"])
+                    tr = pd.concat([
+                        highs - lows,
+                        (highs - closes.shift(1)).abs(),
+                        (lows - closes.shift(1)).abs()
+                    ], axis=1).max(axis=1)
+                    atr = round(tr.tail(5).mean(), 2)
+        except Exception as e:
+            print(f"⚠️ Failed ATR for {symbol}: {e}")
+    
         # All filters passed
         results.append({
             "symbol": symbol,
             "security_id": secid,
             "ltp": ltp,
-            "avg_volume": avg_volume
+            "avg_volume": avg_volume,
+            "atr": atr
         })
+    
         print(f"🟢 Final Selected: {symbol} (LTP: ₹{ltp}, Volume: {avg_volume})")
 
         systime.sleep(0.5)
@@ -195,7 +227,11 @@ except Exception as e:
 
 # === Final Summary ===
 print(f"\n📊 Final Summary:")
+end_time = datetime.now()
+elapsed = end_time - start_time
 print(f"• Total Checked: {total_checked}")
 print(f"• Passed Volume: {volume_passed_count}")
 print(f"• Passed Affordability: {affordable_count}")
 print(f"• Final Saved: {len(results)}")
+print(f"• Total Time: {str(elapsed).split('.')[0]}")
+

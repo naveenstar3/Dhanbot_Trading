@@ -139,7 +139,13 @@ def should_trigger_buy(symbol, high_15min, capital):
         return False, 0, 0
 
 def place_buy_order(symbol, security_id, price, qty):
+    # 🚫 Skip if inputs are missing or invalid
+    if not security_id or not symbol or qty <= 0 or price <= 0:
+        print(f"❌ Skipping invalid input: symbol={symbol}, security_id={security_id}, price={price}, qty={qty}")
+        return False, "Invalid input"
+
     buffer_price = round(price * 1.002, 2)  # 0.2% buffer for limit buy
+
     payload = {
         "transactionType": "BUY",
         "exchangeSegment": "NSE_EQ",
@@ -157,7 +163,30 @@ def place_buy_order(symbol, security_id, price, qty):
         "smartOrder": False
     }
 
+    # 🧾 Print payload for debugging
+    print(f"📦 Order Payload for {symbol}: {json.dumps(payload, indent=2)}")
+
     try:
+        response = requests.post(BASE_URL, headers=HEADERS, json=payload)
+
+        if response.status_code == 200:
+            order_id = response.json().get("data", {}).get("orderId", "N/A")
+            print(f"✅ Order placed for {symbol} | Order ID: {order_id}")
+            return True, order_id
+        else:
+            print(f"❌ Error placing order for {symbol}: {response.status_code} - {response.text}")
+            return False, response.text
+
+    except Exception as e:
+        print(f"❌ Exception placing order for {symbol}: {e}")
+        return False, str(e)
+
+    finally:
+        # ⏱️ Throttle to avoid 429 Rate Limit
+        time.sleep(random.uniform(0.6, 1.2))
+
+    try:
+        print(f"📦 Order Payload for {symbol}: {json.dumps(payload, indent=2)}")
         response = requests.post(BASE_URL, headers=HEADERS, json=payload)
         if response.status_code == 200:
             order_data = response.json().get("data", {})
@@ -222,6 +251,7 @@ def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map):
         return
 
     triggered, price, qty = should_trigger_buy(symbol, high_trigger, capital)
+    time.sleep(random.uniform(0.5, 1.2))  # ⏳ Throttle to avoid rate limits
     if not triggered:
         return
 
@@ -303,7 +333,12 @@ def run_autotrade():
 
         if best_candidate:
             s = best_candidate
+            if not s["security_id"] or not s["symbol"] or s["price"] <= 0 or s["qty"] <= 0:
+                print(f"❌ Invalid order data, skipping: {s}")
+                continue
+            
             success, order_id_or_msg = place_buy_order(s["symbol"], s["security_id"], s["price"], s["qty"])
+            systime.sleep(0.6)  # throttle to stay within rate limit
             if success:
                 trade_status = get_trade_status(order_id_or_msg)
                 if trade_status in ["TRADED", "PENDING", "OPEN"]:

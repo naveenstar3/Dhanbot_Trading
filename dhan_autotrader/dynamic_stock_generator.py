@@ -1,243 +1,266 @@
-# ✅ PART 1: Imports and Configuration
-import pandas as pd
-import pytz
+# ✅ PART 1: Imports and Config Setup
 import os
-import requests
+import sys
 import json
 import time as systime
-from dhan_api import get_security_id, get_current_capital
-from utils_logger import log_bot_action
+import pandas as pd
+import requests
 from datetime import datetime, timedelta
-import datetime as dt
-import sys
+from dhan_api import get_historical_price, get_current_capital
+from utils_logger import log_bot_action
+import openai
+from textblob import TextBlob
+from datetime import datetime, timedelta
+import time
 
+start_time = datetime.now()
 
-# === Credentials and Headers ===
 with open('D:/Downloads/Dhanbot/dhan_autotrader/config.json', 'r') as f:
     config = json.load(f)
 
-FINAL_STOCK_LIMIT = 50
-PREMARKET_MODE = True
 ACCESS_TOKEN = config["access_token"]
 CLIENT_ID = config["client_id"]
+openai.api_key = config.get("openai_api_key")
+NEWS_API_KEY = config.get("news_api_key", "")
+capital_path = "D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv"
+CAPITAL = float(pd.read_csv(capital_path, header=None).iloc[0, 0])
+
+
 HEADERS = {
     "access-token": ACCESS_TOKEN,
     "client-id": CLIENT_ID,
     "Content-Type": "application/json"
 }
 
-def is_market_closed():
-    if PREMARKET_MODE:
-        return False
-    now = datetime.now(pytz.timezone("Asia/Kolkata"))
-    weekday = now.weekday()
-    hour = now.hour + now.minute / 60.0
-    return weekday >= 5 or hour < 9.25 or hour > 15.5
+FINAL_STOCK_LIMIT = 150
+PREMARKET_MODE = True
 
-def fetch_latest_price(symbol, security_id):
-    now = datetime.now()
-    if PREMARKET_MODE or now.hour < 9 or now.hour >= 16:
-        india = pytz.timezone("Asia/Kolkata")
-        prev_day = dt.datetime.now(india) - dt.timedelta(days=1)
-        while prev_day.weekday() >= 5:  # Skip Sat/Sun
-            prev_day -= dt.timedelta(days=1)
-    
-        from_time = prev_day.replace(hour=15, minute=20, second=0, microsecond=0)
-        to_time = from_time + dt.timedelta(minutes=5)    
+# ✅ PART 2: Load filtered weekly universe CSV (already volume + affordability passed)
+universe_path = "D:/Downloads/Dhanbot/dhan_autotrader/weekly_affordable_volume_filtered.csv"
+
+try:
+    filtered_df = pd.read_csv(universe_path)
+except Exception as e:
+    print(f"❌ Failed to read universe CSV: {e}")
+    sys.exit(1)
+
+if "symbol" not in filtered_df.columns or "security_id" not in filtered_df.columns:
+    print("❌ Required columns 'symbol' and 'security_id' not found in weekly CSV.")
+    sys.exit(1)
+
+# 💡 If test mode is active
+test_security_id = None
+if len(sys.argv) > 1:
+    test_security_id = str(sys.argv[1]).strip()
+    print(f"🔬 Test Mode: Single Security ID = {test_security_id}")
+    filtered_df = filtered_df[filtered_df["security_id"].astype(str) == test_security_id]
+    if filtered_df.empty:
+        print(f"❌ Security ID {test_security_id} not found in filtered universe.")
+        sys.exit(1)
+
+    symbol = filtered_df.iloc[0]["symbol"]
+
+    # Run sentiment filter even in test mode
+    sentiment_passed = 1 if is_positive_sentiment(symbol, NEWS_API_KEY) else 0
+    print(f"📰 Sentiment Pass: {sentiment_passed}")
+
+    # Write single stock to CSV only if sentiment passes
+    if sentiment_passed:
+        output_file = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
+        with open(output_file, "w") as f:
+            f.write("symbol,security_id\n")
+            f.write(f"{symbol},{test_security_id}\n")
+        print(f"✅ Saved test-mode stock to {output_file}")
     else:
-        from_time = now - timedelta(minutes=5)
-        to_time = now
+        print(f"⛔ Stock {symbol} skipped due to negative sentiment.")
+        print(f"❌ {symbol} Skipped due to sentiment [1/1]")  # Manual index for test mode
 
-    payload = {
-        "securityId": security_id,
-        "exchangeSegment": "NSE_EQ",
-        "instrument": "EQUITY",
-        "interval": "1",
-        "oi": "false",
-        "fromDate": from_time.strftime("%Y-%m-%d %H:%M:%S"),
-        "toDate": to_time.strftime("%Y-%m-%d %H:%M:%S")
+    # Log to filter_summary_log.csv
+    summary_log_path = "D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_log.csv"
+    now = datetime.now().strftime("%m/%d/%Y %H:%M")
+    summary_data = {
+        "date": now,
+        "total_scanned": 1,
+        "affordable": 1,
+        "technical_passed": 1,
+        "volume_passed": CAPITAL,
+        "sentiment_passed": sentiment_passed,
+        "rsi_passed": "",  # Not checked here
+        "final_selected": 1 if sentiment_passed else 0
+    }
+    try:
+        if os.path.exists(summary_log_path):
+            existing_df = pd.read_csv(summary_log_path)
+            existing_df = pd.concat([existing_df, pd.DataFrame([summary_data])], ignore_index=True)
+            existing_df.to_csv(summary_log_path, index=False)
+        else:
+            pd.DataFrame([summary_data]).to_csv(summary_log_path, index=False)
+        print("📝 Logged test summary to filter_summary_log.csv")
+    except Exception as e:
+        print(f"⚠️ Could not log summary: {e}")
+    sys.exit(0)
+
+
+# 🔄 Convert to list of tuples for loop
+final_filtered_list = list(zip(filtered_df["symbol"].astype(str), filtered_df["security_id"].astype(str)))
+
+# ✅ PART 3: Scoring and Ranking Using GPT (Unchanged Logic)
+final_stocks = []
+sentiment_passed = 0
+rsi_passed = 0  # Not implemented, keep 0 for now
+
+print("🔍 Scanning filtered universe for scoring...")
+# ✅ PART 3: Scoring and Ranking Using GPT (Unchanged Logic)
+final_stocks = []
+sentiment_passed = 0
+rsi_passed = 0  # Not implemented, keep 0 for now
+
+print("🔍 Scanning filtered universe for scoring...")
+
+for idx, (symbol, secid) in enumerate(final_filtered_list, start=1):
+    try:
+        avg_volume = float(filtered_df.loc[filtered_df["symbol"] == symbol, "avg_volume"].values[0])
+        atr = float(filtered_df.loc[filtered_df["symbol"] == symbol, "atr"].values[0])
+        ltp = float(filtered_df.loc[filtered_df["symbol"] == symbol, "ltp"].values[0])
+
+        score = (
+            (avg_volume / 1e6) * 0.5 +
+            (ltp / 1000) * 0.25 +
+            (atr / 5) * 0.25
+        )
+
+        print(f"\n🔎 [{idx}/{len(final_filtered_list)}] {symbol}")
+        print(f"    • ✅ Volume OK: {avg_volume/1e6:.2f}M")
+        print(f"    • ✅ Affordable: ₹{ltp:.2f} vs ₹{CAPITAL/FINAL_STOCK_LIMIT:.2f}")
+        print(f"    • ✅ ATR: {atr}")
+        print(f"    • ✅ Score: {score:.2f} → Selected")
+
+        final_stocks.append((symbol, secid, round(score, 3)))
+        time.sleep(0.1)
+
+    except Exception as e:
+        print(f"\n❌ [{idx}/{len(final_filtered_list)}] {symbol}")
+        print(f"    • ⚠️ Skipped due to: {e}")
+        continue
+
+
+final_count = len(final_stocks)
+if len(final_stocks) == 0:
+    print("❌ No stocks passed scoring.")
+    sys.exit(1)
+
+# ✅ Sort and take top 150 to pass to GPT
+top_stocks = sorted(final_stocks, key=lambda x: x[2], reverse=True)[:150]
+
+# ✅ Format as GPT prompt
+gpt_prompt = f"""
+🧠 You are an expert intraday stock selector and market analyst. Today is {datetime.now().strftime('%Y-%m-%d')} IST.
+
+You have been given a list of pre-screened stocks, each with a momentum score based on:
+- 5-day average volume
+- ATR (intraday movement potential)
+- Stock price
+- Recent EOD uptrend pattern
+- Strong close signals
+
+Your mission is to select **exactly {FINAL_STOCK_LIMIT} stocks** that are the **safest and most reliable intraday candidates** for today’s session.
+
+📌 Important Instructions:
+- These stocks must have the **highest probability** of passing **live filters** like RSI < 70, 5-min/15-min uptrend, and positive sentiment during market hours.
+- Since intraday data is not available yet, base your ranking on **historical behavior that predicts future strength**, such as:
+  - Recent consistent bullishness or strong close
+  - High delivery % and volume consistency
+  - Clean technical structure (e.g., breakout readiness)
+  - Sector strength and market alignment
+  - No red-flag news or corporate issues
+  - Avoid SME/PSU/penny/junk stocks
+
+⚠️ You are strictly accountable for the quality of your picks. At least **10% of these selected stocks MUST pass** real-time intraday momentum filters in the next step.
+- Do not include weak, random, or speculative stocks just to fill the count.
+- Prioritize quality over diversity.
+
+🎯 Output format: Just the stock symbols, comma-separated, no explanation.
+
+Candidate Stocks with Scores:
+{", ".join([f"{s[0]}:{s[2]}" for s in top_stocks])}
+"""
+
+print("🤖 Asking GPT to rank top 50...")
+client = openai.OpenAI(api_key=config.get("openai_api_key"))
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[
+        {"role": "system", "content": "You are a trading assistant."},
+        {"role": "user", "content": gpt_prompt}
+    ],
+    temperature=0.4
+)
+
+gpt_result = response.choices[0].message.content.strip()
+if not gpt_result:
+    print("❌ GPT response was empty.")
+    sys.exit(1)
+
+ranked_symbols = [s.strip().upper() for s in gpt_result.split(",") if s.strip()]
+
+# ✅ PART 4: Final Output — Save Top 50 Picks
+print("📦 Filtering GPT-ranked symbols from scored universe...")
+
+final_selected = []
+seen_symbols = set()
+
+for symbol in ranked_symbols:
+    match = next((s for s in final_stocks if s[0] == symbol), None)
+    if match and symbol not in seen_symbols:
+        final_selected.append(match)
+        seen_symbols.add(symbol)
+
+if len(final_selected) == 0:
+    print("❌ No final stocks matched GPT output.")
+    sys.exit(1)
+
+# Save top 50 to dynamic_stock_list.csv
+output_file = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
+with open(output_file, "w") as f:
+    f.write("symbol,security_id\n")
+    for s in final_selected[:FINAL_STOCK_LIMIT]:
+        f.write(f"{s[0]},{s[1]}\n")
+
+# === ✅ FINAL SUMMARY LOG UPDATE ===
+try:
+    summary_log_path = "D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_log.csv"
+    now = datetime.now().strftime("%m/%d/%Y %H:%M")  # e.g., 5/27/2025 14:45
+
+    total_count = len(final_filtered_list)  # this is same as scanned, affordable, technical_passed, volume_passed
+
+    summary_data = {
+        "date": now,
+        "total_scanned": total_count,
+        "affordable": total_count,
+        "technical_passed": total_count,
+        "volume_passed": total_count,
+        "sentiment_passed": sentiment_passed,
+        "rsi_passed": rsi_passed,
+        "final_selected": len(final_selected)
     }
 
-    try:
-        resp = requests.post("https://api.dhan.co/v2/charts/intraday", headers=HEADERS, json=payload)
-        if resp.status_code == 429:
-            print(f"⏳ Rate limit hit for {symbol}")
-            log_bot_action("dynamic_stock_generator.py", "PriceFetch", "❌ 429 Rate Limit", f"{symbol} - Rate limit hit")
-            return 429
-        elif resp.status_code != 200:
-            print(f"❌ API failed for {symbol}: {resp.status_code} | {resp.text}")
-            return None
-        elif resp.status_code == 200:
-            data = resp.json()
-            closes = data.get("close", [])
-            return float(closes[-1]) if closes else None
-    except Exception as e:
-        print(f"⚠️ {symbol} LTP fetch error: {e}")
-    return None
+    # Append or update summary row
+    if os.path.exists(summary_log_path):
+        existing_df = pd.read_csv(summary_log_path)
+        mask = (existing_df["date"] == now) & (existing_df["total_scanned"] == total_count)
+        if mask.any():
+            existing_df.loc[mask, summary_data.keys()] = summary_data.values()
+        else:
+            existing_df = pd.concat([existing_df, pd.DataFrame([summary_data])], ignore_index=True)
+        existing_df.to_csv(summary_log_path, index=False)
+    else:
+        pd.DataFrame([summary_data]).to_csv(summary_log_path, index=False)
 
-def load_dhan_master(path):
-    master_list = []
-    try:
-        reader = pd.read_csv(path)
-        for _, row in reader.iterrows():
-            symbol = str(row['SEM_TRADING_SYMBOL']).strip().upper()
-            secid = str(row['SEM_SMST_SECURITY_ID']).strip()
-            exch_type = str(row.get("SEM_EXCH_INSTRUMENT_TYPE", "")).strip().upper()
-            series = str(row.get("SEM_SERIES", "")).strip().upper()
+    print("📝 Logged summary to filter_summary_log.csv")
 
-            skip_keywords = ['-RE', '-PP', 'SGB', 'TS', 'RJ', 'WB', 'AP', 'PN', 'HP',
-                            'SFMP', 'M6DD', 'EMKAYTOOLS', 'ICICM', 'TRUST', 'REIT', 'INVIT', 'ETF', 'FUND']
-            skip_exch_types = ['DBT', 'DEB', 'MF', 'GS', 'TB']
-            skip_series = ['SG', 'GS', 'YL', 'MF', 'NC', 'TB']
+except Exception as e:
+    print(f"⚠️ Could not log summary: {e}")
 
-            if (not secid.isdigit() or len(secid) < 4 or len(symbol) < 3 or 
-                symbol.startswith(tuple('0123456789')) or
-                any(kw in symbol for kw in skip_keywords) or
-                exch_type in skip_exch_types or series in skip_series):
-                continue
-
-            master_list.append((symbol, secid))
-    except Exception as e:
-        print(f"❌ Error loading dhan_master.csv: {e}")
-    return master_list
-
-def get_affordable_symbols(master_list):
-    capital = get_current_capital()
-    affordable = []
-    unavailable = []
-
-    for idx, (symbol, secid) in enumerate(master_list, start=1):
-        if not secid.isdigit() or len(secid) < 3:
-            continue
-    
-        price = fetch_latest_price(symbol, secid)
-        systime.sleep(0.5)  # ✅ Add delay after each fetch
-    
-        if price is None or price == 429:
-            unavailable.append(symbol)
-            continue
-        elif price > capital:
-            print(f"⛔ Skipped {symbol} ({idx}/{len(master_list)}) — ₹{price} > ₹{capital}")
-            continue
-    
-        affordable.append((symbol, secid, 0.0))
-        print(f"✅ Added {symbol} ({idx}/{len(master_list)})")
-    
-        systime.sleep(0.5)
-
-    print(f"📊 Final affordable: {len(affordable)} | Unavailable: {len(unavailable)}")
-    return affordable
-    
-def save_final_stock_list(stocks, filepath):
-    df = pd.DataFrame(stocks, columns=["symbol", "security_id", "momentum"])
-    df.to_csv(filepath, index=False)
-    print(f"✅ Saved {len(stocks)} stocks to {filepath}")
-
-def save_filter_summary(stats):
-    file = "D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_log.csv"
-    header = ",".join(stats.keys())
-    row = ",".join(str(x) for x in stats.values())
-    date = datetime.now().strftime("%Y-%m-%d")
-
-    if not os.path.exists(file):
-        with open(file, "w") as f:
-            f.write("date," + header + "\n")
-    with open(file, "a") as f:
-        f.write(f"{date},{row}\n")
-
-def run_dynamic_stock_selection():
-    test_security_id = None
-    if len(sys.argv) > 1:
-        test_security_id = str(sys.argv[1]).strip()
-        print(f"🔬 Test Mode: Single Security ID = {test_security_id}")
-
-    print("🚀 Starting dynamic stock selection..." + (" (PRE-MARKET MODE)" if PREMARKET_MODE else ""))
-    
-    if is_market_closed():
-        print("⏸️ Market is closed. Exiting.")
-        return
-
-    master_path = "D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv"
-    output_file = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
-
-    master_list = load_dhan_master(master_path)
-
-    if test_security_id:
-        master_list = [entry for entry in master_list if entry[1] == test_security_id]
-        if not master_list:
-            print(f"❌ Security ID {test_security_id} not found in dhan_master.csv")
-            return
-
-    affordable_ids = get_affordable_symbols(master_list)
-
-    if not affordable_ids:
-        print("🚨 No affordable stocks found. Exiting.")
-        return
-
-    # ✅ Load volume filter data
-    print("📊 Fetching 1-min intraday data (last 5d)...")
-
-    filtered = []
-    end = datetime.now()
-    start = end - timedelta(days=5)
-    from_date = start.strftime('%Y-%m-%d') + " 09:30:00"
-    to_date = end.strftime('%Y-%m-%d') + " 15:30:00"
-    
-    for symbol, secid, _ in affordable_ids:
-        payload = {
-            "securityId": secid,
-            "exchangeSegment": "NSE_EQ",
-            "instrument": "EQUITY",
-            "interval": "1",
-            "oi": "false",
-            "fromDate": from_date,
-            "toDate": to_date
-        }
-    
-        try:
-            resp = requests.post("https://api.dhan.co/v2/charts/intraday", headers=HEADERS, json=payload)
-            data = resp.json()
-            if not all(k in data for k in ["volume", "timestamp"]):
-                print(f"[{symbol}] ❌ No EOD data.")
-                continue
-    
-            df = pd.DataFrame({
-                "timestamp": pd.to_datetime(data["timestamp"], unit="s"),
-                "volume": data["volume"]
-            })
-            df["date"] = df["timestamp"].dt.date
-            volume_by_day = df.groupby("date")["volume"].sum()
-            avg_volume = int(volume_by_day.tail(5).mean())
-    
-            if avg_volume >= 200000:
-                filtered.append((symbol, secid, 0.0))
-                print(f"[{symbol}] ✅ Avg Vol = {avg_volume}")
-            else:
-                print(f"[{symbol}] ⛔ Low Vol = {avg_volume}")
-    
-            systime.sleep(0.5)
-    
-        except Exception as e:
-            print(f"[{symbol}] ❌ Error: {e}")
-            continue
-    
-    
-    final_stocks = filtered[:FINAL_STOCK_LIMIT]
-    
-    save_final_stock_list(final_stocks, output_file)
-
-    filter_stats = {
-        "total_scanned": len(master_list),
-        "affordable": len(affordable_ids),
-        "technical_passed": len(affordable_ids),  # Now same as affordable count
-        "volume_passed": "SKIPPED",
-        "sentiment_passed": "SKIPPED",
-        "rsi_passed": "SKIPPED",
-        "dynamic_list_selected": len(final_stocks)
-    }
-    save_filter_summary(filter_stats)
-    log_bot_action("dynamic_stock_generator.py", "run_dynamic_stock_selection", "✅ FINISHED", 
-                  f"Affordable={len(affordable_ids)}, Final={len(final_stocks)}")
-
-if __name__ == "__main__":
-    run_dynamic_stock_selection()
+end_time = datetime.now()
+elapsed = end_time - start_time
+print(f"• Total Time: {str(elapsed).split('.')[0]}")

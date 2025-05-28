@@ -977,3 +977,29 @@ timestamp,script_name,action,status,message
 2025-05-27 12:12:11,dynamic_stock_generator.py,run_dynamic_stock_selection,✅ FINISHED,"Scanned=1, Final=1"
 2025-05-27 12:15:10,dynamic_stock_generator.py,run_dynamic_stock_selection,✅ FINISHED,"Scanned=1, Final=1"
 2025-05-27 13:04:54,dynamic_stock_generator.py,run_dynamic_stock_selection,✅ FINISHED,"Scanned=1, Final=1"
+2025-05-27 16:00:05,git_sync.py,Git Push,✅ COMPLETE,46 file(s) pushed
+2025-05-28 09:32:14,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-28 11:39:24,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-28 11:46:38,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-28 11:57:32,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-28 11:58:01,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-05-28 11:59:25,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-05-28 12:00:38,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-05-28 12:05:52,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-05-28 12:07:16,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-05-28 12:17:37,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-05-28 12:19:01,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-05-28 12:27:07,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-05-28 12:28:36,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-05-28 12:36:24,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-05-28 12:38:03,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,2 stocks processed
+2025-05-28 12:38:09,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['GTLINFRA', 'SEPC']"
+2025-05-28 13:06:58,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-05-28 13:09:19,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-05-28 13:38:24,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-05-28 13:41:18,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-05-28 13:52:00,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-05-28 13:55:18,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,25 stocks processed
+2025-05-28 13:55:21,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['JIOFIN', 'SAGILITY', 'SYNCOMF', 'NMDC', 'INFIBEAM']"
+2025-05-28 15:27:46,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹-37.36 | Capital: ₹3000.0
+2025-05-28 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹-37.36 | Capital: ₹3000.0
