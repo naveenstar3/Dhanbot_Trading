@@ -6,7 +6,7 @@ import pytz
 import time as systime
 import pandas as pd
 import os
-from dhan_api import get_live_price, get_historical_price
+from dhan_api import get_live_price, get_historical_price, compute_rsi
 from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_rank_stocks
 from utils_logger import log_bot_action
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -107,20 +107,7 @@ def load_dynamic_stocks(filepath="D:/Downloads/Dhanbot/dhan_autotrader/dynamic_s
     raw_lines = safe_read_csv(filepath)
     df = pd.read_csv(pd.compat.StringIO("".join(raw_lines)))
     return list(zip(df["symbol"], df["security_id"]))
-
-def build_dhan_symbol_map(valid_symbols):
-    master = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv")
-    map_dict = {}
-    for _, row in master.iterrows():
-        sym = str(row["SEM_TRADING_SYMBOL"]).strip().upper()
-        secid = str(row["SEM_SMST_SECURITY_ID"]).strip()
-        if sym in valid_symbols:
-            map_dict[sym] = secid
-    return map_dict
-
-def get_security_id(symbol, symbol_map):
-    return symbol_map.get(symbol.upper())
-
+    
 # ✅ Buy Logic + Order Execution
 
 def should_trigger_buy(symbol, high_15min, capital):
@@ -245,40 +232,59 @@ best_candidate = None
 trade_lock = threading.Lock()
 
 def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map):
-    global best_candidate
-
-    if not high_trigger:
-        return
-
-    triggered, price, qty = should_trigger_buy(symbol, high_trigger, capital)
-    time.sleep(random.uniform(0.5, 1.2))  # ⏳ Throttle to avoid rate limits
-    if not triggered:
-        return
-
-    # Use GPT ranking score: higher rank = higher score
     try:
-        rank_score = 100 - ranked_stocks.index(symbol)
-    except ValueError:
-        rank_score = 0  # Symbol not ranked by GPT
-    
-    score = rank_score
-    
-    with trade_lock:
-        if best_candidate is None or score > best_candidate["score"]:
-            best_candidate = {
-                "symbol": symbol,
-                "price": price,
-                "qty": qty,
-                "security_id": dhan_symbol_map.get(symbol),
-                "score": score
-            }
+        send_telegram_message(f"🔎 Scanning {symbol}...")
+
+        security_id = dhan_symbol_map.get(symbol)
+        if not security_id:
+            print(f"⛔ Skipping {symbol} — security ID not found.")
+            return
+
+        ltp = get_live_price(symbol, security_id, premarket=False)
+        price = ltp if ltp else 0
+
+        if price <= 0:
+            print(f"❌ Skipping {symbol} — Invalid LTP: ₹{price}")
+            return
+
+        # Breakout Check
+        if high_trigger and price < high_trigger:
+            print(f"⏭️ Skipping {symbol} — Price ₹{price} has not crossed 15-min high ₹{high_trigger}")
+            return
+
+        # RSI Check
+        rsi = compute_rsi(security_id)
+        if rsi is None:
+            print(f"⚠️ Skipping {symbol} — Unable to compute RSI.")
+            return
+        if rsi >= 70:
+            print(f"⚠️ Skipping {symbol} — RSI too high: {rsi}")
+            return
+
+        qty = calculate_qty(price, capital)
+        if qty <= 0:
+            print(f"❌ Skipping {symbol} — Insufficient qty for price ₹{price}")
+            return
+
+        # ✅ Final Candidate
+        return {
+            "symbol": symbol,
+            "security_id": security_id,
+            "price": price,
+            "qty": qty
+        }
+
+    except Exception as e:
+        print(f"❌ Exception during monitoring {symbol}: {e}")
+        return
 
 # ✅ Real-Time Monitoring & Trade Controller
 
 def run_autotrade():
+    csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv"
     log_bot_action("autotrade.py", "startup", "STARTED", "Smart dynamic AutoTrade started.")
     print("🔍 Checking if market is open...")
-    
+
     if not is_market_open():
         print("⛔ Market is currently closed. Exiting auto-trade.")
         log_bot_action("autotrade.py", "market_status", "INFO", "Market closed today, skipping trading.")
@@ -292,11 +298,13 @@ def run_autotrade():
         send_telegram_message("⛔ Emergency Exit Active. Skipping today's trading.")
         return
 
-    capital = get_available_capital()
-    min_profit = get_dynamic_minimum_net_profit(capital)
+    if not os.path.exists(csv_path):
+        print(f"⛔ {csv_path} not found. Falling back to dynamic_stock_list.csv")
+        csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"  
 
-    # ✅ Step 1: Prepare & GPT Rank
-    df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv")
+    df = pd.read_csv(csv_path)
+    print(f"📄 Using stock list: {csv_path}")
+    
     if df.empty or "symbol" not in df.columns or "security_id" not in df.columns:
         send_telegram_message("⚠️ dynamic_stock_list.csv is missing or invalid.")
         return
@@ -305,32 +313,51 @@ def run_autotrade():
     dhan_symbol_map = dict(zip(df["symbol"], df["security_id"]))
     bought_stocks = set()
     exit_loop = False
+    capital = get_available_capital()
     first_15min_high = {}
 
     # ✅ Precompute 15-min high (for each ranked stock)
     for stock in ranked_stocks:
         try:
-            candles = get_historical_price(stock, interval="15m")
+            if not stock or not isinstance(stock, str) or stock.strip() == "":
+                print(f"⚠️ Skipping empty or invalid symbol: {stock}")
+                continue
+    
+            security_id = dhan_symbol_map.get(stock)
+            if not security_id:
+                print(f"⛔ {stock} Skipped — Missing security_id in CSV.")
+                continue
+            candles = get_historical_price(security_id, interval="15m")       
+            systime.sleep(0.6)
             highs = [c['high'] for c in candles if 'high' in c]
             if highs:
                 first_15min_high[stock] = max(highs[:3])  # first 3 candles ~15m
         except Exception as e:
-            print(f"⚠️ Failed to fetch 15min high for {stock}: {e}")
+            print(f"⚠️ Skipping {stock} — could not fetch 15min high. Reason: {e}")   
 
     # ✅ Live Monitoring Loop
+    from datetime import datetime as dt
+    
+    trade_executed = False
+    s = None  # Final trade data to reference in EOD
+    
     while datetime.now(pytz.timezone("Asia/Kolkata")).time() <= time(14, 30):
         global best_candidate
         best_candidate = None  # Reset each minute
-
+    
+        now_time = datetime.now(pytz.timezone("Asia/Kolkata")).strftime('%H:%M:%S')
+        print(f"🔁 Monitoring stocks for breakout at {now_time}...")
+        send_telegram_message(f"🟡 Monitoring loop running — {now_time}")
+    
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = []
             for symbol in ranked_stocks:
                 high_trigger = first_15min_high.get(symbol)
                 futures.append(executor.submit(monitor_stock_for_breakout, symbol, high_trigger, capital, dhan_symbol_map))
-
+    
             for f in as_completed(futures):
                 pass  # Wait for all threads to complete this cycle
-
+    
         if best_candidate:
             s = best_candidate
             if not s["security_id"] or not s["symbol"] or s["price"] <= 0 or s["qty"] <= 0:
@@ -341,23 +368,70 @@ def run_autotrade():
             systime.sleep(0.6)  # throttle to stay within rate limit
             if success:
                 trade_status = get_trade_status(order_id_or_msg)
+                systime.sleep(0.5)  # throttle API after trade status check
                 if trade_status in ["TRADED", "PENDING", "OPEN"]:
                     log_trade(s["symbol"], s["security_id"], s["qty"], s["price"])
                     send_telegram_message(f"✅ Bought {s['symbol']} at ₹{s['price']}, Qty: {s['qty']}")
                     log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{s['symbol']} @ ₹{s['price']}")
-                    global trade_executed
                     trade_executed = True
                     break  # ✅ Exit main loop — trade done
             else:
                 send_telegram_message(f"❌ Order failed for {s['symbol']}: {order_id_or_msg}")
                 log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{s['symbol']} → {order_id_or_msg}")
-        # 🕒 Timeout Watchdog: No trade by 2:15 PM
+        
         now_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
         if not trade_executed and now_time >= time(14, 15):
             send_telegram_message("⚠️ No trade executed by 2:15 PM. Please review.")
-            log_bot_action("autotrade.py", "WATCHDOG", "⚠️ NO TRADE", "No trade by 2:15 PM")       
-
+            log_bot_action("autotrade.py", "WATCHDOG", "⚠️ NO TRADE", "No trade by 2:15 PM")
+    
         systime.sleep(60)
+    
+    # 🕒 3:25 PM End-of-Day Telegram Report
+    now_ist = dt.now(pytz.timezone("Asia/Kolkata")).strftime('%d-%b-%Y')
+    
+    if trade_executed and s:
+        try:
+            ltp_candle = get_latest_price(s["security_id"])
+            systime.sleep(0.5)
+            ltp = ltp_candle.get("last_price", s["price"])
+            profit = round((ltp - s["price"]) * s["qty"], 2)
+        except Exception as e:
+            ltp = s["price"]
+            profit = 0.0
+    
+        summary = f"""📊 *DhanBot Daily Summary — {now_ist}*
+    
+    🛒 *Trade Executed:*
+    • 🏷️ Symbol: {s['symbol']}
+    • 🆔 Security ID: {s['security_id']}
+    • 💰 Buy Price: ₹{s['price']}
+    • 📦 Quantity: {s['qty']}
+    • 🧾 Order Status: TRADED
+    
+    📈 *Trade Metrics:*
+    • 📊 15-min High Trigger: ₹{first_15min_high.get(s['symbol'], 'N/A')}
+    • 🔻 SL Hit: No
+    
+    💼 Capital Used: ₹{s['qty'] * s['price']:.2f}
+    📈 LTP (EOD): ₹{ltp}
+    💸 Net P&L: ₹{profit}
+    
+    📌 Auto-Trade completed successfully.
+    """
+    else:
+        summary = f"""📊 *DhanBot Daily Summary — {now_ist}*
+    
+    ⚠️ No trades were executed today.
+    
+    📌 Market Status: OPEN
+    📋 Stocks Monitored: {len(ranked_stocks)}
+    ⏳ Last scanned at: {datetime.now(pytz.timezone("Asia/Kolkata")).strftime('%H:%M')}
+    
+    🕒 Watchdog auto-exit confirmed at 3:25 PM.
+    """
+    
+    send_telegram_message(summary)
+    
 
 # ✅ Final Trigger Block
 

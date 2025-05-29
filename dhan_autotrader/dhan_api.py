@@ -141,6 +141,28 @@ def get_current_capital():
 
 # ✅ Fetch live price from Dhan API (last traded price)
 
+def compute_rsi(security_id, period=14):
+    try:
+        candles = get_historical_price(security_id, interval="15m", limit=period + 1)
+        closes = [c["close"] for c in candles if "close" in c]
+        if len(closes) < period + 1:
+            return 50  # Neutral fallback if insufficient data
+
+        deltas = [closes[i+1] - closes[i] for i in range(len(closes)-1)]
+        gains = [d for d in deltas if d > 0]
+        losses = [-d for d in deltas if d < 0]
+
+        avg_gain = sum(gains) / period if gains else 0.01
+        avg_loss = sum(losses) / period if losses else 0.01
+
+        rs = avg_gain / avg_loss if avg_loss != 0 else 100
+        rsi = 100 - (100 / (1 + rs))
+        return round(rsi, 2)
+    except Exception as e:
+        print(f"⚠️ RSI computation failed for {security_id}: {e}")
+        return 50  # Neutral fallback
+
+
 @retry(max_attempts=3, delay=2)
 def get_live_price(symbol, security_id, premarket=False):
     now = datetime.now()
@@ -165,8 +187,6 @@ def get_live_price(symbol, security_id, premarket=False):
         "fromDate": from_time.strftime("%Y-%m-%d %H:%M:%S"),
         "toDate": to_time.strftime("%Y-%m-%d %H:%M:%S")
     }
-
-    print(f"📌 DEBUG: In fetch_latest_price() for {symbol}")
     try:
         resp = session.post("https://api.dhan.co/v2/charts/intraday", json=payload)
         if resp.status_code == 429:
@@ -186,6 +206,8 @@ def get_live_price(symbol, security_id, premarket=False):
         
 # ✅ Fetch historical candles (5m, 15m, or 1d)
 def get_historical_price(security_id, interval="5", limit=20, from_date=None, to_date=None):
+    if not security_id or not str(security_id).strip().isdigit():
+        raise ValueError(f"Invalid security_id passed to get_historical_price: {security_id}")
     try:
         india = pytz.timezone("Asia/Kolkata")
         now = datetime.now(india)

@@ -151,40 +151,59 @@ for idx, (symbol, secid) in enumerate(filtered, 1):
         # Step 2: Only check affordability if volume passed
         ltp = get_live_price(symbol, secid, premarket=True)
         if not ltp or ltp > CAPITAL:
-            print(f"⛔ Not Affordable: ₹{ltp} > ₹{CAPITAL}")
+            print(f"⛔ {symbol} Skipped — Not Affordable: ₹{ltp} > Capital ₹{CAPITAL}")
             continue
 
         affordable_count += 1
         print(f"✅ Affordable — ₹{ltp}")
 
-        # Step 3: Calculate 5-day ATR
-        ohlc_payload = {
-            "securityId": secid,
-            "exchangeSegment": "NSE_EQ",
-            "instrument": "EQUITY",
-            "interval": "1DAY",
-            "oi": False,
-            "fromDate": from_date,
-            "toDate": to_date
-        }
-    
+        # Step 3: Calculate 5-day ATR-proxy using 1-min candles from past 15 calendar days
         atr = 0.0
         try:
-            ohlc_resp = requests.post("https://api.dhan.co/v2/charts/intraday", headers=HEADERS, json=ohlc_payload)
-            if ohlc_resp.status_code == 200:
-                ohlc_data = ohlc_resp.json()
-                if all(k in ohlc_data for k in ["high", "low", "close"]):
-                    highs = pd.Series(ohlc_data["high"])
-                    lows = pd.Series(ohlc_data["low"])
-                    closes = pd.Series(ohlc_data["close"])
-                    tr = pd.concat([
-                        highs - lows,
-                        (highs - closes.shift(1)).abs(),
-                        (lows - closes.shift(1)).abs()
-                    ], axis=1).max(axis=1)
-                    atr = round(tr.tail(5).mean(), 2)
+            from_datetime = (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d 09:30:00')
+            to_datetime = datetime.now().strftime('%Y-%m-%d 15:30:00')
+            
+            atr_payload = {
+                "securityId": secid,
+                "exchangeSegment": "NSE_EQ",
+                "instrument": "EQUITY",
+                "interval": "1",
+                "oi": False,
+                "fromDate": from_datetime,
+                "toDate": to_datetime
+            }
+        
+            atr_url = "https://api.dhan.co/v2/charts/intraday"
+            atr_resp = requests.post(atr_url, headers=HEADERS, json=atr_payload)
+        
+            if atr_resp.status_code == 200:
+                intraday_data = atr_resp.json()
+                if all(k in intraday_data for k in ["high", "low", "timestamp"]):
+                    df = pd.DataFrame({
+                        "timestamp": pd.to_datetime(intraday_data["timestamp"], unit="s"),
+                        "high": intraday_data["high"],
+                        "low": intraday_data["low"]
+                    })
+                    df["date"] = df["timestamp"].dt.date
+                    df["range"] = df["high"] - df["low"]
+                    daily_avg = df.groupby("date")["range"].max().dropna().tail(5)
+                    if len(daily_avg) >= 5:
+                        atr = round(daily_avg.mean(), 2)
+                        if atr < 1.5:
+                            print(f"⛔ {symbol} Skipped — ATR too low: ₹{atr}")
+                            continue                                           
+                    else:
+                        print(f"⛔ Not enough trading days to compute ATR for {symbol}")
+                        continue
+                else:
+                    print(f"⛔ Incomplete intraday candle data for {symbol}")
+                    continue
+            else:
+                print(f"❌ ATR fetch failed for {symbol}, status {atr_resp.status_code}")
+                continue
         except Exception as e:
-            print(f"⚠️ Failed ATR for {symbol}: {e}")
+            print(f"⚠️ ATR computation failed for {symbol}: {e}")
+            continue            
     
         # All filters passed
         results.append({
@@ -195,7 +214,7 @@ for idx, (symbol, secid) in enumerate(filtered, 1):
             "atr": atr
         })
     
-        print(f"🟢 Final Selected: {symbol} (LTP: ₹{ltp}, Volume: {avg_volume})")
+        print(f"🟢 Final Selected: {symbol} (LTP: ₹{ltp}, Volume: {avg_volume}, ATR: ₹{atr})")
 
         systime.sleep(0.5)
 
@@ -204,8 +223,17 @@ for idx, (symbol, secid) in enumerate(filtered, 1):
         continue
 
 # === Save to CSV ===
-pd.DataFrame(results).to_csv(OUTPUT_CSV, index=False)
-print(f"\n✅ Saved {len(results)} stocks to {OUTPUT_CSV}")
+# === Limit to top 200 by Volume × ATR (relevance score) ===
+ranked_df = pd.DataFrame(results)
+
+if ranked_df.empty:
+    print("❌ No valid stocks passed all filters. Skipping CSV write.")
+else:
+    ranked_df["score"] = ranked_df["avg_volume"] * ranked_df["atr"]
+    ranked_df = ranked_df.sort_values(by="score", ascending=False).head(200)
+    ranked_df.drop(columns=["score"], inplace=True)
+    ranked_df.to_csv(OUTPUT_CSV, index=False)
+    print(f"\n✅ Saved top {len(ranked_df)} ranked stocks to {OUTPUT_CSV}")
 
 # === Log filter summary ===
 summary_row = {

@@ -32,7 +32,7 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-FINAL_STOCK_LIMIT = 150
+FINAL_STOCK_LIMIT = 100
 PREMARKET_MODE = True
 
 # ✅ PART 2: Load filtered weekly universe CSV (already volume + affordability passed)

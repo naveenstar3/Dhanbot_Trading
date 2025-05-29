@@ -407,3 +407,18 @@ if __name__ == "__main__":
         print("\n🤖 Sending to GPT for analysis...\n")
         decision = ask_gpt_to_rank_stocks(df)
         print(f"\n✅ GPT Decision: {decision}")
+        
+        # 🟢 Save GPT-final list to new CSV for autotrade
+        live_df = df[df["symbol"].isin(decision)][["symbol"]].copy()
+        
+        # Reload original security_id map from dynamic_stock_list.csv
+        map_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv")
+        live_df = pd.merge(live_df, map_df, on="symbol", how="left")
+        
+        # Ensure clean structure and drop duplicates
+        live_df = live_df[["symbol", "security_id"]].dropna().drop_duplicates()
+        
+        # Save to new file
+        live_df.to_csv("D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv", index=False)
+        print(f"✅ Saved GPT-ranked stocks to live_stocks_trade_today.csv → {len(live_df)} stocks")
+        
