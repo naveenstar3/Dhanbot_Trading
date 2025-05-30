@@ -8,6 +8,8 @@ import functools
 import time
 from utils_safety import retry
 import datetime as dt
+from utils_logger import log_bot_action
+
 
 
 
@@ -27,6 +29,26 @@ session.headers.update({
 
 
 dhan_master_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv")
+
+def get_order_status(order_id):
+    url = f"{API_BASE}/orders/{order_id}"
+    headers = get_auth_headers()
+    res = requests.get(url, headers=headers)
+    return res.json()
+
+
+
+def calculate_qty(price, capital, buffer_pct=0.002):
+    """
+    Calculates quantity based on available capital and price.
+    Applies a small buffer percentage to avoid overspending.
+    """
+    if price <= 0:
+        return 0
+    effective_price = price * (1 + buffer_pct)
+    qty = int(capital // effective_price)
+    return qty
+
 
 def retry(max_attempts=3, delay=2):
     def decorator(func):
@@ -138,6 +160,14 @@ def get_current_capital():
     except Exception as e:
         print(f"❌ Error reading current_capital.csv: {e}")
         raise SystemExit("🛑 Halting: current_capital.csv must contain a valid capital value in A1")
+        
+def get_stock_volume(security_id):
+    try:
+        candles = get_historical_price(security_id, interval="1d", days=1)
+        return candles[-1]["volume"] if candles else 0
+    except Exception as e:
+        print(f"⚠️ Volume fetch failed: {e}")
+        return 0
 
 # ✅ Fetch live price from Dhan API (last traded price)
 

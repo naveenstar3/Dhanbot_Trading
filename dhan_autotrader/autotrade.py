@@ -6,7 +6,7 @@ import pytz
 import time as systime
 import pandas as pd
 import os
-from dhan_api import get_live_price, get_historical_price, compute_rsi
+from dhan_api import get_live_price, get_historical_price, compute_rsi, calculate_qty, get_stock_volume
 from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_rank_stocks
 from utils_logger import log_bot_action
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -80,6 +80,16 @@ def get_available_capital():
         print(f"⚠️ Skipping growth file update: {e}")
 
     return base_capital
+
+def compute_trade_score(stock):
+    """
+    Simple scoring logic: You can customize this.
+    Currently favors lower price and higher qty (affordability).
+    """
+    price_weight = -1 * stock["price"]  # Lower price = better
+    qty_weight = stock["qty"] * 0.5     # More qty = better
+    return round(price_weight + qty_weight, 2)
+
 
 def get_dynamic_minimum_net_profit(capital):
     return max(5, round(capital * 0.001, 2))  # ₹5 or 0.1%
@@ -159,6 +169,7 @@ def place_buy_order(symbol, security_id, price, qty):
         if response.status_code == 200:
             order_id = response.json().get("data", {}).get("orderId", "N/A")
             print(f"✅ Order placed for {symbol} | Order ID: {order_id}")
+            send_telegram_message(f"✅ Order placed for {symbol} | Order ID: {order_id}")
             return True, order_id
         else:
             print(f"❌ Error placing order for {symbol}: {response.status_code} - {response.text}")
@@ -170,7 +181,7 @@ def place_buy_order(symbol, security_id, price, qty):
 
     finally:
         # ⏱️ Throttle to avoid 429 Rate Limit
-        time.sleep(random.uniform(0.6, 1.2))
+        systime.sleep(random.uniform(0.6, 1.2))
 
     try:
         print(f"📦 Order Payload for {symbol}: {json.dumps(payload, indent=2)}")
@@ -240,7 +251,23 @@ def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map):
             print(f"⛔ Skipping {symbol} — security ID not found.")
             return
 
-        ltp = get_live_price(symbol, security_id, premarket=False)
+        ltp = 0
+        retries = 3
+        while retries > 0:
+            try:
+                ltp = get_live_price(symbol, security_id, premarket=False)
+                if ltp == "RATE_LIMIT":
+                    raise ValueError("RATE_LIMIT")
+                break
+            except Exception as e:
+                if "429" in str(e) or "RATE_LIMIT" in str(e):
+                    print(f"⏳ Rate limit hit for {symbol}. Retrying in 10s...")
+                    systime.sleep(10)
+                    retries -= 1
+                else:
+                    print(f"⚠️ {symbol} LTP fetch error: {e}")
+                    break
+        
         price = ltp if ltp else 0
 
         if price <= 0:
@@ -266,14 +293,35 @@ def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map):
             print(f"❌ Skipping {symbol} — Insufficient qty for price ₹{price}")
             return
 
-        # ✅ Final Candidate
+        # ✅ Final Candidate with Weighted Score
+        # Get historical data for last 5 days manually
+        try:
+            candles_all = get_historical_price(security_id, interval="1d")
+            candles = candles_all[-5:] if len(candles_all) >= 5 else candles_all
+            volume = sum(c.get("volume", 0) for c in candles)
+        except Exception as e:
+            print(f"⚠️ Volume fetch failed: {e}")
+            volume = 0
+        # Ensure this function exists or implement it
+        atr = get_atr(symbol)  # Ensure ATR function exists
+        
+        volume_score = min(1.0, volume / 1000000)  # Normalize volume
+        atr_distance = abs(price - high_trigger) if high_trigger else 0
+        atr_score = min(1.0, atr_distance / price) if price else 0
+        
+        # Optional: placeholder ML sentiment score (e.g., from GPT earlier process or set to 0.5 default)
+        ml_score = 0.5  
+        
+        weighted_score = round((ml_score * 0.6) + (volume_score * 0.2) + (atr_score * 0.2), 4)
+        
         return {
             "symbol": symbol,
             "security_id": security_id,
             "price": price,
-            "qty": qty
+            "qty": qty,
+            "score": weighted_score
         }
-
+        
     except Exception as e:
         print(f"❌ Exception during monitoring {symbol}: {e}")
         return
@@ -342,43 +390,66 @@ def run_autotrade():
     s = None  # Final trade data to reference in EOD
     
     while datetime.now(pytz.timezone("Asia/Kolkata")).time() <= time(14, 30):
-        global best_candidate
-        best_candidate = None  # Reset each minute
+        print(f"🔁 Monitoring stocks for breakout at {datetime.now().strftime('%H:%M:%S')}...")
+        candidate_scores = []
+        top_candidates = []
+        for symbol in ranked_stocks:
+            rate_limit_counter = 0
+            if rate_limit_counter >= 5:
+                print("⛔ Too many rate limit errors. Backing off for 30 seconds...")
+                systime.sleep(30)
+                rate_limit_counter = 0
+            rate_limit_counter += 1
+            high_trigger = first_15min_high.get(symbol)
+            result = monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map)
+            systime.sleep(0.8)  # Respect API rate limit
     
-        now_time = datetime.now(pytz.timezone("Asia/Kolkata")).strftime('%H:%M:%S')
-        print(f"🔁 Monitoring stocks for breakout at {now_time}...")
-        send_telegram_message(f"🟡 Monitoring loop running — {now_time}")
+            if result:
+                result["score"] = compute_trade_score(result)  # Optional: could be based on volume, price action, etc.
+                candidate_scores.append(result)
+                top_candidates.append(result)
     
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = []
-            for symbol in ranked_stocks:
-                high_trigger = first_15min_high.get(symbol)
-                futures.append(executor.submit(monitor_stock_for_breakout, symbol, high_trigger, capital, dhan_symbol_map))
+        # Sort and buy best candidate
+        if candidate_scores:
+            top_candidates.sort(key=lambda x: x.get("score", 0), reverse=True)
+            best = top_candidates[0]  # Primary choice
+            fallbacks = top_candidates[1:]  # Others as backup            
+            pd.DataFrame(candidate_scores).to_csv("D:/Downloads/Dhanbot/dhan_autotrader/scanned_candidates_today.csv", index=False)
+            print(f"✅ Best candidate selected: {best['symbol']} @ ₹{best['price']} (Score: {best['score']})")
+            success, order_id_or_msg = place_buy_order(best["symbol"], best["security_id"], best["price"], best["qty"])
+            systime.sleep(0.6)
     
-            for f in as_completed(futures):
-                pass  # Wait for all threads to complete this cycle
-    
-        if best_candidate:
-            s = best_candidate
-            if not s["security_id"] or not s["symbol"] or s["price"] <= 0 or s["qty"] <= 0:
-                print(f"❌ Invalid order data, skipping: {s}")
-                continue
-            
-            success, order_id_or_msg = place_buy_order(s["symbol"], s["security_id"], s["price"], s["qty"])
-            systime.sleep(0.6)  # throttle to stay within rate limit
             if success:
-                trade_status = get_trade_status(order_id_or_msg)
-                systime.sleep(0.5)  # throttle API after trade status check
-                if trade_status in ["TRADED", "PENDING", "OPEN"]:
-                    log_trade(s["symbol"], s["security_id"], s["qty"], s["price"])
-                    send_telegram_message(f"✅ Bought {s['symbol']} at ₹{s['price']}, Qty: {s['qty']}")
-                    log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{s['symbol']} @ ₹{s['price']}")
-                    trade_executed = True
-                    break  # ✅ Exit main loop — trade done
+                if order_id_or_msg and order_id_or_msg != "N/A":
+                    log_trade(best["symbol"], best["security_id"], best["qty"], best["price"])
+                    print(f"✅ Trade log entry written to portfolio_log.csv for {best['symbol']}")
+                else:
+                    print(f"⚠️ Warning: Order placed but no valid Order ID. Logging trade anyway.")
+                    log_trade(best["symbol"], best["security_id"], best["qty"], best["price"])
+            
+                send_telegram_message(f"✅ Bought {best['symbol']} at ₹{best['price']}, Qty: {best['qty']}")
+                log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{best['symbol']} @ ₹{best['price']}")
+                trade_executed = True
+                s = best
+                break
             else:
-                send_telegram_message(f"❌ Order failed for {s['symbol']}: {order_id_or_msg}")
-                log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{s['symbol']} → {order_id_or_msg}")
-        
+                send_telegram_message(f"❌ Order failed for {best['symbol']}: {order_id_or_msg}")
+                log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{best['symbol']} → {order_id_or_msg}")
+                
+                # 🔁 Try fallback candidates
+                for alt in fallbacks:
+                    print(f"⚠️ Trying fallback candidate: {alt['symbol']}")
+                    success, order_id_or_msg = place_buy_order(alt["symbol"], alt["security_id"], alt["price"], alt["qty"])
+                    systime.sleep(0.6)
+                    if success:
+                        log_trade(alt["symbol"], alt["security_id"], alt["qty"], alt["price"])
+                        send_telegram_message(f"✅ Fallback Buy: {alt['symbol']} at ₹{alt['price']}, Qty: {alt['qty']}")
+                        log_bot_action("autotrade.py", "BUY", "✅ Fallback EXECUTED", f"{alt['symbol']} @ ₹{alt['price']}")
+                        trade_executed = True
+                        s = alt
+                        break
+              
+        # Watchdog timeout
         now_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
         if not trade_executed and now_time >= time(14, 15):
             send_telegram_message("⚠️ No trade executed by 2:15 PM. Please review.")
@@ -395,6 +466,8 @@ def run_autotrade():
             systime.sleep(0.5)
             ltp = ltp_candle.get("last_price", s["price"])
             profit = round((ltp - s["price"]) * s["qty"], 2)
+            pnl_pct = round(((ltp - s['price']) / s['price']) * 100, 2)
+            
         except Exception as e:
             ltp = s["price"]
             profit = 0.0
@@ -415,6 +488,7 @@ def run_autotrade():
     💼 Capital Used: ₹{s['qty'] * s['price']:.2f}
     📈 LTP (EOD): ₹{ltp}
     💸 Net P&L: ₹{profit}
+    • 📊 P&L %: {pnl_pct}%
     
     📌 Auto-Trade completed successfully.
     """

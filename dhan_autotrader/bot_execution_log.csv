@@ -1024,3 +1024,170 @@ timestamp,script_name,action,status,message
 2025-05-29 11:41:17,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
 2025-05-29 11:47:32,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
 2025-05-29 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹-37.36 | Capital: ₹3000.0
+2025-05-29 16:00:06,git_sync.py,Git Push,✅ COMPLETE,26 file(s) pushed
+2025-05-30 08:40:48,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-30 08:40:48,autotrade.py,market_status,INFO,"Market closed today, skipping trading."
+2025-05-30 08:40:48,autotrade.py,end,NO TRADE,No stock bought today.
+2025-05-30 09:32:12,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-30 09:39:45,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-30 09:43:34,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-30 09:47:49,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-30 09:47:55,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,DLF - Rate limit hit
+2025-05-30 10:01:56,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-30 10:02:01,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,CUMMINSIND - Rate limit hit
+2025-05-30 10:31:37,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-30 10:31:49,autotrade.py,CRASH,❌ ERROR,name 'top_candidates' is not defined
+2025-05-30 10:31:49,autotrade.py,end,NO TRADE,No stock bought today.
+2025-05-30 10:34:49,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-30 10:35:01,autotrade.py,CRASH,❌ ERROR,name 'top_candidates' is not defined
+2025-05-30 10:35:01,autotrade.py,end,NO TRADE,No stock bought today.
+2025-05-30 10:48:07,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-30 10:55:32,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-30 10:55:46,autotrade.py,CRASH,❌ ERROR,type object 'datetime.time' has no attribute 'sleep'
+2025-05-30 10:55:46,autotrade.py,end,NO TRADE,No stock bought today.
+2025-05-30 13:20:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:20:33,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:21:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:22:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:22:38,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:23:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:24:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:25:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:26:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:27:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:28:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:29:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:30:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:31:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:32:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:33:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:34:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:40:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:41:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:42:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:43:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:44:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:45:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:46:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:47:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:48:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:49:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:50:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:51:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:52:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:53:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:54:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:55:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:56:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:57:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:58:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 13:59:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:00:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:01:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:02:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:03:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:04:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:05:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:06:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:07:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:08:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:09:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:10:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:11:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:12:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:13:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:14:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:15:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:16:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:17:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:18:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:19:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:20:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:21:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:22:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:23:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:24:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:25:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:26:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:27:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:28:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:29:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:30:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:31:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:32:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:33:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:34:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:36:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:40:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:41:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:42:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:43:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:44:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:45:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:46:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:47:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:48:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:49:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:50:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:51:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:52:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:53:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:54:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:55:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:56:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:57:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:58:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 14:59:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:00:04,portfolio_tracker.py,3PM check,⚠️ HOLDING,⏳ 1 stock(s) still HOLD at 3:00 PM: MPHASIS
+2025-05-30 15:00:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:01:04,portfolio_tracker.py,3PM check,⚠️ HOLDING,⏳ 1 stock(s) still HOLD at 3:00 PM: MPHASIS
+2025-05-30 15:01:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:02:04,portfolio_tracker.py,3PM check,⚠️ HOLDING,⏳ 1 stock(s) still HOLD at 3:00 PM: MPHASIS
+2025-05-30 15:02:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:03:04,portfolio_tracker.py,3PM check,⚠️ HOLDING,⏳ 1 stock(s) still HOLD at 3:00 PM: MPHASIS
+2025-05-30 15:03:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:04:04,portfolio_tracker.py,3PM check,⚠️ HOLDING,⏳ 1 stock(s) still HOLD at 3:00 PM: MPHASIS
+2025-05-30 15:04:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:05:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:06:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:07:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:08:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:09:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:10:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:11:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:12:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:13:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:14:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:15:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:16:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:17:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:18:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:19:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:20:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:21:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:21:47,force_exit.py,CAPITAL SYNC,❌ ERROR,'reason'
+2025-05-30 15:22:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:22:10,force_exit.py,CAPITAL SYNC,❌ ERROR,'reason'
+2025-05-30 15:23:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:24:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:24:15,force_exit.py,FORCED SELL,❌ FAILED,"MPHASIS - API Error: {'status': 'success', 'remarks': '', 'data': {'orderId': '10125053046484', 'orderStatus': 'TRANSIT'}}"
+2025-05-30 15:24:17,force_exit.py,CAPITAL SYNC,❌ ERROR,'reason'
+2025-05-30 15:25:02,force_exit.py,FORCED SELL,❌ FAILED,"MPHASIS - API Error: {'status': 'success', 'remarks': '', 'data': {'orderId': '10125053046594', 'orderStatus': 'TRANSIT'}}"
+2025-05-30 15:25:03,force_exit.py,CAPITAL SYNC,❌ ERROR,'reason'
+2025-05-30 15:25:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:26:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:27:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:28:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:29:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-05-30 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹-37.36 | Capital: ₹3000.0
+2025-05-30 15:52:15,force_exit.py,FORCED SELL,❌ FAILED,"MPHASIS - API Error: {'status': 'success', 'remarks': '', 'data': {'orderId': '9125053045694', 'orderStatus': 'TRANSIT'}}"
+2025-05-30 15:52:15,force_exit.py,CAPITAL SYNC,❌ ERROR,'reason'

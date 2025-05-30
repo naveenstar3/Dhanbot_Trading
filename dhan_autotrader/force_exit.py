@@ -2,7 +2,7 @@
 # 📂 force_exit.py — Final Version (Cleaned & Verified)
 
 import csv
-import datetime
+from datetime import datetime, time as dtime
 import requests
 import json
 import os
@@ -13,6 +13,11 @@ from dhan_api import get_live_price
 from config import *
 from utils_logger import log_bot_action
 from utils_safety import safe_read_csv
+
+now = datetime.now(pytz.timezone("Asia/Kolkata")).time()
+if now >= dtime(15, 30):
+    print("⏳ Market is closed. Skipping forced exit.")
+    exit()
 
 # ✅ Load Dhan credentials
 with open("config.json") as f:
@@ -101,12 +106,11 @@ def force_exit():
     if not os.path.exists(PORTFOLIO_LOG) or os.stat(PORTFOLIO_LOG).st_size == 0:
         print("⚠️ No portfolio_log.csv found or empty. Skipping force exit.")
         return
-    
-    # ✅ Correct placement outside the return block
+
     raw_lines = safe_read_csv(PORTFOLIO_LOG)
-    reader = csv.DictReader(raw_lines)        
+    reader = csv.DictReader(raw_lines)
     existing_rows = list(reader)
-    
+
     now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M")
     headers = reader.fieldnames if reader.fieldnames else []
     updated_rows = []
@@ -118,7 +122,6 @@ def force_exit():
 
         symbol = row["symbol"].strip().upper()
         security_id = row.get("security_id", "").strip()
-        exchange_segment = "NSE_EQ"
 
         if not security_id:
             print(f"❌ Missing security_id for {symbol}")
@@ -129,33 +132,27 @@ def force_exit():
         quantity = int(row["quantity"])
 
         try:
-            live_price = get_live_price(symbol)
+            live_price = get_live_price(symbol, security_id)
         except Exception as e:
             print(f"⚠️ Error fetching live price for {symbol}: {e}")
             updated_rows.append(row)
             continue
 
         print(f"🧚 Placing SELL: {symbol}, ID={security_id}, Qty={quantity}")
+        exchange_segment = "NSE_EQ"
         code, response = place_sell_order(security_id, symbol, quantity, exchange_segment)
+        
 
         if code == 200 and "order_id" in response:
-            systime.sleep(2)
             order_id = response["order_id"]
+        
+            time.sleep(3)  # Delay before checking status
+            final_status = get_order_status(order_id)
+            status_text = final_status.get("data", {}).get("orderStatus", "UNKNOWN")
 
-            max_retries = 5
-            trade_status = None
-            matching_trades = []
+            print(f"📟 Order ID {order_id} current status: {status_text}")
 
-            for attempt in range(max_retries):
-                trade_book = get_trade_book()
-                matching_trades = [t for t in trade_book if t.get("order_id") == order_id]
-                if matching_trades:
-                    trade_status = matching_trades[0].get("status", "").upper()
-                    if trade_status == "TRADED":
-                        break
-                systime.sleep(2)
-
-            if trade_status == "TRADED":
+            if status_text in ["TRADED", "COMPLETED", "FILLED"]:
                 row.update({
                     "live_price": round(live_price, 2),
                     "change_pct": "",
@@ -185,8 +182,8 @@ def force_exit():
                 )
                 send_telegram_message(summary_msg)
             else:
-                print(f"⚠️ Order {order_id} did not complete after retries: status={trade_status}")
-                log_bot_action("force_exit.py", "FORCED SELL", "⚠️ NOT TRADED", f"{symbol} - Status: {trade_status}")
+                print(f"⚠️ Order {order_id} did not complete after retries: status={status_text}")
+                log_bot_action("force_exit.py", "FORCED SELL", "⚠️ NOT TRADED", f"{symbol} - Status: {status_text}")
                 updated_rows.append(row)
         else:
             print(f"❌ Force SELL failed for {symbol}: {response}")
@@ -207,7 +204,6 @@ def force_exit():
             msg += f"Symbol: {r['symbol']}\n"
         msg += "⚠️ Please check manually before next trade day."
         send_telegram_message(msg)
-        # ✅ Capital Sync After Forced Exit
         try:
             total_profit = 0
             with open("sell_log.csv", newline="") as f:
@@ -222,20 +218,21 @@ def force_exit():
                             total_profit += profit
                         except:
                             continue
-        
+
             with open("current_capital.csv", "r") as f:
                 current_cap = float(f.read().strip())
-        
+
             new_cap = round(current_cap + total_profit, 2)
             with open("current_capital.csv", "w") as f:
                 f.write(str(new_cap))
-        
+
             log_bot_action("force_exit.py", "CAPITAL SYNC", "✅ DONE", f"Capital updated to ₹{new_cap} after forced exit.")
         except Exception as e:
             log_bot_action("force_exit.py", "CAPITAL SYNC", "❌ ERROR", str(e))
             send_telegram_message(f"❌ Capital sync failed in force_exit.py: {e}")
-        
+
     print("🚨 Force Exit complete.")
+
 
 if __name__ == "__main__":
     if os.path.exists("emergency_exit.txt"):

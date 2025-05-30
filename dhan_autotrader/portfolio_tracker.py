@@ -110,11 +110,29 @@ def is_peak_exhausted(symbol, target_pct=0.07, grace_band=0.01, min_retries=5):
     return False
     
 def log_live_trail(symbol, live_price, change_pct):
-    with portalocker.Lock(LIVE_BUFFER_FILE, timeout=5):
-        now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
-        with open(LIVE_BUFFER_FILE, mode='a', newline='') as f:
+    try:
+        print(f"📦 Entering log_live_trail for {symbol} at price {live_price} with change_pct {change_pct}")
+        print(f"🔒 Attempting to acquire lock on {LIVE_BUFFER_FILE}")
+
+        file_empty = not os.path.exists(LIVE_BUFFER_FILE) or os.stat(LIVE_BUFFER_FILE).st_size == 0
+
+        with portalocker.Lock(LIVE_BUFFER_FILE, mode='a', timeout=5, newline='') as f:
+            print(f"✍️ Locked and opening {LIVE_BUFFER_FILE} in append mode")
             writer = csv.writer(f)
+
+            # Add header if file is new/empty
+            if file_empty:
+                writer.writerow(["timestamp", "symbol", "price", "change_pct"])
+
+            now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
             writer.writerow([now, symbol, round(live_price, 2), round(change_pct, 2)])
+            print(f"✅ Successfully wrote to {LIVE_BUFFER_FILE}")
+
+    except PermissionError as e:
+        print(f"⛔ Permission denied when logging {symbol} to {LIVE_BUFFER_FILE}: {e}")
+    except Exception as e:
+        print(f"❌ Unexpected error in log_live_trail for {symbol}: {e}")
+
 
 # ✅ Telegram Notification Function
 def send_telegram_message(message):
@@ -199,17 +217,17 @@ def is_market_open():
 def should_exit_early(symbol, current_price):
     try:
         records = []
-        with open("live_trail_BUFFER.csv", newline='') as f:
+        with open(LIVE_BUFFER_FILE, newline='') as f:
             reader = csv.reader(f)
-            for row in reader:
-                if len(row) != 4:
+            for row_ in reader:
+                if len(row_) != 4:
                     continue
-                ts_str, sym, price, change = row
-                if sym.strip().upper() != symbol.upper():
-                    continue
-                ts = datetime.datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
-                change = float(change)
-                records.append((ts, change))
+                ts_str, sym, price, change = row_
+                if sym.strip().upper() == symbol.upper():
+                    try:
+                        records.append((ts_str, float(change)))
+                    except:
+                        continue
 
         if not records or len(records) < 4:
             return False
@@ -231,7 +249,7 @@ def should_exit_early(symbol, current_price):
         raw_data = get_historical_price(security_id, interval="15")
         if not raw_data or "close" not in raw_data:
             return False
-        
+
         df = pd.DataFrame({"close": raw_data["close"]})
         rsi_series = calculate_rsi(df['close'])
         if not rsi_series.empty and rsi_series.iloc[-1] > 70:
@@ -282,6 +300,7 @@ def check_portfolio():
     existing_rows = list(reader)
     
     def process_sell_logic(row):
+        print(f"🔍 Starting processing for {row.get('symbol')}")
         if row.get("status") == "SOLD":
             return row
 
@@ -293,7 +312,11 @@ def check_portfolio():
             target_pct = float(row.get("target_pct", 1.5))
             stop_pct = float(row.get("stop_pct", 1))
 
-            live_price = get_live_price(symbol)
+            security_id = get_security_id(symbol)
+            print(f"📌 Calling get_live_price with: {security_id}")
+            live_price = get_live_price(symbol, security_id)
+            print(f"✅ Live price for {symbol} = {live_price}")
+            
             if live_price is None:
                 print(f"⚠️ Failed to get live price for {symbol}")
                 return row
@@ -312,10 +335,31 @@ def check_portfolio():
 
             reason = ""
             should_sell = False
-
+            
+            records = []
+            if os.path.exists(LIVE_BUFFER_FILE):
+                with open(LIVE_BUFFER_FILE, newline='') as f:
+                    reader = csv.reader(f)
+                    for row_ in reader:
+                        if len(row_) != 4:
+                            continue
+                        ts_str, sym, price, change = row_
+                        if sym.strip().upper() == symbol.upper():
+                            try:
+                                records.append((ts_str, float(change)))
+                            except:
+                                continue
+            
+            max_trail = max([r[1] for r in records if r[1] is not None], default=0)
+            trailing_drop = max_trail - change_pct
+            
             if change_pct >= target_pct:
                 reason = "TARGET HIT"
                 should_sell = True
+            elif max_trail >= 0.5 and trailing_drop >= 0.25:
+                reason = f"PEAK DROP: Peaked at {round(max_trail,2)}%, now at {round(change_pct,2)}%"
+                should_sell = True
+            
             elif change_pct <= -stop_pct:
                 reason = "STOP LOSS"
                 should_sell = True
@@ -369,6 +413,7 @@ def check_portfolio():
                         print(f"⚠️ Sell order placed but NOT TRADED yet for {symbol}. Holding.")
                 else:
                     print(f"❌ SELL failed for {symbol}: {response}")
+                    send_telegram_message(f"❌ SELL failed for {symbol}: {response}")
             else:
                 hold_reason = ""
                 if not should_sell:
@@ -408,8 +453,7 @@ def check_portfolio():
             writer.writeheader()
             writer.writerows(updated_rows)
         print("✅ Portfolio updated.")
-    else:
-        print("⚠️ No rows processed.")
+    
 
 if __name__ == "__main__":
     if os.path.exists("emergency_exit.txt"):
