@@ -12,8 +12,47 @@ import openai
 from textblob import TextBlob
 from datetime import datetime, timedelta
 import time
+import pytz
 
 start_time = datetime.now()
+
+def is_trading_day():
+    # Skip weekends
+    today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
+    if today.weekday() >= 5:
+        return False
+
+    # Load or download holiday list
+    year = today.year
+    holiday_file = f"nse_holidays_{year}.csv"
+
+    if not os.path.exists(holiday_file):
+        print(f"📥 Downloading NSE holiday calendar for {year}...")
+        url = f"https://www.nseindia.com/api/holiday-master?type=trading"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        session = requests.Session()
+        session.headers.update(headers)
+        try:
+            r = session.get(url, timeout=10)
+            holidays = r.json()["Trading"]
+            dates = [datetime.strptime(day["date"], "%d-%b-%Y").date() for day in holidays if str(year) in day["date"]]
+            pd.DataFrame({"date": dates}).to_csv(holiday_file, index=False)
+        except Exception as e:
+            print("⚠️ Could not fetch NSE holiday calendar:", e)
+            return True  # fallback to allow run
+
+    try:
+        holiday_df = pd.read_csv(holiday_file)
+        holiday_dates = pd.to_datetime(holiday_df["date"]).dt.date.tolist()
+        return today not in holiday_dates
+    except:
+        return True  # fallback: assume open
+
+if not is_trading_day():
+    print("⛔ Today is a non-trading day. Skipping stock generation.")
+    log_bot_action("dynamic_stock_generator.py", "market_status", "INFO", "Skipped: NSE holiday/weekend.")
+    sys.exit(0)
+
 
 with open('D:/Downloads/Dhanbot/dhan_autotrader/config.json', 'r') as f:
     config = json.load(f)

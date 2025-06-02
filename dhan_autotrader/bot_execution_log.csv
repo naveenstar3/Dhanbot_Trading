@@ -1191,3 +1191,229 @@ timestamp,script_name,action,status,message
 2025-05-30 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹-37.36 | Capital: ₹3000.0
 2025-05-30 15:52:15,force_exit.py,FORCED SELL,❌ FAILED,"MPHASIS - API Error: {'status': 'success', 'remarks': '', 'data': {'orderId': '9125053045694', 'orderStatus': 'TRANSIT'}}"
 2025-05-30 15:52:15,force_exit.py,CAPITAL SYNC,❌ ERROR,'reason'
+2025-05-30 16:00:05,git_sync.py,Git Push,✅ COMPLETE,31 file(s) pushed
+2025-05-31 09:54:42,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-31 10:35:34,dynamic_stock_generator.py,market_status,INFO,Skipped: NSE holiday/weekend.
+2025-05-31 10:36:02,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-05-31 10:45:37,autotrade.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 10:45:37,autotrade.py,end,NO TRADE,No stock bought today.
+2025-05-31 11:20:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:21:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:22:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:23:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:24:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:25:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:26:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:27:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:28:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:29:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:30:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:31:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:32:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:33:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:34:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:35:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:36:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:37:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:38:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:39:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:40:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:41:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:42:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:43:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:44:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:45:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:46:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:47:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:48:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:49:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:50:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:51:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:52:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:53:02,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:53:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:54:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:55:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:56:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:57:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:58:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 11:59:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-05-31 12:00:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:33:10,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:34:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:35:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:36:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:37:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:38:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:39:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:40:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:40:45,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ZENSARTECH - Rate limit hit
+2025-06-02 08:41:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:42:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:42:15,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,XCHANGING - Rate limit hit
+2025-06-02 08:43:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:43:42,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,HDFCBANK - Rate limit hit
+2025-06-02 08:44:23,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:44:39,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,AARTIPHARM - Rate limit hit
+2025-06-02 08:45:13,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:46:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:47:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:47:27,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BAJAJFINSV - Rate limit hit
+2025-06-02 08:48:13,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:49:13,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:49:19,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,KARURVYSYA - Rate limit hit
+2025-06-02 08:49:36,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ICICIPRULI - Rate limit hit
+2025-06-02 08:49:52,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,MVGJL - Rate limit hit
+2025-06-02 08:50:15,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:50:46,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,OBEROIRLTY - Rate limit hit
+2025-06-02 08:51:17,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:52:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:53:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:53:32,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ABDL - Rate limit hit
+2025-06-02 08:54:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:54:42,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SHAKTIPUMP - Rate limit hit
+2025-06-02 08:55:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:56:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:57:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:57:47,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,MAFANG - Rate limit hit
+2025-06-02 08:58:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 08:59:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:00:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:00:39,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,CIFL - Rate limit hit
+2025-06-02 09:00:54,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,AVANTIFEED - Rate limit hit
+2025-06-02 09:01:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:01:20,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,MSUMI - Rate limit hit
+2025-06-02 09:02:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:03:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:04:13,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:05:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:06:13,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:07:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:08:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:09:13,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:10:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:11:13,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:12:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:13:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:14:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:15:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:16:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:17:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:18:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:19:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:20:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:21:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:22:12,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:23:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:24:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:25:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:26:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:27:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:28:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:29:11,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-02 09:30:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-130.12 < ₹5
+2025-06-02 09:31:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-132.72 < ₹5
+2025-06-02 09:32:06,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-02 09:32:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-132.22 < ₹5
+2025-06-02 09:32:20,autotrade.py,CRASH,❌ ERROR,name 'random' is not defined
+2025-06-02 09:32:20,autotrade.py,end,NO TRADE,No stock bought today.
+2025-06-02 09:33:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-136.61 < ₹5
+2025-06-02 09:34:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-134.91 < ₹5
+2025-06-02 09:34:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-133.62 < ₹5
+2025-06-02 09:35:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-126.02 < ₹5
+2025-06-02 09:35:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-121.03 < ₹5
+2025-06-02 09:36:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-123.73 < ₹5
+2025-06-02 09:36:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-124.13 < ₹5
+2025-06-02 09:37:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-123.63 < ₹5
+2025-06-02 09:37:13,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-124.13 < ₹5
+2025-06-02 09:38:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-122.73 < ₹5
+2025-06-02 09:38:13,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 💸 Blocked by Net Profit Rule: ₹-120.73 < ₹5
+2025-06-02 09:39:07,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:39:15,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:40:07,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:40:15,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:41:07,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:41:15,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:42:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:42:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:43:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:43:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:44:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:44:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:45:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:45:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:46:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:46:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:47:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:47:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:48:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:48:13,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:49:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:49:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:50:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:50:13,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:51:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:51:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:52:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:52:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:53:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:53:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:54:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:54:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:55:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:55:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:56:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:56:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,MPHASIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 09:57:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.25 < ₹5
+2025-06-02 09:57:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.29 < ₹5
+2025-06-02 09:57:28,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.27 < ₹5
+2025-06-02 09:58:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.45 < ₹5
+2025-06-02 09:58:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.38 < ₹5
+2025-06-02 09:59:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.3 < ₹5
+2025-06-02 09:59:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.11 < ₹5
+2025-06-02 09:59:47,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.0 < ₹5
+2025-06-02 10:00:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.12 < ₹5
+2025-06-02 10:00:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.12 < ₹5
+2025-06-02 10:01:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.07 < ₹5
+2025-06-02 10:01:11,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.07 < ₹5
+2025-06-02 10:03:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.08 < ₹5
+2025-06-02 10:03:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.08 < ₹5
+2025-06-02 10:03:23,force_exit.py,FORCED SELL,❌ FAILED,"SDBL - API Error: {'status': 'failure', 'remarks': {'error_code': 'DH-905', 'error_type': 'Input_Exception', 'error_message': 'Invalid SecurityId'}, 'data': ''}"
+2025-06-02 10:03:24,force_exit.py,CAPITAL SYNC,❌ ERROR,'reason'
+2025-06-02 10:04:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.08 < ₹5
+2025-06-02 10:04:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.07 < ₹5
+2025-06-02 10:05:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.04 < ₹5
+2025-06-02 10:05:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.04 < ₹5
+2025-06-02 10:06:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.05 < ₹5
+2025-06-02 10:06:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.05 < ₹5
+2025-06-02 10:07:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.05 < ₹5
+2025-06-02 10:07:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.05 < ₹5
+2025-06-02 10:08:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹0.99 < ₹5
+2025-06-02 10:08:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.18 < ₹5
+2025-06-02 10:08:25,force_exit.py,FORCED SELL,❌ FAILED,"SDBL - API Error: {'status': 'success', 'remarks': '', 'data': {'orderId': '6125060212824', 'orderStatus': 'TRANSIT'}}"
+2025-06-02 10:08:25,force_exit.py,CAPITAL SYNC,❌ ERROR,'reason'
+2025-06-02 10:09:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.35 < ₹5
+2025-06-02 10:09:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.35 < ₹5
+2025-06-02 10:10:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.33 < ₹5
+2025-06-02 10:10:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.33 < ₹5
+2025-06-02 10:11:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.34 < ₹5
+2025-06-02 10:11:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.34 < ₹5
+2025-06-02 10:12:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.35 < ₹5
+2025-06-02 10:12:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹1.35 < ₹5
+2025-06-02 10:13:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹0.95 < ₹5
+2025-06-02 10:13:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,SDBL | 💸 Blocked by Net Profit Rule: ₹0.95 < ₹5
+2025-06-02 10:13:22,force_exit.py,FORCED SELL,❌ FAILED,"SDBL - API Error: {'status': 'success', 'remarks': '', 'data': {'orderId': '4125060217374', 'orderStatus': 'TRANSIT'}}"
+2025-06-02 10:13:23,force_exit.py,CAPITAL SYNC,❌ ERROR,'reason'
+2025-06-02 10:28:40,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-02 10:34:43,autotrade.py,BUY,✅ EXECUTED,ERIS @ ₹1564.0
+2025-06-02 10:34:44,autotrade.py,CRASH,❌ ERROR,cannot access local variable 'pnl_pct' where it is not associated with a value
+2025-06-02 10:35:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ERIS | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-02 10:36:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ERIS | 💸 Blocked by Net Profit Rule: ₹-15.78 < ₹5
+2025-06-02 10:55:24,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-02 10:57:20,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-06-02 11:06:27,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-02 11:25:08,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-02 11:27:10,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-06-02 11:47:30,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-02 11:49:28,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
+2025-06-02 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹166.52 | Capital: ₹3166.52

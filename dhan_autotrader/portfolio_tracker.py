@@ -272,16 +272,50 @@ def calculate_rsi(close_prices, period=14):
     return 100 - (100 / (1 + rs))
 
 # ✅ Main Portfolio Evaluation
+def is_nse_trading_day():
+    today = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).date()
+    if today.weekday() >= 5:
+        return False
+
+    year = today.year
+    fname = f"nse_holidays_{year}.csv"
+
+    if not os.path.exists(fname):
+        try:
+            print(f"📥 Downloading NSE holiday calendar for {year}...")
+            url = "https://www.nseindia.com/api/holiday-master?type=trading"
+            headers = {"User-Agent": "Mozilla/5.0"}
+            s = requests.Session()
+            s.headers.update(headers)
+            r = s.get(url, timeout=10)
+            data = r.json()
+            if "Trading" not in data:
+                raise ValueError("Missing 'Trading' key in NSE holiday API response")
+            holidays = data["Trading"]           
+            dates = [datetime.datetime.strptime(d["date"], "%d-%b-%Y").date() for d in holidays if str(year) in d["date"]]
+            pd.DataFrame({"date": dates}).to_csv(fname, index=False)
+        except Exception as e:
+            print(f"⚠️ NSE holiday fetch failed: {e}")
+            return True
+
+    try:
+        hdf = pd.read_csv(fname)
+        holiday_dates = pd.to_datetime(hdf["date"]).dt.date.tolist()
+        return today not in holiday_dates
+    except:
+        return True
+
 def check_portfolio():
+    if not is_market_open() or not is_nse_trading_day():
+        print("⏹️ Market closed or holiday. Skipping auto-sell.")
+        log_bot_action("portfolio_tracker.py", "market_status", "INFO", "Skipped: Market closed or holiday.")
+        return
+
     monitor_hold_positions()
     ist_now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
     if ist_now.hour == 9 and ist_now.minute <= 30 and os.path.exists(LIVE_BUFFER_FILE):
         os.remove(LIVE_BUFFER_FILE)
         print("🧹 Cleared live_trail_BUFFER.csv for new day.")
-
-    if not is_market_open():
-        print("⏹️ Market closed. Skipping auto-sell.")
-        return
 
     now = ist_now.strftime("%Y-%m-%d %H:%M")
     headers = ["timestamp", "symbol", "security_id", "quantity", "buy_price", "momentum_5min",
@@ -356,9 +390,31 @@ def check_portfolio():
             if change_pct >= target_pct:
                 reason = "TARGET HIT"
                 should_sell = True
+            # 🧠 Predictive peak logic using linear regression
+            if len(records) >= 15:
+                import numpy as np
+                from sklearn.linear_model import LinearRegression
+            
+                X = np.array(list(range(len(records)))).reshape(-1, 1)
+                y = np.array([r[1] for r in records]).reshape(-1, 1)
+            
+                model = LinearRegression()
+                model.fit(X, y)
+            
+                future_index = len(records) + 5  # Predict 5 mins ahead
+                predicted_peak = float(model.predict([[future_index]])[0])
+                potential_upside = predicted_peak - change_pct
+            
+                print(f"🔮 AI Prediction: Current={round(change_pct,2)}%, Predicted Peak={round(predicted_peak,2)}%")
+            
+                if potential_upside < 0.2 and trailing_drop > 0.1:
+                    reason = f"AI EXIT: Predicted peak only {round(predicted_peak,2)}%, current={round(change_pct,2)}%"
+                    should_sell = True
+            
+            # Fallback to original peak drop
             elif max_trail >= 0.5 and trailing_drop >= 0.25:
                 reason = f"PEAK DROP: Peaked at {round(max_trail,2)}%, now at {round(change_pct,2)}%"
-                should_sell = True
+                should_sell = True            
             
             elif change_pct <= -stop_pct:
                 reason = "STOP LOSS"

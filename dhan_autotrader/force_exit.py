@@ -33,7 +33,7 @@ dhan = dhanhq(context)
 
 def log_bot_action(script_name, action, status, message):
     log_file = "bot_execution_log.csv"
-    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
     headers = ["timestamp", "script_name", "action", "status", "message"]
     new_row = [now, script_name, action, status, message]
     file_exists = os.path.exists(log_file)
@@ -111,7 +111,7 @@ def force_exit():
     reader = csv.DictReader(raw_lines)
     existing_rows = list(reader)
 
-    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M")
+    now = datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M")
     headers = reader.fieldnames if reader.fieldnames else []
     updated_rows = []
 
@@ -152,7 +152,7 @@ def force_exit():
 
             print(f"📟 Order ID {order_id} current status: {status_text}")
 
-            if status_text in ["TRADED", "COMPLETED", "FILLED"]:
+            if status_text.upper() in ["TRADED", "COMPLETED", "FILLED", "TRANSIT"]:
                 row.update({
                     "live_price": round(live_price, 2),
                     "change_pct": "",
@@ -171,7 +171,7 @@ def force_exit():
                 profit_pct = round(((live_price - buy_price) / buy_price) * 100, 2)
 
                 summary_msg = (
-                    f"📊 Forced Trade Summary ({datetime.datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')})\n"
+                    f"📊 Forced Trade Summary ({datetime.now(pytz.timezone('Asia/Kolkata')).strftime('%Y-%m-%d')})\n"
                     f"Stock: {symbol}\n"
                     f"Buy Price: ₹{round(buy_price, 2)}\n"
                     f"Sell Price: ₹{round(live_price, 2)}\n"
@@ -186,9 +186,19 @@ def force_exit():
                 log_bot_action("force_exit.py", "FORCED SELL", "⚠️ NOT TRADED", f"{symbol} - Status: {status_text}")
                 updated_rows.append(row)
         else:
-            print(f"❌ Force SELL failed for {symbol}: {response}")
-            log_bot_action("force_exit.py", "FORCED SELL", "❌ FAILED", f"{symbol} - API Error: {response}")
-            updated_rows.append(row)
+            if response.get("status") == "success":
+                order_id = response['data'].get('orderId')
+                print(f"✅ Force SELL placed for {symbol}: Order ID {order_id}")
+                row.update({
+                    "live_price": round(live_price, 2),
+                    "change_pct": "",
+                    "last_checked": now,
+                    "status": "SOLD",
+                    "exit_price": round(live_price, 2)
+                })
+            else:
+                print(f"❌ Force SELL failed for {symbol}: {response}")
+            updated_rows.append(row)       
 
     if updated_rows:
         with open(PORTFOLIO_LOG, "w", newline="", encoding="utf-8") as f:

@@ -11,7 +11,9 @@ from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_rank_stocks
 from utils_logger import log_bot_action
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+import random
 from utils_safety import safe_read_csv
+
 
 
 
@@ -141,8 +143,9 @@ def place_buy_order(symbol, security_id, price, qty):
         print(f"❌ Skipping invalid input: symbol={symbol}, security_id={security_id}, price={price}, qty={qty}")
         return False, "Invalid input"
 
-    buffer_price = round(price * 1.002, 2)  # 0.2% buffer for limit buy
-
+    tick_size = 0.05
+    buffer_price = round(round(price * 1.002 / tick_size) * tick_size, 2)
+    
     payload = {
         "transactionType": "BUY",
         "exchangeSegment": "NSE_EQ",
@@ -167,10 +170,16 @@ def place_buy_order(symbol, security_id, price, qty):
         response = requests.post(BASE_URL, headers=HEADERS, json=payload)
 
         if response.status_code == 200:
-            order_id = response.json().get("data", {}).get("orderId", "N/A")
-            print(f"✅ Order placed for {symbol} | Order ID: {order_id}")
-            send_telegram_message(f"✅ Order placed for {symbol} | Order ID: {order_id}")
-            return True, order_id
+            res_json = response.json()
+            if res_json.get("status") == "success":
+                order_id = res_json.get("data", {}).get("orderId", "N/A")
+                print(f"✅ Order placed for {symbol} | Order ID: {order_id}")
+                send_telegram_message(f"✅ Order placed for {symbol} | Order ID: {order_id}")
+                return True, order_id
+            else:
+                error = res_json.get("remarks", {}).get("error_message", "Unknown error")
+                print(f"❌ Order rejected for {symbol}: {error}")
+                return False, error        
         else:
             print(f"❌ Error placing order for {symbol}: {response.status_code} - {response.text}")
             return False, response.text
@@ -182,17 +191,6 @@ def place_buy_order(symbol, security_id, price, qty):
     finally:
         # ⏱️ Throttle to avoid 429 Rate Limit
         systime.sleep(random.uniform(0.6, 1.2))
-
-    try:
-        print(f"📦 Order Payload for {symbol}: {json.dumps(payload, indent=2)}")
-        response = requests.post(BASE_URL, headers=HEADERS, json=payload)
-        if response.status_code == 200:
-            order_data = response.json().get("data", {})
-            return True, order_data.get("orderId", "")
-        else:
-            return False, response.text
-    except Exception as e:
-        return False, str(e)
 
 def get_trade_status(order_id):
     try:
@@ -231,14 +229,20 @@ def log_trade(symbol, security_id, qty, price):
         target_pct = 0.7
         stop_pct = 0.4
         
+    file_exists = os.path.isfile(PORTFOLIO_LOG)
     with open(PORTFOLIO_LOG, mode='a', newline='') as f:
         writer = csv.writer(f)
+        if not file_exists or os.stat(PORTFOLIO_LOG).st_size == 0:
+            writer.writerow([
+                "timestamp", "symbol", "security_id", "quantity", "buy_price",
+                "momentum_5min", "target_pct", "stop_pct", "live_price",
+                "change_pct", "last_checked", "status", "exit_price"
+            ])
         writer.writerow([
-            timestamp, symbol, security_id, qty,
-            price, 0, 1, target_pct, stop_pct,
-            '', 'HOLD', ''
+            timestamp, symbol, security_id, qty, price,
+            0, target_pct, stop_pct, '', '', '', 'HOLD', ''
         ])
-
+    
 best_candidate = None
 trade_lock = threading.Lock()
 
@@ -328,16 +332,50 @@ def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map):
 
 # ✅ Real-Time Monitoring & Trade Controller
 
+def is_nse_trading_day():
+    today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
+    if today.weekday() >= 5:
+        return False
+
+    year = today.year
+    fname = f"nse_holidays_{year}.csv"
+
+    if not os.path.exists(fname):
+        try:
+            print(f"📥 Downloading NSE holiday calendar for {year}...")
+            url = "https://www.nseindia.com/api/holiday-master?type=trading"
+            headers = {"User-Agent": "Mozilla/5.0"}
+            s = requests.Session()
+            s.headers.update(headers)
+            r = s.get(url, timeout=10)
+            data = r.json()
+            if "Trading" not in data:
+                raise KeyError("Trading key missing in NSE response")
+            
+            holidays = data["Trading"]
+            dates = [datetime.strptime(d["date"], "%d-%b-%Y").date() for d in holidays if str(year) in d["date"]]
+            pd.DataFrame({"date": dates}).to_csv(fname, index=False)
+        except Exception as e:
+            print(f"⚠️ NSE holiday fetch failed: {e}")
+            return True  # fallback: assume trading
+
+    try:
+        hdf = pd.read_csv(fname)
+        holiday_dates = pd.to_datetime(hdf["date"]).dt.date.tolist()
+        return today not in holiday_dates
+    except:
+        return True  # fallback to assume trading
+
+
 def run_autotrade():
+    if not is_market_open() or not is_nse_trading_day():
+        print("⛔ Market is closed today (weekend or holiday). Exiting auto-trade.")
+        log_bot_action("autotrade.py", "market_status", "INFO", "Skipped: Market closed or holiday.")
+        return
     csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv"
     log_bot_action("autotrade.py", "startup", "STARTED", "Smart dynamic AutoTrade started.")
     print("🔍 Checking if market is open...")
-
-    if not is_market_open():
-        print("⛔ Market is currently closed. Exiting auto-trade.")
-        log_bot_action("autotrade.py", "market_status", "INFO", "Market closed today, skipping trading.")
-        return
-
+    
     if has_open_position():
         print("📌 Existing position found. Skipping new trades.")
         return
@@ -420,13 +458,7 @@ def run_autotrade():
             systime.sleep(0.6)
     
             if success:
-                if order_id_or_msg and order_id_or_msg != "N/A":
-                    log_trade(best["symbol"], best["security_id"], best["qty"], best["price"])
-                    print(f"✅ Trade log entry written to portfolio_log.csv for {best['symbol']}")
-                else:
-                    print(f"⚠️ Warning: Order placed but no valid Order ID. Logging trade anyway.")
-                    log_trade(best["symbol"], best["security_id"], best["qty"], best["price"])
-            
+                log_trade(best["symbol"], best["security_id"], best["qty"], best["price"])
                 send_telegram_message(f"✅ Bought {best['symbol']} at ₹{best['price']}, Qty: {best['qty']}")
                 log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{best['symbol']} @ ₹{best['price']}")
                 trade_executed = True
@@ -471,7 +503,8 @@ def run_autotrade():
         except Exception as e:
             ltp = s["price"]
             profit = 0.0
-    
+            pnl_pct = 0.0
+            
         summary = f"""📊 *DhanBot Daily Summary — {now_ist}*
     
     🛒 *Trade Executed:*
