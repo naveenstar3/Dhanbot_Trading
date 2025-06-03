@@ -341,7 +341,11 @@ def prepare_data():
     print(f"📊 Completed: {len(records)}/{total_attempted} passed filters")
 
     if df.empty:
-        print("⚠️ No strong candidates passed filters. Activating fallback logic...")
+        print("⚠️ No valid data fetched. Clearing stale live_stocks_trade_today.csv")
+        with open("D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv", "w") as f:
+            f.write("symbol,security_id\n")  # Empty header
+        log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "❌ NO STOCKS", "Cleared stale trade list")
+        exit(0)   
 
         fallback = sorted(
             [s for s in skipped_candidates if s["tick_align_ok"] and s["rsi"] < 75],
@@ -446,13 +450,17 @@ if __name__ == "__main__":
         print("🚫 Market is closed. Skipping momentum analysis.")
         exit(0)
 
-    df = prepare_data()
-    if df.empty:
-        print("⚠️ No valid data fetched. Exiting.")
-    else:
+        df = prepare_data()
+        
+        if df.empty or df["symbol"].nunique() == 0:
+            print("⚠️ No valid data to analyze. Skipping GPT call.")
+            log_bot_action("Dynamic_Gpt_Momentum.py", "main", "❌ SKIPPED", "No valid records to rank")
+            exit(0)
+        
         print("\n📊 Live Data:\n", df)
         print("\n🤖 Sending to GPT for analysis...\n")
         decision = ask_gpt_to_rank_stocks(df)
+        
         print(f"\n✅ GPT Decision: {decision}")
         
         # 🟢 Save GPT-final list to new CSV for autotrade

@@ -1,7 +1,8 @@
 import csv
+import sys
 import json
 import requests
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import pytz
 import time as systime
 import pandas as pd
@@ -13,8 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import random
 from utils_safety import safe_read_csv
-
-
+import time as tm 
 
 
 # ✅ Load Dhan credentials
@@ -41,6 +41,10 @@ HEADERS = {
 NEWS_API_KEY = config.get("news_api_key")
 TELEGRAM_TOKEN = config.get("telegram_token")
 TELEGRAM_CHAT_ID = config.get("telegram_chat_id")
+
+LIVEMONEYDEDUCTION = True
+if len(sys.argv) > 1 and sys.argv[1].strip().upper() == "NO":
+    LIVEMONEYDEDUCTION = False
 
 # ✅ Utility Functions
 
@@ -167,31 +171,31 @@ def place_buy_order(symbol, security_id, price, qty):
     print(f"📦 Order Payload for {symbol}: {json.dumps(payload, indent=2)}")
 
     try:
-        response = requests.post(BASE_URL, headers=HEADERS, json=payload)
+        if not LIVEMONEYDEDUCTION:
+            print(f"🧪 DRY RUN: Simulating order for {symbol} | Qty: {qty} @ ₹{buffer_price}")
+            send_telegram_message(f"🧪 DRY RUN ORDER: {symbol} | Qty: {qty} @ ₹{buffer_price}")
+            dry_run_id = f"DRY_RUN_{int(tm.time())}" 
+            return True, dry_run_id           
 
-        if response.status_code == 200:
-            res_json = response.json()
-            if res_json.get("status") == "success":
-                order_id = res_json.get("data", {}).get("orderId", "N/A")
-                print(f"✅ Order placed for {symbol} | Order ID: {order_id}")
-                send_telegram_message(f"✅ Order placed for {symbol} | Order ID: {order_id}")
-                return True, order_id
-            else:
-                error = res_json.get("remarks", {}).get("error_message", "Unknown error")
-                print(f"❌ Order rejected for {symbol}: {error}")
-                return False, error        
+        # ✅ Real money execution
+        response = requests.post(BASE_URL, headers=HEADERS, json=payload).json()
+        order_id = response.get("data", {}).get("orderId")
+
+        if response.get("status", "").lower() == "success" and order_id:
+            send_telegram_message(f"✅ Order Placed: {symbol} | Qty: {qty} @ ₹{buffer_price}")
+            return True, order_id
         else:
-            print(f"❌ Error placing order for {symbol}: {response.status_code} - {response.text}")
-            return False, response.text
+            reason = response.get("remarks") or response.get("message") or "Unknown error"
+            send_telegram_message(f"❌ Order rejected for {symbol}: {reason}")
+            return False, reason
 
     except Exception as e:
         print(f"❌ Exception placing order for {symbol}: {e}")
         return False, str(e)
 
     finally:
-        # ⏱️ Throttle to avoid 429 Rate Limit
         systime.sleep(random.uniform(0.6, 1.2))
-
+        
 def get_trade_status(order_id):
     try:
         response = requests.get(TRADE_BOOK_URL, headers=HEADERS)
@@ -387,8 +391,48 @@ def run_autotrade():
     if not os.path.exists(csv_path):
         print(f"⛔ {csv_path} not found. Falling back to dynamic_stock_list.csv")
         csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"  
+        
+    if os.path.exists(csv_path) and os.path.getsize(csv_path) <= 30:
+        send_telegram_message(f"⚠️ {os.path.basename(csv_path)} is empty or invalid. Auto-trade skipped.")
+        return
+    momentum_flag = "D:/Downloads/Dhanbot/dhan_autotrader/momentum_ready.txt"
+    momentum_csv = "D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv"
+    now = datetime.now()
+    
+    should_run_momentum = True
+    if os.path.exists(momentum_flag):
+        last_run_time = datetime.fromtimestamp(os.path.getmtime(momentum_flag))
+        if now - last_run_time < timedelta(minutes=15):
+            print("🕒 GPT momentum was run recently. Skipping regeneration.")
+            should_run_momentum = False
+        else:
+            print("⚠️ GPT momentum last run >15 mins ago. Will regenerate list.")
+    else:
+        print("⚙️ No previous GPT run found. Running now.")
+    
+    # ✅ Run GPT momentum only if needed and after 9:30 AM
+    if should_run_momentum and now.time() >= datetime.strptime("09:30", "%H:%M").time():
+        print("⚙️ Running GPT Momentum Filter...")
+        df_generated = prepare_data()
+        if df_generated.empty or df_generated["symbol"].nunique() == 0:
+            send_telegram_message("⚠️ No stocks qualified by GPT filter. Skipping trading today.")
+            with open(momentum_csv, "w") as f:
+                f.write("symbol,security_id\n")
+            return
+        ask_gpt_to_rank_stocks(df_generated)
+        with open(momentum_flag, "w") as f:
+            f.write(now.strftime("%Y-%m-%d %H:%M:%S"))
+    elif now.time() < datetime.strptime("09:30", "%H:%M").time():
+        print("⏳ Waiting for 9:30 AM to start GPT momentum process.")
+        send_telegram_message("⏳ Waiting for 9:30 AM to generate GPT stock list.")
+        return
 
     df = pd.read_csv(csv_path)
+    if df.empty or df["symbol"].isnull().all() or df["security_id"].isnull().all():
+        print(f"⚠️ No valid rows in {csv_path}. Skipping trading for today.")
+        send_telegram_message(f"⚠️ No stocks available in {os.path.basename(csv_path)}. Auto-trade skipped.")
+        log_bot_action("autotrade.py", "data_check", "❌ EMPTY STOCK LIST", f"No rows in {csv_path}")
+        return   
     print(f"📄 Using stock list: {csv_path}")
     
     if df.empty or "symbol" not in df.columns or "security_id" not in df.columns:
@@ -458,20 +502,31 @@ def run_autotrade():
             systime.sleep(0.6)
     
             if success:
-                log_trade(best["symbol"], best["security_id"], best["qty"], best["price"])
-                send_telegram_message(f"✅ Bought {best['symbol']} at ₹{best['price']}, Qty: {best['qty']}")
-                log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{best['symbol']} @ ₹{best['price']}")
-                trade_executed = True
-                s = best
+                # Force delay to avoid race conditions
+                systime.sleep(1)
+            
+                # ✅ Confirm log entry actually written
+                try:
+                    log_trade(best["symbol"], best["security_id"], best["qty"], best["price"])
+                    send_telegram_message(f"✅ Bought {best['symbol']} at ₹{best['price']}, Qty: {best['qty']}")
+                    log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{best['symbol']} @ ₹{best['price']}")
+                    trade_executed = True
+                    bought_stocks.add(best["symbol"])  # Mark this stock as executed
+                    s = best
+                except Exception as e:
+                    send_telegram_message(f"⚠️ Trade executed but logging failed: {e}")
                 break
+            
             else:
                 send_telegram_message(f"❌ Order failed for {best['symbol']}: {order_id_or_msg}")
                 log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{best['symbol']} → {order_id_or_msg}")
                 
                 # 🔁 Try fallback candidates
                 for alt in fallbacks:
+                    if alt["symbol"] in bought_stocks:
+                        continue  # ✅ Already executed, skip retry               
                     print(f"⚠️ Trying fallback candidate: {alt['symbol']}")
-                    success, order_id_or_msg = place_buy_order(alt["symbol"], alt["security_id"], alt["price"], alt["qty"])
+                    success, order_id_or_msg = place_buy_order(alt["symbol"], alt["security_id"], alt["price"], alt["qty"])               
                     systime.sleep(0.6)
                     if success:
                         log_trade(alt["symbol"], alt["security_id"], alt["qty"], alt["price"])

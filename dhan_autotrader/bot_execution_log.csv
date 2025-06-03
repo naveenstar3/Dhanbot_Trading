@@ -1417,3 +1417,49 @@ timestamp,script_name,action,status,message
 2025-06-02 11:47:30,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
 2025-06-02 11:49:28,Dynamic_Gpt_Momentum.py,prepare_data,❌ EMPTY,No stocks passed filters
 2025-06-02 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹166.52 | Capital: ₹3166.52
+2025-06-02 16:00:07,git_sync.py,Git Push,✅ COMPLETE,33 file(s) pushed
+2025-06-03 08:54:06,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,IDFCFIRSTB - Rate limit hit
+2025-06-03 08:54:17,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,PTC - Rate limit hit
+2025-06-03 08:54:24,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BANKBEES - Rate limit hit
+2025-06-03 08:54:29,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,EMIL - Rate limit hit
+2025-06-03 08:54:30,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,HDFCMOMENT - Rate limit hit
+2025-06-03 08:54:42,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ALKEM - Rate limit hit
+2025-06-03 08:57:04,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,PSUBNKBEES - Rate limit hit
+2025-06-03 09:00:36,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,XCHANGING - Rate limit hit
+2025-06-03 09:06:09,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BAJAJFINSV - Rate limit hit
+2025-06-03 09:08:33,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ICICIPRULI - Rate limit hit
+2025-06-03 09:32:06,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-03 09:32:21,autotrade.py,BUY,❌ FAILED,SDBL → Unknown error
+2025-06-03 09:33:34,autotrade.py,BUY,❌ FAILED,SDBL → Unknown error
+2025-06-03 09:34:49,autotrade.py,BUY,❌ FAILED,SDBL → Unknown error
+2025-06-03 10:12:21,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-03 10:14:50,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,25 stocks processed
+2025-06-03 10:14:54,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['PURVA', 'GPTINFRA', 'SPARC', 'VPRPL', 'UNIMECH']"
+2025-06-03 10:19:50,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-03 10:20:05,autotrade.py,BUY,❌ FAILED,GPTINFRA → Unknown error
+2025-06-03 11:40:25,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-03 11:40:25,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-03 11:42:51,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,22 stocks processed
+2025-06-03 11:42:54,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['SPMLINFRA', 'DIACABS', 'CAMPUS', 'SPARC', 'AVANTIFEED']"
+2025-06-03 11:43:09,autotrade.py,BUY,❌ FAILED,VPRPL → type object 'datetime.time' has no attribute 'time'
+2025-06-03 11:44:25,autotrade.py,BUY,❌ FAILED,VPRPL → type object 'datetime.time' has no attribute 'time'
+2025-06-03 11:45:44,autotrade.py,BUY,❌ FAILED,VPRPL → type object 'datetime.time' has no attribute 'time'
+2025-06-03 11:50:41,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-03 11:50:56,autotrade.py,BUY,❌ FAILED,VPRPL → type object 'datetime.time' has no attribute 'time'
+2025-06-03 12:12:58,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-03 12:12:58,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-03 12:15:06,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,11 stocks processed
+2025-06-03 12:15:08,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['COMSYN', 'FIRSTCRY', 'GRSE', 'SBFC', 'CCL']"
+2025-06-03 12:15:23,autotrade.py,BUY,❌ FAILED,GPTINFRA → log_trade() got an unexpected keyword argument 'quantity'
+2025-06-03 12:16:34,autotrade.py,BUY,❌ FAILED,GPTINFRA → log_trade() got an unexpected keyword argument 'quantity'
+2025-06-03 12:16:59,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-03 12:17:13,autotrade.py,BUY,✅ EXECUTED,GPTINFRA @ ₹141.0
+2025-06-03 12:18:01,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-03 12:18:16,autotrade.py,BUY,✅ EXECUTED,GPTINFRA @ ₹141.0
+2025-06-03 12:20:37,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-03 12:20:52,autotrade.py,BUY,✅ EXECUTED,GPTINFRA @ ₹141.03
+2025-06-03 12:23:19,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-03 12:25:20,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-03 12:27:50,autotrade.py,BUY,❌ FAILED,SPARC → Unknown error
+2025-06-03 12:29:01,autotrade.py,BUY,❌ FAILED,SPARC → Unknown error
+2025-06-03 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹166.52 | Capital: ₹3333.04

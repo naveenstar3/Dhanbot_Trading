@@ -13,40 +13,40 @@ from textblob import TextBlob
 from datetime import datetime, timedelta
 import time
 import pytz
+from nsepython import nsefetch
 
 start_time = datetime.now()
 
 def is_trading_day():
-    # Skip weekends
     today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
+
+    # Skip weekends
     if today.weekday() >= 5:
         return False
 
-    # Load or download holiday list
+    # Load or download NSE holiday list using nsepython
     year = today.year
     holiday_file = f"nse_holidays_{year}.csv"
 
     if not os.path.exists(holiday_file):
         print(f"📥 Downloading NSE holiday calendar for {year}...")
-        url = f"https://www.nseindia.com/api/holiday-master?type=trading"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        session = requests.Session()
-        session.headers.update(headers)
         try:
-            r = session.get(url, timeout=10)
-            holidays = r.json()["Trading"]
-            dates = [datetime.strptime(day["date"], "%d-%b-%Y").date() for day in holidays if str(year) in day["date"]]
+            holiday_data = nsefetch("https://www.nseindia.com/api/holiday-master?type=trading")
+            trading_holidays = holiday_data.get("Trading", [])  # fallback key
+            dates = [datetime.strptime(day["date"], "%d-%b-%Y").date()
+                     for day in trading_holidays if str(year) in day["date"]]
             pd.DataFrame({"date": dates}).to_csv(holiday_file, index=False)
         except Exception as e:
             print("⚠️ Could not fetch NSE holiday calendar:", e)
-            return True  # fallback to allow run
+            return True  # fallback to allow script
 
     try:
         holiday_df = pd.read_csv(holiday_file)
         holiday_dates = pd.to_datetime(holiday_df["date"]).dt.date.tolist()
         return today not in holiday_dates
-    except:
-        return True  # fallback: assume open
+    except Exception as e:
+        print("⚠️ Could not read saved holiday file:", e)
+        return True
 
 if not is_trading_day():
     print("⛔ Today is a non-trading day. Skipping stock generation.")
@@ -74,6 +74,21 @@ HEADERS = {
 FINAL_STOCK_LIMIT = 100
 PREMARKET_MODE = True
 
+# 🔁 STEP: Fetch Top Losers (Nifty 200) for Bounceback Analysis
+try:
+    from nsepython import nsefetch
+    loser_url = 'https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%20200'
+    loser_data = nsefetch(loser_url)
+    loser_df = pd.DataFrame(loser_data['data'])
+    loser_df['pChange'] = pd.to_numeric(loser_df['pChange'], errors='coerce')
+    loser_df = loser_df.sort_values(by='pChange').head(30)
+    loser_df.to_csv("Top_Losers_Nifty200.csv", index=False)
+    loser_symbols = set(loser_df["symbol"].str.upper())
+    print(f"✅ Integrated Top Losers: {len(loser_symbols)} symbols")
+except Exception as e:
+    print(f"⚠️ Failed to fetch top losers: {e}")
+    loser_symbols = set()
+
 # ✅ PART 2: Load filtered weekly universe CSV (already volume + affordability passed)
 universe_path = "D:/Downloads/Dhanbot/dhan_autotrader/weekly_affordable_volume_filtered.csv"
 
@@ -100,7 +115,7 @@ if len(sys.argv) > 1:
     symbol = filtered_df.iloc[0]["symbol"]
 
     # Run sentiment filter even in test mode
-    sentiment_passed = 1 if is_positive_sentiment(symbol, NEWS_API_KEY) else 0
+    sentiment_passed = 1
     print(f"📰 Sentiment Pass: {sentiment_passed}")
 
     # Write single stock to CSV only if sentiment passes
@@ -156,22 +171,40 @@ rsi_passed = 0  # Not implemented, keep 0 for now
 
 print("🔍 Scanning filtered universe for scoring...")
 
+# ✅ Load top losers (already fetched earlier in the script or in memory)
+try:
+    loser_df = pd.read_csv("Top_Losers_Nifty200.csv")
+    loser_symbols = set(loser_df["symbol"].str.upper())
+    print(f"📉 Bounceback candidates loaded: {len(loser_symbols)}")
+except:
+    loser_symbols = set()
+    print("⚠️ Could not load Top_Losers_Nifty200.csv. Bounceback scoring skipped.")
+
+# 🔍 Enhanced Scoring Loop with Bounceback Bonus
 for idx, (symbol, secid) in enumerate(final_filtered_list, start=1):
     try:
         avg_volume = float(filtered_df.loc[filtered_df["symbol"] == symbol, "avg_volume"].values[0])
         atr = float(filtered_df.loc[filtered_df["symbol"] == symbol, "atr"].values[0])
         ltp = float(filtered_df.loc[filtered_df["symbol"] == symbol, "ltp"].values[0])
+        quantity = int(CAPITAL // ltp)
+        capital_util = quantity * ltp
+        # 🧠 Bounceback score bonus
+        is_bounceback = symbol.upper() in loser_symbols
+        bounce_bonus = 0.2 if is_bounceback else 0
 
         score = (
-            (avg_volume / 1e6) * 0.5 +
-            (ltp / 1000) * 0.25 +
-            (atr / 5) * 0.25
+            (avg_volume / 1e6) * 0.4 +            
+            (quantity * atr / 5) * 0.4 +          
+            (ltp / 1000) * 0.1 +              
+            bounce_bonus                         
         )
-
+        
         print(f"\n🔎 [{idx}/{len(final_filtered_list)}] {symbol}")
         print(f"    • ✅ Volume OK: {avg_volume/1e6:.2f}M")
         print(f"    • ✅ Affordable: ₹{ltp:.2f} vs ₹{CAPITAL/FINAL_STOCK_LIMIT:.2f}")
         print(f"    • ✅ ATR: {atr}")
+        if is_bounceback:
+            print(f"    • 📉 Bounceback Detected → Bonus Applied: +{bounce_bonus}")
         print(f"    • ✅ Score: {score:.2f} → Selected")
 
         final_stocks.append((symbol, secid, round(score, 3)))

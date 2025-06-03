@@ -153,6 +153,11 @@ for idx, (symbol, secid) in enumerate(filtered, 1):
         if not ltp or ltp > CAPITAL:
             print(f"⛔ {symbol} Skipped — Not Affordable: ₹{ltp} > Capital ₹{CAPITAL}")
             continue
+        
+        # 🧮 Calculate how many shares can be bought
+        quantity = int(CAPITAL // ltp)
+        if quantity < 1:
+            continue        
 
         affordable_count += 1
         print(f"✅ Affordable — ₹{ltp}")
@@ -229,9 +234,10 @@ ranked_df = pd.DataFrame(results)
 if ranked_df.empty:
     print("❌ No valid stocks passed all filters. Skipping CSV write.")
 else:
-    ranked_df["score"] = ranked_df["avg_volume"] * ranked_df["atr"]
-    ranked_df = ranked_df.sort_values(by="score", ascending=False).head(200)
-    ranked_df.drop(columns=["score"], inplace=True)
+    ranked_df["qty"] = (CAPITAL // ranked_df["ltp"]).astype(int)
+    ranked_df["profit_score"] = ranked_df["qty"] * ranked_df["atr"]
+    ranked_df = ranked_df.sort_values(by="profit_score", ascending=False).head(200)
+    ranked_df.drop(columns=["profit_score"], inplace=True)    
     ranked_df.to_csv(OUTPUT_CSV, index=False)
     print(f"\n✅ Saved top {len(ranked_df)} ranked stocks to {OUTPUT_CSV}")
 
