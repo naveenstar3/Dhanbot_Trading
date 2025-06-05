@@ -232,7 +232,7 @@ def get_trade_status(order_id):
         if response.status_code == 200:
             trades = response.json().get("data", [])
             for t in trades:
-                if t.get("order_id") == order_id:
+                if str(t.get("order_id")).strip() == str(order_id).strip():
                     return t.get("status", "").upper()
         return "UNKNOWN"
     except:
@@ -565,11 +565,13 @@ def run_autotrade():
         
             if success:
                 order_status = get_trade_status(order_id_or_msg)
-                if order_status not in ["TRADED", "OPEN"]:
+                
+                # Proceed to logging if trade status is UNKNOWN but we are confident it was placed
+                if order_status not in ["TRADED", "OPEN", "UNKNOWN"]:
                     send_telegram_message(f"❌ Order rejected by broker: {order_status} — {best['symbol']}")
                     log_bot_action("autotrade.py", "REJECTED", "❌ Broker rejected", f"{best['symbol']} → {order_status}")
                     return
-        
+            
                 try:
                     log_trade(best["symbol"], best["security_id"], best["qty"], best["price"])
                     send_telegram_message(f"✅ Bought {best['symbol']} at ₹{best['price']}, Qty: {best['qty']}")
@@ -581,6 +583,7 @@ def run_autotrade():
                     send_telegram_message(f"⚠️ Trade executed but logging failed: {e}")
                     print("🚫 Logging failed. Halting further trading to prevent duplicate order.")
                     return
+            
                 break
         
             else:
@@ -598,7 +601,7 @@ def run_autotrade():
         
                     if success:
                         order_status = get_trade_status(order_id_or_msg)
-                        if order_status not in ["TRADED", "OPEN"]:
+                        if order_status not in ["TRADED", "OPEN", "UNKNOWN"]:
                             send_telegram_message(f"❌ Rejected fallback: {alt['symbol']} — {order_status}")
                             continue
         

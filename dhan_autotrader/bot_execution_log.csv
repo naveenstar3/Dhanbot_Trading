@@ -1509,3 +1509,9 @@ timestamp,script_name,action,status,message
 2025-06-04 11:54:31,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,9 stocks processed
 2025-06-04 11:54:35,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['SHRIRAMFIN', 'ASIANPAINT', 'BEL', 'HDFCLIFE', 'RELIANCE']"
 2025-06-04 12:19:19,autotrade.py,BUY,❌ FAILED,BEL → Unknown error
+2025-06-05 09:32:09,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-05 09:32:09,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-05 09:33:45,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,9 stocks processed
+2025-06-05 09:33:48,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['DRREDDY', 'INDUSINDBK', 'ADANIENT', 'JINDALSTEL', 'TECHM']"
+2025-06-05 09:48:03,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-05 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹166.52 | Capital: ₹3166.52
