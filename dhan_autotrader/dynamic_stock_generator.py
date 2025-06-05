@@ -1,338 +1,194 @@
-# ✅ PART 1: Imports and Config Setup
+# premarket_nifty100_scanner.py
 import os
 import sys
 import json
-import time as systime
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
-from dhan_api import get_historical_price, get_current_capital
-from utils_logger import log_bot_action
-import openai
-from textblob import TextBlob
-from datetime import datetime, timedelta
-import time
+from dhan_api import get_live_price
 import pytz
-from nsepython import nsefetch
+import time
+from nsepython import nsefetch  # Using your working library
 
+# ======== CONFIGURATION ========
 start_time = datetime.now()
+CAPITAL_PATH = "D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv"
+CONFIG_PATH = "D:/Downloads/Dhanbot/dhan_autotrader/config.json"
+OUTPUT_CSV = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
+NIFTY100_CACHE = "D:/Downloads/Dhanbot/dhan_autotrader/nifty100_constituents.csv"
+MASTER_CSV = "D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv"
 
+# ======== TRADING DAY CHECK ========
 def is_trading_day():
     today = datetime.now(pytz.timezone("Asia/Kolkata")).date()
-
-    # Skip weekends
-    if today.weekday() >= 5:
+    if today.weekday() >= 5:  # Weekend check
         return False
-
-    # Load or download NSE holiday list using nsepython
-    year = today.year
-    holiday_file = f"nse_holidays_{year}.csv"
-
-    if not os.path.exists(holiday_file):
-        print(f"📥 Downloading NSE holiday calendar for {year}...")
-        try:
-            holiday_data = nsefetch("https://www.nseindia.com/api/holiday-master?type=trading")
-            trading_holidays = holiday_data.get("Trading", [])  # fallback key
-            dates = [datetime.strptime(day["date"], "%d-%b-%Y").date()
-                     for day in trading_holidays if str(year) in day["date"]]
-            pd.DataFrame({"date": dates}).to_csv(holiday_file, index=False)
-        except Exception as e:
-            print("⚠️ Could not fetch NSE holiday calendar:", e)
-            return True  # fallback to allow script
-
-    try:
-        holiday_df = pd.read_csv(holiday_file)
-        holiday_dates = pd.to_datetime(holiday_df["date"]).dt.date.tolist()
-        return today not in holiday_dates
-    except Exception as e:
-        print("⚠️ Could not read saved holiday file:", e)
-        return True
+    return True
 
 if not is_trading_day():
-    print("⛔ Today is a non-trading day. Skipping stock generation.")
-    log_bot_action("dynamic_stock_generator.py", "market_status", "INFO", "Skipped: NSE holiday/weekend.")
+    print("⛔ Non-trading day. Exiting.")
     sys.exit(0)
 
-
-with open('D:/Downloads/Dhanbot/dhan_autotrader/config.json', 'r') as f:
+# ======== LOAD CREDENTIALS & CAPITAL ========
+with open(CONFIG_PATH, 'r') as f:
     config = json.load(f)
-
 ACCESS_TOKEN = config["access_token"]
 CLIENT_ID = config["client_id"]
-openai.api_key = config.get("openai_api_key")
-NEWS_API_KEY = config.get("news_api_key", "")
-capital_path = "D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv"
-CAPITAL = float(pd.read_csv(capital_path, header=None).iloc[0, 0])
-
-
 HEADERS = {
     "access-token": ACCESS_TOKEN,
     "client-id": CLIENT_ID,
     "Content-Type": "application/json"
 }
 
-FINAL_STOCK_LIMIT = 100
-PREMARKET_MODE = True
-
-# 🔁 STEP: Fetch Top Losers (Nifty 200) for Bounceback Analysis
 try:
-    from nsepython import nsefetch
-    loser_url = 'https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%20200'
-    loser_data = nsefetch(loser_url)
-    loser_df = pd.DataFrame(loser_data['data'])
-    loser_df['pChange'] = pd.to_numeric(loser_df['pChange'], errors='coerce')
-    loser_df = loser_df.sort_values(by='pChange').head(30)
-    loser_df.to_csv("Top_Losers_Nifty200.csv", index=False)
-    loser_symbols = set(loser_df["symbol"].str.upper())
-    print(f"✅ Integrated Top Losers: {len(loser_symbols)} symbols")
+    CAPITAL = float(pd.read_csv(CAPITAL_PATH, header=None).iloc[0, 0])
+    print(f"💰 Capital Loaded: ₹{CAPITAL:,.2f}")
 except Exception as e:
-    print(f"⚠️ Failed to fetch top losers: {e}")
-    loser_symbols = set()
-
-# ✅ PART 2: Load filtered weekly universe CSV (already volume + affordability passed)
-universe_path = "D:/Downloads/Dhanbot/dhan_autotrader/weekly_affordable_volume_filtered.csv"
-
-try:
-    filtered_df = pd.read_csv(universe_path)
-except Exception as e:
-    print(f"❌ Failed to read universe CSV: {e}")
+    print(f"❌ Capital loading failed: {e}")
     sys.exit(1)
 
-if "symbol" not in filtered_df.columns or "security_id" not in filtered_df.columns:
-    print("❌ Required columns 'symbol' and 'security_id' not found in weekly CSV.")
-    sys.exit(1)
-
-# 💡 If test mode is active
-test_security_id = None
-if len(sys.argv) > 1:
-    test_security_id = str(sys.argv[1]).strip()
-    print(f"🔬 Test Mode: Single Security ID = {test_security_id}")
-    filtered_df = filtered_df[filtered_df["security_id"].astype(str) == test_security_id]
-    if filtered_df.empty:
-        print(f"❌ Security ID {test_security_id} not found in filtered universe.")
-        sys.exit(1)
-
-    symbol = filtered_df.iloc[0]["symbol"]
-
-    # Run sentiment filter even in test mode
-    sentiment_passed = 1
-    print(f"📰 Sentiment Pass: {sentiment_passed}")
-
-    # Write single stock to CSV only if sentiment passes
-    if sentiment_passed:
-        output_file = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
-        with open(output_file, "w") as f:
-            f.write("symbol,security_id\n")
-            f.write(f"{symbol},{test_security_id}\n")
-        print(f"✅ Saved test-mode stock to {output_file}")
-    else:
-        print(f"⛔ Stock {symbol} skipped due to negative sentiment.")
-        print(f"❌ {symbol} Skipped due to sentiment [1/1]")  # Manual index for test mode
-
-    # Log to filter_summary_log.csv
-    summary_log_path = "D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_log.csv"
-    now = datetime.now().strftime("%m/%d/%Y %H:%M")
-    summary_data = {
-        "date": now,
-        "total_scanned": 1,
-        "affordable": 1,
-        "technical_passed": 1,
-        "volume_passed": CAPITAL,
-        "sentiment_passed": sentiment_passed,
-        "rsi_passed": "",  # Not checked here
-        "final_selected": 1 if sentiment_passed else 0
-    }
+# ======== RELIABLE NIFTY 100 FETCH ========
+def get_nifty100_constituents():
+    """Fetch Nifty 100 using nsepython with robust error handling"""
     try:
-        if os.path.exists(summary_log_path):
-            existing_df = pd.read_csv(summary_log_path)
-            existing_df = pd.concat([existing_df, pd.DataFrame([summary_data])], ignore_index=True)
-            existing_df.to_csv(summary_log_path, index=False)
-        else:
-            pd.DataFrame([summary_data]).to_csv(summary_log_path, index=False)
-        print("📝 Logged test summary to filter_summary_log.csv")
+        # Using the same method as your Top_Losers_Strategy
+        url = 'https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%20100'
+        data = nsefetch(url)
+        symbols = [item["symbol"].strip().upper() for item in data["data"]]
+        print(f"✅ Fetched {len(symbols)} current Nifty 100 constituents")
+        return symbols
     except Exception as e:
-        print(f"⚠️ Could not log summary: {e}")
-    sys.exit(0)
+        print(f"⚠️ NSE fetch failed: {e}. Using cached list")
+        if os.path.exists(NIFTY100_CACHE):
+            return pd.read_csv(NIFTY100_CACHE)["symbol"].tolist()
+        return []  # Fallback
 
+nifty100_symbols = get_nifty100_constituents()
+if not nifty100_symbols:
+    print("❌ No Nifty 100 symbols available")
+    sys.exit(1)
 
-# 🔄 Convert to list of tuples for loop
-final_filtered_list = list(zip(filtered_df["symbol"].astype(str), filtered_df["security_id"].astype(str)))
+# Save/update cache
+pd.DataFrame(nifty100_symbols, columns=["symbol"]).to_csv(NIFTY100_CACHE, index=False)
 
-# ✅ PART 3: Scoring and Ranking Using GPT (Unchanged Logic)
-final_stocks = []
-sentiment_passed = 0
-rsi_passed = 0  # Not implemented, keep 0 for now
-
-print("🔍 Scanning filtered universe for scoring...")
-# ✅ PART 3: Scoring and Ranking Using GPT (Unchanged Logic)
-final_stocks = []
-sentiment_passed = 0
-rsi_passed = 0  # Not implemented, keep 0 for now
-
-print("🔍 Scanning filtered universe for scoring...")
-
-# ✅ Load top losers (already fetched earlier in the script or in memory)
+# ======== LOAD MASTER SECURITY LIST ========
 try:
-    loser_df = pd.read_csv("Top_Losers_Nifty200.csv")
-    loser_symbols = set(loser_df["symbol"].str.upper())
-    print(f"📉 Bounceback candidates loaded: {len(loser_symbols)}")
-except:
-    loser_symbols = set()
-    print("⚠️ Could not load Top_Losers_Nifty200.csv. Bounceback scoring skipped.")
+    master_df = pd.read_csv(MASTER_CSV)
+    # Create clean symbol for matching
+    master_df["base_symbol"] = master_df["SEM_TRADING_SYMBOL"].str.replace("-EQ", "").str.strip().str.upper()
+    nifty100_df = master_df[master_df["base_symbol"].isin(nifty100_symbols)]
+    print(f"📊 Master list filtered to {len(nifty100_df)} Nifty 100 stocks")
+    
+    if len(nifty100_df) == 0:
+        print("❌ No matching securities found in master list")
+        sys.exit(1)
+except Exception as e:
+    print(f"❌ Master CSV load failed: {e}")
+    sys.exit(1)
 
-# 🔍 Enhanced Scoring Loop with Bounceback Bonus
-for idx, (symbol, secid) in enumerate(final_filtered_list, start=1):
+# ======== PRE-MARKET SCAN ========
+results = []
+MIN_VOLUME = 500000  # 5 lakh shares
+MIN_ATR = 2.0  # ₹2 minimum daily range
+
+print("\n🚀 Starting pre-market scan...")
+for idx, row in nifty100_df.iterrows():
+    symbol = row["base_symbol"]
+    secid = str(row["SEM_SMST_SECURITY_ID"])
+    print(f"\n🔍 [{len(results)+1}/{len(nifty100_df)}] Scanning {symbol}")
+
     try:
-        avg_volume = float(filtered_df.loc[filtered_df["symbol"] == symbol, "avg_volume"].values[0])
-        atr = float(filtered_df.loc[filtered_df["symbol"] == symbol, "atr"].values[0])
-        ltp = float(filtered_df.loc[filtered_df["symbol"] == symbol, "ltp"].values[0])
-        quantity = int(CAPITAL // ltp)
-        capital_util = quantity * ltp
-        # 🧠 Bounceback score bonus
-        is_bounceback = symbol.upper() in loser_symbols
-        bounce_bonus = 0.2 if is_bounceback else 0
-
-        score = (
-            (avg_volume / 1e6) * 0.4 +            
-            (quantity * atr / 5) * 0.4 +          
-            (ltp / 1000) * 0.1 +              
-            bounce_bonus                         
+        # Step 1: Get pre-market LTP
+        ltp = get_live_price(symbol, secid, premarket=True)
+        if not ltp or ltp > CAPITAL:
+            print(f"⛔ Unaffordable: ₹{ltp or 0:,.2f} > ₹{CAPITAL:,.2f}")
+            continue
+        
+        # Step 2: Volume check (last 5 trading days)
+        payload = {
+            "securityId": secid,
+            "exchangeSegment": "NSE_EQ",
+            "instrument": "EQUITY",  # ADD THIS MISSING FIELD
+            "interval": "1",
+            "oi": False,  # ADD THIS MISSING FIELD
+            "fromDate": (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d %H:%M:%S'),  # ADD TIME
+            "toDate": (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')  # USE YESTERDAY
+        }
+        vol_response = requests.post(
+            "https://api.dhan.co/v2/charts/intraday", 
+            headers=HEADERS, 
+            json=payload,
+            timeout=10
         )
         
-        print(f"\n🔎 [{idx}/{len(final_filtered_list)}] {symbol}")
-        print(f"    • ✅ Volume OK: {avg_volume/1e6:.2f}M")
-        print(f"    • ✅ Affordable: ₹{ltp:.2f} vs ₹{CAPITAL/FINAL_STOCK_LIMIT:.2f}")
-        print(f"    • ✅ ATR: {atr}")
-        if is_bounceback:
-            print(f"    • 📉 Bounceback Detected → Bonus Applied: +{bounce_bonus}")
-        print(f"    • ✅ Score: {score:.2f} → Selected")
+        if vol_response.status_code != 200:
+            print(f"❌ Volume API error: {vol_response.status_code}")
+            continue
+            
+        vol_data = vol_response.json()
+        df_vol = pd.DataFrame({
+            "timestamp": pd.to_datetime(vol_data["timestamp"], unit="s"),
+            "volume": vol_data["volume"]
+        })
+        df_vol["date"] = df_vol["timestamp"].dt.date
+        daily_vol = df_vol.groupby("date")["volume"].sum()
+        avg_volume = daily_vol.tail(5).mean()
+        
+        if pd.isna(avg_volume) or avg_volume < MIN_VOLUME:
+            print(f"⛔ Low volume: {avg_volume:,.0f} < {MIN_VOLUME:,.0f}")
+            continue
 
-        final_stocks.append((symbol, secid, round(score, 3)))
-        time.sleep(0.1)
+        # Step 3: Volatility check (ATR proxy)
+        if "high" in vol_data and "low" in vol_data:
+            df_vol["high"] = vol_data["high"]
+            df_vol["low"] = vol_data["low"]
+            df_vol["range"] = df_vol["high"] - df_vol["low"]
+            daily_range = df_vol.groupby("date")["range"].max()
+            atr = daily_range.tail(5).mean()
+        else:
+            print(f"⛔ Missing high/low data for volatility check")
+            continue
+        
+        if pd.isna(atr) or atr < MIN_ATR:
+            print(f"⛔ Low volatility: ₹{atr:.2f} < ₹{MIN_ATR:.2f}")
+            continue
+
+        # Step 4: Calculate position size
+        quantity = int(CAPITAL // ltp)
+        capital_used = quantity * ltp
+        
+        results.append({
+            "symbol": symbol,
+            "security_id": secid,
+            "ltp": ltp,
+            "quantity": quantity,
+            "capital_used": capital_used,
+            "avg_volume": int(avg_volume),
+            "avg_range": round(atr, 2),
+            "potential_profit": round(quantity * atr, 2)
+        })
+        print(f"✅ SELECTED: ₹{ltp:,.2f} | Vol: {avg_volume:,.0f} | Range: ₹{atr:.2f}")
 
     except Exception as e:
-        print(f"\n❌ [{idx}/{len(final_filtered_list)}] {symbol}")
-        print(f"    • ⚠️ Skipped due to: {e}")
-        continue
+        print(f"⚠️ Processing error: {str(e)[:70]}")
+    finally:
+        time.sleep(0.3)  # Rate limit protection
 
+# ======== SAVE RESULTS ========
+if results:
+    results_df = pd.DataFrame(results)
+    # Prioritize high volatility and volume
+    results_df["priority_score"] = results_df["avg_range"] * results_df["avg_volume"]
+    results_df = results_df.sort_values("priority_score", ascending=False)
+    results_df.to_csv(OUTPUT_CSV, index=False)
+    print(f"\n✅ Saved {len(results_df)} stocks to {OUTPUT_CSV}")
+    print(f"📊 Top 5 opportunities:")
+    print(results_df[["symbol", "ltp", "quantity", "potential_profit"]].head().to_string(index=False))
+else:
+    print("\n❌ No stocks passed all filters")
 
-final_count = len(final_stocks)
-if len(final_stocks) == 0:
-    print("❌ No stocks passed scoring.")
-    sys.exit(1)
-
-# ✅ Sort and take top 150 to pass to GPT
-top_stocks = sorted(final_stocks, key=lambda x: x[2], reverse=True)[:150]
-
-# ✅ Format as GPT prompt
-gpt_prompt = f"""
-🧠 You are an expert intraday stock selector and market analyst. Today is {datetime.now().strftime('%Y-%m-%d')} IST.
-
-You have been given a list of pre-screened stocks, each with a momentum score based on:
-- 5-day average volume
-- ATR (intraday movement potential)
-- Stock price
-- Recent EOD uptrend pattern
-- Strong close signals
-
-Your mission is to select **exactly {FINAL_STOCK_LIMIT} stocks** that are the **safest and most reliable intraday candidates** for today’s session.
-
-📌 Important Instructions:
-- These stocks must have the **highest probability** of passing **live filters** like RSI < 70, 5-min/15-min uptrend, and positive sentiment during market hours.
-- Since intraday data is not available yet, base your ranking on **historical behavior that predicts future strength**, such as:
-  - Recent consistent bullishness or strong close
-  - High delivery % and volume consistency
-  - Clean technical structure (e.g., breakout readiness)
-  - Sector strength and market alignment
-  - No red-flag news or corporate issues
-  - Avoid SME/PSU/penny/junk stocks
-
-⚠️ You are strictly accountable for the quality of your picks. At least **10% of these selected stocks MUST pass** real-time intraday momentum filters in the next step.
-- Do not include weak, random, or speculative stocks just to fill the count.
-- Prioritize quality over diversity.
-
-🎯 Output format: Just the stock symbols, comma-separated, no explanation.
-
-Candidate Stocks with Scores:
-{", ".join([f"{s[0]}:{s[2]}" for s in top_stocks])}
-"""
-
-print("🤖 Asking GPT to rank top 50...")
-client = openai.OpenAI(api_key=config.get("openai_api_key"))
-response = client.chat.completions.create(
-    model="gpt-4",
-    messages=[
-        {"role": "system", "content": "You are a trading assistant."},
-        {"role": "user", "content": gpt_prompt}
-    ],
-    temperature=0.4
-)
-
-gpt_result = response.choices[0].message.content.strip()
-if not gpt_result:
-    print("❌ GPT response was empty.")
-    sys.exit(1)
-
-ranked_symbols = [s.strip().upper() for s in gpt_result.split(",") if s.strip()]
-
-# ✅ PART 4: Final Output — Save Top 50 Picks
-print("📦 Filtering GPT-ranked symbols from scored universe...")
-
-final_selected = []
-seen_symbols = set()
-
-for symbol in ranked_symbols:
-    match = next((s for s in final_stocks if s[0] == symbol), None)
-    if match and symbol not in seen_symbols:
-        final_selected.append(match)
-        seen_symbols.add(symbol)
-
-if len(final_selected) == 0:
-    print("❌ No final stocks matched GPT output.")
-    sys.exit(1)
-
-# Save top 50 to dynamic_stock_list.csv
-output_file = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
-with open(output_file, "w") as f:
-    f.write("symbol,security_id\n")
-    for s in final_selected[:FINAL_STOCK_LIMIT]:
-        f.write(f"{s[0]},{s[1]}\n")
-
-# === ✅ FINAL SUMMARY LOG UPDATE ===
-try:
-    summary_log_path = "D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_log.csv"
-    now = datetime.now().strftime("%m/%d/%Y %H:%M")  # e.g., 5/27/2025 14:45
-
-    total_count = len(final_filtered_list)  # this is same as scanned, affordable, technical_passed, volume_passed
-
-    summary_data = {
-        "date": now,
-        "total_scanned": total_count,
-        "affordable": total_count,
-        "technical_passed": total_count,
-        "volume_passed": total_count,
-        "sentiment_passed": sentiment_passed,
-        "rsi_passed": rsi_passed,
-        "final_selected": len(final_selected)
-    }
-
-    # Append or update summary row
-    if os.path.exists(summary_log_path):
-        existing_df = pd.read_csv(summary_log_path)
-        mask = (existing_df["date"] == now) & (existing_df["total_scanned"] == total_count)
-        if mask.any():
-            existing_df.loc[mask, summary_data.keys()] = summary_data.values()
-        else:
-            existing_df = pd.concat([existing_df, pd.DataFrame([summary_data])], ignore_index=True)
-        existing_df.to_csv(summary_log_path, index=False)
-    else:
-        pd.DataFrame([summary_data]).to_csv(summary_log_path, index=False)
-
-    print("📝 Logged summary to filter_summary_log.csv")
-
-except Exception as e:
-    print(f"⚠️ Could not log summary: {e}")
-
-end_time = datetime.now()
-elapsed = end_time - start_time
-print(f"• Total Time: {str(elapsed).split('.')[0]}")
+# ======== PERFORMANCE METRICS ========
+elapsed = datetime.now() - start_time
+print(f"\n⏱️ Total scan time: {elapsed.total_seconds():.1f} seconds")
+print(f"💵 Capital available: ₹{CAPITAL:,.2f}")
+print(f"📈 Potential positions: {len(results)}")

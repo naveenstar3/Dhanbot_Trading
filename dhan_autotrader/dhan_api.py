@@ -163,7 +163,9 @@ def get_current_capital():
         
 def get_stock_volume(security_id):
     try:
-        candles = get_historical_price(security_id, interval="1d", days=1)
+        from_date = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S")
+        to_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        candles = get_historical_price(security_id, interval="1d", from_date=from_date, to_date=to_date)
         return candles[-1]["volume"] if candles else 0
     except Exception as e:
         print(f"⚠️ Volume fetch failed: {e}")

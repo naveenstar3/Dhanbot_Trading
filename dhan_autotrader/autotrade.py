@@ -45,6 +45,36 @@ TELEGRAM_CHAT_ID = config.get("telegram_chat_id")
 LIVEMONEYDEDUCTION = True
 if len(sys.argv) > 1 and sys.argv[1].strip().upper() == "NO":
     LIVEMONEYDEDUCTION = False
+    
+    
+# 📦 Dynamic Delivery % Estimator
+def get_estimated_delivery_percentage(security_id):
+    from datetime import datetime, timedelta
+    try:
+        yesterday = datetime.now() - timedelta(days=1)
+        start = yesterday.strftime("%Y-%m-%d 09:15:00")
+        end = yesterday.strftime("%Y-%m-%d 15:30:00")
+
+        candles = get_historical_price(
+            security_id=security_id,
+            interval="15",
+            from_date=start,
+            to_date=end
+        )
+
+        if not candles:
+            print(f"⚠️ No candles returned for delivery %")
+            return 35.0
+
+        total_volume = sum(c["volume"] for c in candles if "volume" in c)
+        if total_volume == 0:
+            return 35.0
+
+        estimated_deliverable = total_volume * 0.65  # Assumed average
+        return round((estimated_deliverable / total_volume) * 100, 2)
+    except Exception as e:
+        print(f"⚠️ Delivery % error: {e}")
+        return 35.0
 
 # ✅ Utility Functions
 
@@ -208,24 +238,35 @@ def get_trade_status(order_id):
     except:
         return "ERROR"
 
-def get_atr(symbol, period=14):
+def get_atr(security_id, period=14, interval="15m"):
+    """Proper ATR calculation from historical data"""
     try:
-        candles = get_historical_price(symbol, interval="15m")[-(period + 1):]
-        trs = []
+        candles = get_historical_price(security_id, interval=interval)
+        if len(candles) < period + 1:
+            return None
+            
+        tr_values = []
         for i in range(1, len(candles)):
             high = candles[i]['high']
             low = candles[i]['low']
             prev_close = candles[i-1]['close']
-            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
-            trs.append(tr)
-        return sum(trs) / len(trs) if trs else None
+            tr = max(
+                high - low,
+                abs(high - prev_close),
+                abs(low - prev_close)
+            )
+            tr_values.append(tr)
+        
+        # Calculate ATR as SMA of TR
+        atr = sum(tr_values[-period:]) / period
+        return round(atr, 2)
     except:
         return None
 
 def log_trade(symbol, security_id, qty, price):
     timestamp = datetime.now().strftime("%m/%d/%Y %H:%M")
     # Get ATR dynamically (past 14 periods)
-    atr = get_atr(symbol, period=14)  # You'll define this helper
+    atr = get_atr(security_id, period=14)
     if atr:
         target_pct = round((atr / price) * 100 * 1.2, 2)  # 1.2x ATR for target
         stop_pct = round((atr / price) * 100 * 0.8, 2)   # 0.8x ATR for stop
@@ -246,11 +287,12 @@ def log_trade(symbol, security_id, qty, price):
             timestamp, symbol, security_id, qty, price,
             0, target_pct, stop_pct, '', '', '', 'HOLD', ''
         ])
+        print(f"✅ Portfolio log updated for {symbol} — Qty: {qty} @ ₹{price}")
     
 best_candidate = None
 trade_lock = threading.Lock()
 
-def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map):
+def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map, avg_volume=100000):
     try:
         send_telegram_message(f"🔎 Scanning {symbol}...")
 
@@ -286,6 +328,21 @@ def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map):
         if high_trigger and price < high_trigger:
             print(f"⏭️ Skipping {symbol} — Price ₹{price} has not crossed 15-min high ₹{high_trigger}")
             return
+            
+        # Add volume check to breakout logic
+        if price > high_trigger:
+            current_volume = get_stock_volume(security_id)  # Implement volume fetch           
+            # Volume must be > 150% of 15-min average
+            capital = get_available_capital()
+            volume_threshold = max(50000, capital // 2)  # Example: ₹50,000 capital → 25,000 volume
+            if current_volume < volume_threshold:
+                print(f"⛔ Breakout rejected: volume {current_volume} < threshold {volume_threshold}")
+                return None
+        # ✅ Check Delivery Percentage (Minimum 30%)
+        delivery_pct = get_estimated_delivery_percentage(security_id)
+        if delivery_pct < 30:
+            print(f"⛔ Skipping {symbol} — Low Delivery %: {delivery_pct}%")
+            return       
 
         # RSI Check
         rsi = compute_rsi(security_id)
@@ -376,7 +433,7 @@ def run_autotrade():
         print("⛔ Market is closed today (weekend or holiday). Exiting auto-trade.")
         log_bot_action("autotrade.py", "market_status", "INFO", "Skipped: Market closed or holiday.")
         return
-    csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv"
+    csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv"
     log_bot_action("autotrade.py", "startup", "STARTED", "Smart dynamic AutoTrade started.")
     print("🔍 Checking if market is open...")
     
@@ -396,7 +453,7 @@ def run_autotrade():
         send_telegram_message(f"⚠️ {os.path.basename(csv_path)} is empty or invalid. Auto-trade skipped.")
         return
     momentum_flag = "D:/Downloads/Dhanbot/dhan_autotrader/momentum_ready.txt"
-    momentum_csv = "D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv"
+    momentum_csv = csv_path
     now = datetime.now()
     
     should_run_momentum = True
@@ -428,6 +485,10 @@ def run_autotrade():
         return
 
     df = pd.read_csv(csv_path)
+    required_cols = ['symbol', 'security_id', 'score', 'rsi', 'sentiment']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Missing required columns in CSV: {missing_cols}")  
     if df.empty or df["symbol"].isnull().all() or df["security_id"].isnull().all():
         print(f"⚠️ No valid rows in {csv_path}. Skipping trading for today.")
         send_telegram_message(f"⚠️ No stocks available in {os.path.basename(csv_path)}. Auto-trade skipped.")
@@ -475,7 +536,7 @@ def run_autotrade():
         print(f"🔁 Monitoring stocks for breakout at {datetime.now().strftime('%H:%M:%S')}...")
         candidate_scores = []
         top_candidates = []
-        for symbol in ranked_stocks:
+        for symbol in ranked_stocks[:10]:
             rate_limit_counter = 0
             if rate_limit_counter >= 5:
                 print("⛔ Too many rate limit errors. Backing off for 30 seconds...")
@@ -498,51 +559,69 @@ def run_autotrade():
             fallbacks = top_candidates[1:]  # Others as backup            
             pd.DataFrame(candidate_scores).to_csv("D:/Downloads/Dhanbot/dhan_autotrader/scanned_candidates_today.csv", index=False)
             print(f"✅ Best candidate selected: {best['symbol']} @ ₹{best['price']} (Score: {best['score']})")
+        
             success, order_id_or_msg = place_buy_order(best["symbol"], best["security_id"], best["price"], best["qty"])
-            systime.sleep(0.6)
-    
+            systime.sleep(1.2)
+        
             if success:
-                # Force delay to avoid race conditions
-                systime.sleep(1)
-            
-                # ✅ Confirm log entry actually written
+                order_status = get_trade_status(order_id_or_msg)
+                if order_status not in ["TRADED", "OPEN"]:
+                    send_telegram_message(f"❌ Order rejected by broker: {order_status} — {best['symbol']}")
+                    log_bot_action("autotrade.py", "REJECTED", "❌ Broker rejected", f"{best['symbol']} → {order_status}")
+                    return
+        
                 try:
                     log_trade(best["symbol"], best["security_id"], best["qty"], best["price"])
                     send_telegram_message(f"✅ Bought {best['symbol']} at ₹{best['price']}, Qty: {best['qty']}")
                     log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{best['symbol']} @ ₹{best['price']}")
                     trade_executed = True
-                    bought_stocks.add(best["symbol"])  # Mark this stock as executed
+                    bought_stocks.add(best["symbol"])
                     s = best
                 except Exception as e:
                     send_telegram_message(f"⚠️ Trade executed but logging failed: {e}")
+                    print("🚫 Logging failed. Halting further trading to prevent duplicate order.")
+                    return
                 break
-            
+        
             else:
                 send_telegram_message(f"❌ Order failed for {best['symbol']}: {order_id_or_msg}")
                 log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{best['symbol']} → {order_id_or_msg}")
-                
+        
                 # 🔁 Try fallback candidates
                 for alt in fallbacks:
                     if alt["symbol"] in bought_stocks:
-                        continue  # ✅ Already executed, skip retry               
+                        continue
+        
                     print(f"⚠️ Trying fallback candidate: {alt['symbol']}")
-                    success, order_id_or_msg = place_buy_order(alt["symbol"], alt["security_id"], alt["price"], alt["qty"])               
-                    systime.sleep(0.6)
+                    success, order_id_or_msg = place_buy_order(alt["symbol"], alt["security_id"], alt["price"], alt["qty"])
+                    systime.sleep(1.2)
+        
                     if success:
-                        log_trade(alt["symbol"], alt["security_id"], alt["qty"], alt["price"])
-                        send_telegram_message(f"✅ Fallback Buy: {alt['symbol']} at ₹{alt['price']}, Qty: {alt['qty']}")
-                        log_bot_action("autotrade.py", "BUY", "✅ Fallback EXECUTED", f"{alt['symbol']} @ ₹{alt['price']}")
-                        trade_executed = True
-                        s = alt
+                        order_status = get_trade_status(order_id_or_msg)
+                        if order_status not in ["TRADED", "OPEN"]:
+                            send_telegram_message(f"❌ Rejected fallback: {alt['symbol']} — {order_status}")
+                            continue
+        
+                        try:
+                            log_trade(alt["symbol"], alt["security_id"], alt["qty"], alt["price"])
+                            send_telegram_message(f"✅ Fallback Buy: {alt['symbol']} at ₹{alt['price']}, Qty: {alt['qty']}")
+                            log_bot_action("autotrade.py", "BUY", "✅ Fallback EXECUTED", f"{alt['symbol']} @ ₹{alt['price']}")
+                            trade_executed = True
+                            s = alt
+                        except Exception as e:
+                            send_telegram_message(f"⚠️ Fallback executed but logging failed: {e}")
+                            print("🚫 Logging failed. Halting further trading to prevent duplicate fallback.")
+                            return
                         break
-              
+        
         # Watchdog timeout
         now_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
         if not trade_executed and now_time >= time(14, 15):
             send_telegram_message("⚠️ No trade executed by 2:15 PM. Please review.")
             log_bot_action("autotrade.py", "WATCHDOG", "⚠️ NO TRADE", "No trade by 2:15 PM")
-    
+        
         systime.sleep(60)
+        
     
     # 🕒 3:25 PM End-of-Day Telegram Report
     now_ist = dt.now(pytz.timezone("Asia/Kolkata")).strftime('%d-%b-%Y')

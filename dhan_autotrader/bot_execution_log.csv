@@ -1463,3 +1463,49 @@ timestamp,script_name,action,status,message
 2025-06-03 12:27:50,autotrade.py,BUY,❌ FAILED,SPARC → Unknown error
 2025-06-03 12:29:01,autotrade.py,BUY,❌ FAILED,SPARC → Unknown error
 2025-06-03 15:45:01,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹166.52 | Capital: ₹3333.04
+2025-06-03 16:00:07,git_sync.py,Git Push,✅ COMPLETE,32 file(s) pushed
+2025-06-03 20:34:49,autotrade.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-03 20:34:49,autotrade.py,end,NO TRADE,No stock bought today.
+2025-06-04 09:31:21,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 09:31:21,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-04 09:33:10,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,18 stocks processed
+2025-06-04 09:33:15,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['ETERNAL', 'INDUSINDBK', 'NESTLEIND', 'HDFCLIFE', 'AXISBANK']"
+2025-06-04 09:38:37,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 09:40:36,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 09:44:53,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 10:08:31,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 10:08:31,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-04 10:10:04,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,7 stocks processed
+2025-06-04 10:10:07,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['SWIGGY', 'BEL', 'TATAMOTORS', 'DABUR', 'BHARTIARTL']"
+2025-06-04 10:23:58,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 10:27:55,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 10:27:55,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-04 10:29:21,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,1 stocks processed
+2025-06-04 10:29:23,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,Fallback: ['ETERNAL']
+2025-06-04 10:51:00,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 10:51:00,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-04 10:52:41,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,14 stocks processed
+2025-06-04 10:52:44,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['TATACONSUM', 'TATAMOTORS', 'CGPOWER', 'SHRIRAMFIN', 'VEDL']"
+2025-06-04 11:15:10,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 11:15:10,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-04 11:16:50,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,11 stocks processed
+2025-06-04 11:16:54,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['MOTHERSON', 'ADANIPOWER', 'JSWENERGY', 'INDUSINDBK', 'SBIN']"
+2025-06-04 11:22:24,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 11:22:25,autotrade.py,CRASH,❌ ERROR,'security_id'
+2025-06-04 11:22:25,autotrade.py,end,NO TRADE,No stock bought today.
+2025-06-04 11:25:38,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 11:25:39,autotrade.py,CRASH,❌ ERROR,"Missing required columns in CSV: ['security_id', 'score', 'sentiment']"
+2025-06-04 11:25:39,autotrade.py,end,NO TRADE,No stock bought today.
+2025-06-04 11:26:47,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 11:26:48,autotrade.py,CRASH,❌ ERROR,"Missing required columns in CSV: ['security_id', 'score', 'sentiment']"
+2025-06-04 11:26:48,autotrade.py,end,NO TRADE,No stock bought today.
+2025-06-04 11:33:57,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 11:33:57,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-04 11:35:34,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,9 stocks processed
+2025-06-04 11:35:37,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['ADANIPOWER', 'ITC', 'TATAMOTORS', 'RECLTD', 'NTPC']"
+2025-06-04 11:37:20,autotrade.py,BUY,❌ FAILED,ITC → Unknown error
+2025-06-04 11:52:45,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-04 11:52:45,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-04 11:54:31,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,9 stocks processed
+2025-06-04 11:54:35,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['SHRIRAMFIN', 'ASIANPAINT', 'BEL', 'HDFCLIFE', 'RELIANCE']"
+2025-06-04 12:19:19,autotrade.py,BUY,❌ FAILED,BEL → Unknown error

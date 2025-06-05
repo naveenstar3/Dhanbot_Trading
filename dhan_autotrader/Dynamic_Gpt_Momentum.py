@@ -220,6 +220,7 @@ def prepare_data():
     total_attempted = 0
 
     for symbol, secid in STOCKS_TO_WATCH:
+        print(f"⏳ Processing {total_attempted+1}/{len(STOCKS_TO_WATCH)} — {symbol}")
         # ✅ Apply sentiment filter before expensive API calls
         if not is_positive_sentiment(symbol, config.get("news_api_key", "")):
             print(f"❌ Skipping {symbol}: Negative news sentiment")
@@ -239,6 +240,12 @@ def prepare_data():
             open_price = data_5['Open'].iloc[-1]
             close_price = data_5['Close'].iloc[-1]
             volume_value = data_5['Volume'].iloc[-1]
+            # ❌ Skip if recent volume is too low to be meaningful
+            capital = float(open('D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv').read().strip())
+            vol_threshold = max(1000, int(capital / 100))
+            if volume_value < vol_threshold:
+                print(f"⛔ Skipping {symbol}: Low 5-min volume = {volume_value} < {vol_threshold}")
+                continue                   
             change_pct_5m = round(((close_price - open_price) / open_price) * 100, 2)
 
             # --- 15m Metrics
@@ -374,7 +381,11 @@ def prepare_data():
     else:
         log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "✅ COMPLETE", f"{len(df)} stocks processed")
 
-    df.to_csv("D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv", index=False)
+    df["score"] = df["momentum_score"]
+    df["sentiment"] = "neutral"
+    map_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv")
+    df = pd.merge(df, map_df[["symbol", "security_id"]], on="symbol", how="left")
+    df.to_csv("D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv", index=False)    
     print(f"📁 Exported: Today_Trade_Stocks.csv with {len(df)} records.")
 
     return df
@@ -394,7 +405,7 @@ Stock Data:
 {df.to_string(index=False)}
 
 📌 Instructions:
-- Rank stocks (up to 10) using:
+- Rank stocks (up to 15) using:
     • 5min_change_pct > 0.5%
     • 15min_change_pct > 0.3%
     • RSI < 68
@@ -450,30 +461,30 @@ if __name__ == "__main__":
         print("🚫 Market is closed. Skipping momentum analysis.")
         exit(0)
 
-        df = prepare_data()
-        
-        if df.empty or df["symbol"].nunique() == 0:
-            print("⚠️ No valid data to analyze. Skipping GPT call.")
-            log_bot_action("Dynamic_Gpt_Momentum.py", "main", "❌ SKIPPED", "No valid records to rank")
-            exit(0)
-        
-        print("\n📊 Live Data:\n", df)
-        print("\n🤖 Sending to GPT for analysis...\n")
-        decision = ask_gpt_to_rank_stocks(df)
-        
-        print(f"\n✅ GPT Decision: {decision}")
-        
-        # 🟢 Save GPT-final list to new CSV for autotrade
-        live_df = df[df["symbol"].isin(decision)][["symbol"]].copy()
-        
-        # Reload original security_id map from dynamic_stock_list.csv
-        map_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv")
-        live_df = pd.merge(live_df, map_df, on="symbol", how="left")
-        
-        # Ensure clean structure and drop duplicates
-        live_df = live_df[["symbol", "security_id"]].dropna().drop_duplicates()
-        
-        # Save to new file
-        live_df.to_csv("D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv", index=False)
-        print(f"✅ Saved GPT-ranked stocks to live_stocks_trade_today.csv → {len(live_df)} stocks")
+    df = prepare_data()
+
+    if df.empty or df["symbol"].nunique() == 0:
+        print("⚠️ No valid data to analyze. Skipping GPT call.")
+        log_bot_action("Dynamic_Gpt_Momentum.py", "main", "❌ SKIPPED", "No valid records to rank")
+        exit(0)
+
+    print("\n📊 Live Data:\n", df)
+    print("\n🤖 Sending to GPT for analysis...\n")
+    decision = ask_gpt_to_rank_stocks(df)
+
+    print(f"\n✅ GPT Decision: {decision}")
+
+    # 🟢 Save GPT-final list to new CSV for autotrade
+    live_df = df[df["symbol"].isin(decision)][["symbol"]].copy()
+
+    # Reload original security_id map from dynamic_stock_list.csv
+    map_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv")
+    live_df = pd.merge(live_df, map_df, on="symbol", how="left")
+
+    # Ensure clean structure and drop duplicates
+    live_df = live_df[["symbol", "security_id"]].dropna().drop_duplicates()
+
+    # ✅ Save live stock list for autotrade.py
+    live_df.to_csv("D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv", index=False)
+    print(f"✅ Saved GPT-ranked stocks to live_stocks_trade_today.csv → {len(live_df)} stocks")
         
