@@ -12,7 +12,6 @@ from utils_logger import log_bot_action
 
 
 
-
 # ✅ Load Dhan credentials from config
 with open("D:/Downloads/Dhanbot/dhan_autotrader/config.json") as f:
     config = json.load(f)

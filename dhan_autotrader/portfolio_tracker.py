@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils_safety import safe_read_csv
 import pandas as pd
 import portalocker 
+from db_logger import insert_live_trail_to_db, insert_portfolio_log_to_db
 
 # ✅ Trailing Exit Config
 LIVE_BUFFER_FILE = "live_trail_BUFFER.csv"
@@ -126,6 +127,7 @@ def log_live_trail(symbol, live_price, change_pct):
 
             now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
             writer.writerow([now, symbol, round(live_price, 2), round(change_pct, 2)])
+            insert_live_trail_to_db(now, symbol, round(live_price, 2), round(change_pct, 2))
             print(f"✅ Successfully wrote to {LIVE_BUFFER_FILE}")
 
     except PermissionError as e:
@@ -509,6 +511,20 @@ def check_portfolio():
             writer.writeheader()
             writer.writerows(updated_rows)
         print("✅ Portfolio updated.")
+
+        # ✅ Also log to PostgreSQL DB for each row
+        for row in updated_rows:
+            if row.get("status") == "HOLD":
+                trade_date = row.get("timestamp") or datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+                insert_portfolio_log_to_db(
+                    trade_date,
+                    row["symbol"],
+                    row["security_id"],
+                    int(row["quantity"]),
+                    float(row["buy_price"]),
+                    float(row.get("stop_pct", 1))
+                )
+
     
 
 if __name__ == "__main__":

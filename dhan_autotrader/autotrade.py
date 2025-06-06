@@ -209,15 +209,40 @@ def place_buy_order(symbol, security_id, price, qty):
 
         # ✅ Real money execution
         response = requests.post(BASE_URL, headers=HEADERS, json=payload).json()
-        order_id = response.get("data", {}).get("orderId")
-
-        if response.get("status", "").lower() == "success" and order_id:
-            send_telegram_message(f"✅ Order Placed: {symbol} | Qty: {qty} @ ₹{buffer_price}")
-            return True, order_id
+        raw_json = json.dumps(response, indent=2)
+        
+        # 🛡️ Patch: Support for both direct and nested orderId formats
+        if "orderId" in response:
+            order_id = response.get("orderId")
+        elif isinstance(response.get("data"), dict):
+            order_id = response["data"].get("orderId")
         else:
-            reason = response.get("remarks") or response.get("message") or "Unknown error"
+            order_id = None
+               
+        if (response.get("status", "").lower() == "success" or response.get("orderStatus", "").upper() == "TRANSIT") and order_id:
+            send_telegram_message(f"✅ Order Placed: {symbol} | Qty: {qty} @ ₹{buffer_price}")
+            print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
+            
+            try:
+                log_trade(symbol, security_id, qty, buffer_price)
+                print(f"✅ log_trade() succeeded for {symbol}")
+            except Exception as e:
+                print(f"❌ log_trade() failed for {symbol}: {e}")
+                send_telegram_message(f"⚠️ Order placed for {symbol}, but logging failed: {e}")
+                log_bot_action("autotrade.py", "LOG_ERROR", "❌ Logging Failed", f"{symbol} → {e}")
+                return False, f"Order Placed but Logging Failed: {e}"
+            
+            log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{symbol} @ ₹{buffer_price}")
+            return True, order_id
+        
+        else:
+            reason = response.get("remarks") or response.get("message")
+            if not reason:
+                reason = f"Dhan API gave no reason. Raw:\n{raw_json}"
             send_telegram_message(f"❌ Order rejected for {symbol}: {reason}")
+            log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{symbol} → {reason}")
             return False, reason
+        
 
     except Exception as e:
         print(f"❌ Exception placing order for {symbol}: {e}")
@@ -275,6 +300,7 @@ def log_trade(symbol, security_id, qty, price):
         stop_pct = 0.4
         
     file_exists = os.path.isfile(PORTFOLIO_LOG)
+    print(f"🛠️ Attempting to write to portfolio log: {PORTFOLIO_LOG}")
     with open(PORTFOLIO_LOG, mode='a', newline='') as f:
         writer = csv.writer(f)
         if not file_exists or os.stat(PORTFOLIO_LOG).st_size == 0:
@@ -433,10 +459,11 @@ def run_autotrade():
         print("⛔ Market is closed today (weekend or holiday). Exiting auto-trade.")
         log_bot_action("autotrade.py", "market_status", "INFO", "Skipped: Market closed or holiday.")
         return
+
     csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv"
     log_bot_action("autotrade.py", "startup", "STARTED", "Smart dynamic AutoTrade started.")
     print("🔍 Checking if market is open...")
-    
+
     if has_open_position():
         print("📌 Existing position found. Skipping new trades.")
         return
@@ -447,15 +474,16 @@ def run_autotrade():
 
     if not os.path.exists(csv_path):
         print(f"⛔ {csv_path} not found. Falling back to dynamic_stock_list.csv")
-        csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"  
-        
+        csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
+
     if os.path.exists(csv_path) and os.path.getsize(csv_path) <= 30:
         send_telegram_message(f"⚠️ {os.path.basename(csv_path)} is empty or invalid. Auto-trade skipped.")
         return
+
     momentum_flag = "D:/Downloads/Dhanbot/dhan_autotrader/momentum_ready.txt"
     momentum_csv = csv_path
     now = datetime.now()
-    
+
     should_run_momentum = True
     if os.path.exists(momentum_flag):
         last_run_time = datetime.fromtimestamp(os.path.getmtime(momentum_flag))
@@ -466,8 +494,7 @@ def run_autotrade():
             print("⚠️ GPT momentum last run >15 mins ago. Will regenerate list.")
     else:
         print("⚙️ No previous GPT run found. Running now.")
-    
-    # ✅ Run GPT momentum only if needed and after 9:30 AM
+
     if should_run_momentum and now.time() >= datetime.strptime("09:30", "%H:%M").time():
         print("⚙️ Running GPT Momentum Filter...")
         df_generated = prepare_data()
@@ -488,18 +515,19 @@ def run_autotrade():
     required_cols = ['symbol', 'security_id', 'score', 'rsi', 'sentiment']
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
-        raise ValueError(f"Missing required columns in CSV: {missing_cols}")  
+        raise ValueError(f"Missing required columns in CSV: {missing_cols}")
     if df.empty or df["symbol"].isnull().all() or df["security_id"].isnull().all():
         print(f"⚠️ No valid rows in {csv_path}. Skipping trading for today.")
         send_telegram_message(f"⚠️ No stocks available in {os.path.basename(csv_path)}. Auto-trade skipped.")
         log_bot_action("autotrade.py", "data_check", "❌ EMPTY STOCK LIST", f"No rows in {csv_path}")
-        return   
+        return
+
     print(f"📄 Using stock list: {csv_path}")
-    
+
     if df.empty or "symbol" not in df.columns or "security_id" not in df.columns:
         send_telegram_message("⚠️ dynamic_stock_list.csv is missing or invalid.")
         return
-    
+
     ranked_stocks = df["symbol"].tolist()
     dhan_symbol_map = dict(zip(df["symbol"], df["security_id"]))
     bought_stocks = set()
@@ -507,122 +535,114 @@ def run_autotrade():
     capital = get_available_capital()
     first_15min_high = {}
 
-    # ✅ Precompute 15-min high (for each ranked stock)
     for stock in ranked_stocks:
         try:
             if not stock or not isinstance(stock, str) or stock.strip() == "":
                 print(f"⚠️ Skipping empty or invalid symbol: {stock}")
                 continue
-    
+
             security_id = dhan_symbol_map.get(stock)
             if not security_id:
                 print(f"⛔ {stock} Skipped — Missing security_id in CSV.")
                 continue
-            candles = get_historical_price(security_id, interval="15m")       
+
+            candles = get_historical_price(security_id, interval="15m")
             systime.sleep(0.6)
             highs = [c['high'] for c in candles if 'high' in c]
             if highs:
-                first_15min_high[stock] = max(highs[:3])  # first 3 candles ~15m
+                first_15min_high[stock] = max(highs[:3])
         except Exception as e:
-            print(f"⚠️ Skipping {stock} — could not fetch 15min high. Reason: {e}")   
+            print(f"⚠️ Skipping {stock} — could not fetch 15min high. Reason: {e}")
 
-    # ✅ Live Monitoring Loop
-    from datetime import datetime as dt
-    
     trade_executed = False
-    s = None  # Final trade data to reference in EOD
-    
+    s = None
+
+    # ✅ Exit monitoring loop once trade is executed
     while datetime.now(pytz.timezone("Asia/Kolkata")).time() <= time(14, 30):
+        if trade_executed:
+            print("✅ Trade completed. Exiting monitoring loop.")
+            break    
         print(f"🔁 Monitoring stocks for breakout at {datetime.now().strftime('%H:%M:%S')}...")
         candidate_scores = []
         top_candidates = []
-        for symbol in ranked_stocks[:10]:
-            rate_limit_counter = 0
-            if rate_limit_counter >= 5:
-                print("⛔ Too many rate limit errors. Backing off for 30 seconds...")
-                systime.sleep(30)
-                rate_limit_counter = 0
-            rate_limit_counter += 1
-            high_trigger = first_15min_high.get(symbol)
-            result = monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map)
-            systime.sleep(0.8)  # Respect API rate limit
-    
-            if result:
-                result["score"] = compute_trade_score(result)  # Optional: could be based on volume, price action, etc.
-                candidate_scores.append(result)
-                top_candidates.append(result)
-    
-        # Sort and buy best candidate
+
+        while not trade_executed:
+            for symbol in ranked_stocks:
+                print(f"🔁 Checking breakout for {symbol}...")
+                security_id = dhan_symbol_map.get(symbol)
+                high_trigger = first_15min_high.get(symbol)
+                result = monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map)
+
+                if not result:
+                    continue
+
+                buffer_price = round(result["price"] * 1.0045, 2)
+                qty = result["qty"]
+
+                success, order_id = place_buy_order(symbol, security_id, buffer_price, qty)
+
+                if success:
+                    trade_executed = True
+                    print(f"✅ Trade executed for {symbol}, stopping scan.")
+                    break
+
+            if not trade_executed:
+                print("⏳ No valid breakout yet. Retrying in 15 seconds...")
+                systime.sleep(15)
+
+        pd.DataFrame(candidate_scores).to_csv("D:/Downloads/Dhanbot/dhan_autotrader/scanned_candidates_today.csv", index=False)
+
         if candidate_scores:
             top_candidates.sort(key=lambda x: x.get("score", 0), reverse=True)
-            best = top_candidates[0]  # Primary choice
-            fallbacks = top_candidates[1:]  # Others as backup            
-            pd.DataFrame(candidate_scores).to_csv("D:/Downloads/Dhanbot/dhan_autotrader/scanned_candidates_today.csv", index=False)
+            best = top_candidates[0]
+            fallbacks = top_candidates[1:]
             print(f"✅ Best candidate selected: {best['symbol']} @ ₹{best['price']} (Score: {best['score']})")
-        
+
             success, order_id_or_msg = place_buy_order(best["symbol"], best["security_id"], best["price"], best["qty"])
             systime.sleep(1.2)
-        
+
             if success:
                 order_status = get_trade_status(order_id_or_msg)
-                
-                # Proceed to logging if trade status is UNKNOWN but we are confident it was placed
-                if order_status not in ["TRADED", "OPEN", "UNKNOWN"]:
+                print(f"🛰️ Order status for {best['symbol']} is {order_status}")
+                if order_status not in ["TRADED", "OPEN", "UNKNOWN", "TRANSIT"]:
                     send_telegram_message(f"❌ Order rejected by broker: {order_status} — {best['symbol']}")
                     log_bot_action("autotrade.py", "REJECTED", "❌ Broker rejected", f"{best['symbol']} → {order_status}")
                     return
-            
-                try:
-                    log_trade(best["symbol"], best["security_id"], best["qty"], best["price"])
-                    send_telegram_message(f"✅ Bought {best['symbol']} at ₹{best['price']}, Qty: {best['qty']}")
-                    log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{best['symbol']} @ ₹{best['price']}")
-                    trade_executed = True
-                    bought_stocks.add(best["symbol"])
-                    s = best
-                except Exception as e:
-                    send_telegram_message(f"⚠️ Trade executed but logging failed: {e}")
-                    print("🚫 Logging failed. Halting further trading to prevent duplicate order.")
-                    return
-            
+                trade_executed = True
+                bought_stocks.add(best["symbol"])
+                s = best
                 break
-        
+
             else:
                 send_telegram_message(f"❌ Order failed for {best['symbol']}: {order_id_or_msg}")
                 log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{best['symbol']} → {order_id_or_msg}")
-        
-                # 🔁 Try fallback candidates
+
                 for alt in fallbacks:
                     if alt["symbol"] in bought_stocks:
                         continue
-        
+
                     print(f"⚠️ Trying fallback candidate: {alt['symbol']}")
                     success, order_id_or_msg = place_buy_order(alt["symbol"], alt["security_id"], alt["price"], alt["qty"])
                     systime.sleep(1.2)
-        
+
                     if success:
                         order_status = get_trade_status(order_id_or_msg)
-                        if order_status not in ["TRADED", "OPEN", "UNKNOWN"]:
+                        print(f"🛰️ Order status for {alt['symbol']} is {order_status}")
+                        if order_status not in ["TRADED", "OPEN", "UNKNOWN", "TRANSIT"]:
                             send_telegram_message(f"❌ Rejected fallback: {alt['symbol']} — {order_status}")
                             continue
-        
-                        try:
-                            log_trade(alt["symbol"], alt["security_id"], alt["qty"], alt["price"])
-                            send_telegram_message(f"✅ Fallback Buy: {alt['symbol']} at ₹{alt['price']}, Qty: {alt['qty']}")
-                            log_bot_action("autotrade.py", "BUY", "✅ Fallback EXECUTED", f"{alt['symbol']} @ ₹{alt['price']}")
-                            trade_executed = True
-                            s = alt
-                        except Exception as e:
-                            send_telegram_message(f"⚠️ Fallback executed but logging failed: {e}")
-                            print("🚫 Logging failed. Halting further trading to prevent duplicate fallback.")
-                            return
+                        trade_executed = True
+                        s = alt
                         break
-        
-        # Watchdog timeout
+
         now_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
         if not trade_executed and now_time >= time(14, 15):
             send_telegram_message("⚠️ No trade executed by 2:15 PM. Please review.")
             log_bot_action("autotrade.py", "WATCHDOG", "⚠️ NO TRADE", "No trade by 2:15 PM")
-        
+
+        if trade_executed:
+            print("✅ Trade completed. Exiting monitoring loop.")
+            break
         systime.sleep(60)
         
     
