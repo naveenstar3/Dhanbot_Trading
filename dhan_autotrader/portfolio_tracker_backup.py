@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils_safety import safe_read_csv
 import pandas as pd
 import portalocker 
-from db_logger import insert_live_trail_to_db, insert_portfolio_log_to_db
+from db_logger import insert_live_trail_to_db, insert_portfolio_log_to_db, update_portfolio_log_to_db
 
 # ✅ Trailing Exit Config
 LIVE_BUFFER_FILE = "live_trail_BUFFER.csv"
@@ -52,6 +52,80 @@ def log_bot_action(script_name, action, status, message):
         if not file_exists:
             writer.writerow(headers)
         writer.writerow(new_row)
+
+def force_exit_hold_stocks():
+    print("🚨 [Force Exit] Triggered at 3:25 PM...")
+
+    if not os.path.exists(PORTFOLIO_LOG) or os.stat(PORTFOLIO_LOG).st_size == 0:
+        print("⚠️ portfolio_log.csv missing or empty.")
+        return
+
+    raw_lines = safe_read_csv(PORTFOLIO_LOG)
+    reader = csv.DictReader(raw_lines)
+    existing_rows = list(reader)
+    headers = reader.fieldnames if reader.fieldnames else []
+    updated_rows = []
+
+    for row in existing_rows:
+        if row.get("status", "").upper() == "SOLD":
+            updated_rows.append(row)
+            continue
+
+        symbol = row["symbol"].strip().upper()
+        security_id = row.get("security_id", "").strip()
+        if not security_id:
+            print(f"❌ [Force Exit] Missing security_id for {symbol}")
+            updated_rows.append(row)
+            continue
+
+        quantity = int(row["quantity"])
+        try:
+            live_price = get_live_price(symbol, security_id)
+        except Exception as e:
+            print(f"⚠️ [Force Exit] Live price error for {symbol}: {e}")
+            updated_rows.append(row)
+            continue
+
+        code, response = place_sell_order(security_id, symbol, quantity, "NSE_EQ")
+        now_dt = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+        now_str = now_dt.strftime("%Y-%m-%d %H:%M")
+
+        if code == 200 and "order_id" in response:
+            row.update({
+                "live_price": round(live_price, 2),
+                "change_pct": "",
+                "last_checked": now_str,
+                "status": "SOLD",
+                "exit_price": round(live_price, 2)
+            })
+
+            # ✅ DB log update: convert `now_dt` to UTC if needed
+            update_portfolio_log_to_db(
+                trade_date=now_dt,
+                symbol=symbol,
+                security_id=security_id,
+                quantity=quantity,
+                buy_price=float(row.get("buy_price", 0)),
+                stop_pct=float(row.get("stop_pct", 1)),
+                exit_price=round(live_price, 2),
+                live_price=round(live_price, 2),
+                status="SOLD"
+            )
+
+            updated_rows.append(row)
+
+            send_telegram_message(f"✅ Force SOLD {symbol} at ₹{round(live_price,2)} (EOD Exit)")
+            log_bot_action("portfolio_tracker.py", "FORCED SELL", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)}")
+        else:
+            print(f"❌ [Force Exit] Failed for {symbol}: {response}")
+            updated_rows.append(row)
+
+    if updated_rows:
+        with open(PORTFOLIO_LOG, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(updated_rows)
+        print("✅ [Force Exit] portfolio_log.csv updated after forced exit.")
         
 def monitor_hold_positions():
     now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
@@ -447,38 +521,40 @@ def check_portfolio():
                         systime.sleep(2)
 
                     if trade_status == "TRADED":
-                        status = "SOLD"
-                        exit_price = live_price
-                        log_sell(symbol, security_id, quantity, live_price, reason)
-                        print(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
-                        send_telegram_message(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
-                        log_bot_action("portfolio_tracker.py", "SELL executed", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} | Reason: {reason}")
-                        # ✅ DB Update — convert timestamp to IST
-                        update_portfolio_log_to_db(
-                            trade_date=datetime.datetime.now(pytz.timezone("Asia/Kolkata")),
-                            symbol=symbol,
-                            security_id=security_id,
-                            quantity=quantity,
-                            buy_price=buy_price,
-                            stop_pct=stop_pct,
-                            exit_price=exit_price,
-                            live_price=live_price,
-                            status="SOLD"
-                        )
-                        
-                        profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
-                        profit_pct = round(((exit_price - buy_price) / buy_price) * 100, 2)
-                        summary_msg = (
-                            f"📊 Trade Summary ({now})\n"
-                            f"Stock: {symbol}\n"
-                            f"Buy Price: ₹{round(buy_price, 2)}\n"
-                            f"Sell Price: ₹{round(exit_price, 2)}\n"
-                            f"Qty: {quantity}\n"
-                            f"Net Profit: ₹{round(net_profit, 2)}\n"
-                            f"Profit %: {profit_pct}%\n"
-                            f"Status: {profit_status}"
-                        )
-                        send_telegram_message(summary_msg)
+                       status = "SOLD"
+                       exit_price = live_price
+                       log_sell(symbol, security_id, quantity, live_price, reason)
+                       print(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
+                       send_telegram_message(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
+                       log_bot_action("portfolio_tracker.py", "SELL executed", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} | Reason: {reason}")
+                   
+                       # ✅ DB Update — convert timestamp to IST
+                       update_portfolio_log_to_db(
+                           trade_date=datetime.datetime.now(pytz.timezone("Asia/Kolkata")),
+                           symbol=symbol,
+                           security_id=security_id,
+                           quantity=quantity,
+                           buy_price=buy_price,
+                           stop_pct=stop_pct,
+                           exit_price=exit_price,
+                           live_price=live_price,
+                           status="SOLD"
+                       )
+                   
+                       profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
+                       profit_pct = round(((exit_price - buy_price) / buy_price) * 100, 2)
+                       summary_msg = (
+                           f"📊 Trade Summary ({now})\n"
+                           f"Stock: {symbol}\n"
+                           f"Buy Price: ₹{round(buy_price, 2)}\n"
+                           f"Sell Price: ₹{round(exit_price, 2)}\n"
+                           f"Qty: {quantity}\n"
+                           f"Net Profit: ₹{round(net_profit, 2)}\n"
+                           f"Profit %: {profit_pct}%\n"
+                           f"Status: {profit_status}"
+                       )
+                       send_telegram_message(summary_msg)
+                   
                     else:
                         print(f"⚠️ Sell order placed but NOT TRADED yet for {symbol}. Holding.")
                 else:
@@ -536,9 +612,11 @@ def check_portfolio():
                     float(row["buy_price"]),
                     float(row.get("stop_pct", 1))
                 )
-
+    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).time()
+    if now >= datetime.time(15, 24) and now < datetime.time(15, 30):
+        force_exit_hold_stocks()
     
-
+    
 if __name__ == "__main__":
     if os.path.exists("emergency_exit.txt"):
         send_telegram_message("⛔ Emergency Exit active. Skipping HOLD monitoring.")

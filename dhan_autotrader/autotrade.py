@@ -15,6 +15,7 @@ import threading
 import random
 from utils_safety import safe_read_csv
 import time as tm 
+from db_logger import insert_portfolio_log_to_db
 
 
 # ✅ Load Dhan credentials
@@ -224,7 +225,16 @@ def place_buy_order(symbol, security_id, price, qty):
             print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
             
             try:
-                log_trade(symbol, security_id, qty, buffer_price)
+                stop_pct = log_trade(symbol, security_id, qty, buffer_price)
+                insert_portfolio_log_to_db(
+                    trade_date=datetime.datetime.now(pytz.timezone("Asia/Kolkata")),
+                    symbol=symbol,
+                    security_id=security_id,
+                    qty=qty,
+                    buy_price=buffer_price,
+                    stop_pct=stop_pct
+                )
+                
                 print(f"✅ log_trade() succeeded for {symbol}")
             except Exception as e:
                 print(f"❌ log_trade() failed for {symbol}: {e}")
@@ -314,6 +324,7 @@ def log_trade(symbol, security_id, qty, price):
             0, target_pct, stop_pct, '', '', '', 'HOLD', ''
         ])
         print(f"✅ Portfolio log updated for {symbol} — Qty: {qty} @ ₹{price}")
+        return stop_pct
     
 best_candidate = None
 trade_lock = threading.Lock()

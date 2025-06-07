@@ -13,11 +13,33 @@ from dhan_api import get_live_price
 from config import *
 from utils_logger import log_bot_action
 from utils_safety import safe_read_csv
+import sys
+from db_logger import update_portfolio_log_to_db
 
-now = datetime.now(pytz.timezone("Asia/Kolkata")).time()
-if now >= dtime(15, 30):
-    print("⏳ Market is closed. Skipping forced exit.")
-    exit()
+PORTFOLIO_LOG = "portfolio_log.csv"
+
+TEST_MODE = len(sys.argv) > 1 and sys.argv[1].strip().upper() == "NO"
+if TEST_MODE:
+    print("🧪 TEST MODE: Mock live price = ₹100. Order will not be placed.")
+    def get_live_price(symbol, security_id):
+        return 100.0
+    def get_order_status(order_id):
+        return {"data": {"orderStatus": "TRADED"}}
+
+
+TEST_MODE_FLAG = len(sys.argv) > 1 and sys.argv[1].strip().upper() == "NO"
+if not TEST_MODE_FLAG:
+    now = datetime.now(pytz.timezone("Asia/Kolkata")).time()
+    if now >= dtime(15, 30):
+        print("⏳ Market is closed. Skipping forced exit.")
+        exit()
+else:
+    print("🧪 TEST MODE: Bypassing market hours check with mock price ₹100")
+
+# 🧪 Override get_live_price in test mode
+if TEST_MODE_FLAG:
+    def get_live_price(symbol, security_id):
+        return 100.0
 
 # ✅ Load Dhan credentials
 with open("config.json") as f:
@@ -146,7 +168,7 @@ def force_exit():
         if code == 200 and "order_id" in response:
             order_id = response["order_id"]
         
-            time.sleep(3)  # Delay before checking status
+            systime.sleep(3) # Delay before checking status
             final_status = get_order_status(order_id)
             status_text = final_status.get("data", {}).get("orderStatus", "UNKNOWN")
 
@@ -161,6 +183,23 @@ def force_exit():
                     "exit_price": round(live_price, 2)
                 })
                 updated_rows.append(row)
+                # ✅ Sync SOLD to DB
+                try:
+                    update_portfolio_log_to_db(
+                        trade_date=row.get("entry_time", datetime.now()),
+                        symbol=row["symbol"],
+                        security_id=row["security_id"],
+                        quantity=int(row["quantity"]),
+                        buy_price=float(row["buy_price"]),
+                        stop_pct=float(row.get("stop_pct", 0)),
+                        exit_price=round(live_price, 2),
+                        live_price=round(live_price, 2),
+                        status="SOLD"
+                    )
+                    
+                except Exception as e:
+                    print(f"⚠️ DB sync failed: {e}")
+                    log_bot_action("force_exit.py", "DB_SYNC", "❌ FAILED", f"{row['symbol']} - {e}")               
                 print(f"✅ Force SOLD {symbol} at ₹{round(live_price,2)}")
                 send_telegram_message(f"✅ Force SOLD {symbol} at ₹{round(live_price,2)} (EOD Exit)")
                 log_bot_action("force_exit.py", "FORCED SELL", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} (EOD Exit)")
@@ -196,6 +235,23 @@ def force_exit():
                     "status": "SOLD",
                     "exit_price": round(live_price, 2)
                 })
+            
+                # ✅ Sync SOLD to DB
+                try:
+                    update_portfolio_log_to_db(
+                        trade_date=row.get("entry_time", datetime.now()),
+                        symbol=row["symbol"],
+                        security_id=row["security_id"],
+                        quantity=int(row["quantity"]),
+                        buy_price=float(row["buy_price"]),
+                        stop_pct=float(row.get("stop_pct", 0)),
+                        exit_price=round(live_price, 2),
+                        live_price=round(live_price, 2),
+                        status="SOLD"
+                    )                    
+                except Exception as e:
+                    print(f"⚠️ DB sync failed: {e}")
+                    log_bot_action("force_exit.py", "DB_SYNC", "❌ FAILED", f"{row['symbol']} - {e}")            
             else:
                 print(f"❌ Force SELL failed for {symbol}: {response}")
             updated_rows.append(row)       
