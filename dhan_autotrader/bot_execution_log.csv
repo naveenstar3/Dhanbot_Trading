@@ -2550,3 +2550,243 @@ timestamp,script_name,action,status,message
 2025-06-08 15:49:49,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
 2025-06-08 15:50:49,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
 2025-06-08 15:51:50,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-08 16:00:08,git_sync.py,Git Push,✅ COMPLETE,31 file(s) pushed
+2025-06-09 09:26:29,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,NTPC - Rate limit hit
+2025-06-09 09:26:31,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,TECHM - Rate limit hit
+2025-06-09 09:32:09,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-09 09:32:09,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-09 09:33:59,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,19 stocks processed
+2025-06-09 09:34:02,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['JSWENERGY', 'SHRIRAMFIN', 'ETERNAL', 'JIOFIN', 'ADANIENSOL']"
+2025-06-09 09:34:27,autotrade.py,LOG_ERROR,❌ Logging Failed,JIOFIN → type object 'datetime.datetime' has no attribute 'datetime'
+2025-06-09 09:35:01,autotrade.py,LOG_ERROR,❌ Logging Failed,JIOFIN → type object 'datetime.datetime' has no attribute 'datetime'
+2025-06-09 09:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-40.55 < ₹5
+2025-06-09 09:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-40.0 < ₹5
+2025-06-09 09:35:34,autotrade.py,LOG_ERROR,❌ Logging Failed,JIOFIN → type object 'datetime.datetime' has no attribute 'datetime'
+2025-06-09 09:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-37.25 < ₹5
+2025-06-09 09:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-37.8 < ₹5
+2025-06-09 09:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-40.0 < ₹5
+2025-06-09 09:36:38,autotrade.py,LOG_ERROR,❌ Logging Failed,JIOFIN → type object 'datetime.datetime' has no attribute 'datetime'
+2025-06-09 09:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-38.9 < ₹5
+2025-06-09 09:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-40.0 < ₹5
+2025-06-09 09:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-38.35 < ₹5
+2025-06-09 09:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-41.1 < ₹5
+2025-06-09 09:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-43.3 < ₹5
+2025-06-09 09:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-42.2 < ₹5
+2025-06-09 09:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-41.1 < ₹5
+2025-06-09 09:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-40.55 < ₹5
+2025-06-09 09:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-43.85 < ₹5
+2025-06-09 09:39:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-44.95 < ₹5
+2025-06-09 09:39:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-44.4 < ₹5
+2025-06-09 09:39:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-46.6 < ₹5
+2025-06-09 09:39:43,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-73.79 < ₹6.67
+2025-06-09 09:40:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-75.99 < ₹6.67
+2025-06-09 09:41:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-09 09:42:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-69.4 < ₹6.67
+2025-06-09 09:43:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-71.59 < ₹6.67
+2025-06-09 09:44:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-70.5 < ₹6.67
+2025-06-09 09:45:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-73.79 < ₹6.67
+2025-06-09 09:46:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-09 09:47:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-09 09:48:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-68.3 < ₹6.67
+2025-06-09 09:49:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-67.2 < ₹6.67
+2025-06-09 09:50:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-67.2 < ₹6.67
+2025-06-09 09:51:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-74.89 < ₹6.67
+2025-06-09 09:52:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-71.59 < ₹6.67
+2025-06-09 09:53:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-73.79 < ₹6.67
+2025-06-09 09:54:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-79.29 < ₹6.67
+2025-06-09 09:55:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-78.19 < ₹6.67
+2025-06-09 09:56:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 09:57:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-78.19 < ₹6.67
+2025-06-09 09:58:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-71.59 < ₹6.67
+2025-06-09 09:59:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-69.4 < ₹6.67
+2025-06-09 10:00:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-68.3 < ₹6.67
+2025-06-09 10:01:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-09 10:02:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-67.2 < ₹6.67
+2025-06-09 10:03:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-09 10:04:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-72.69 < ₹6.67
+2025-06-09 10:05:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-75.99 < ₹6.67
+2025-06-09 10:06:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 10:07:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-74.89 < ₹6.67
+2025-06-09 10:08:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-72.69 < ₹6.67
+2025-06-09 10:09:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-72.69 < ₹6.67
+2025-06-09 10:10:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-74.89 < ₹6.67
+2025-06-09 10:11:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-74.89 < ₹6.67
+2025-06-09 10:12:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-75.99 < ₹6.67
+2025-06-09 10:13:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-75.99 < ₹6.67
+2025-06-09 10:14:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-73.79 < ₹6.67
+2025-06-09 10:15:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-74.89 < ₹6.67
+2025-06-09 10:16:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-75.99 < ₹6.67
+2025-06-09 10:17:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-75.99 < ₹6.67
+2025-06-09 10:18:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-77.09 < ₹6.67
+2025-06-09 10:19:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-78.19 < ₹6.67
+2025-06-09 10:20:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-82.58 < ₹6.67
+2025-06-09 10:21:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-82.58 < ₹6.67
+2025-06-09 10:22:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-81.48 < ₹6.67
+2025-06-09 10:23:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-78.19 < ₹6.67
+2025-06-09 10:24:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 10:25:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-79.29 < ₹6.67
+2025-06-09 10:26:10,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-81.48 < ₹6.67
+2025-06-09 10:27:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 10:28:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-82.58 < ₹6.67
+2025-06-09 10:29:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-85.88 < ₹6.67
+2025-06-09 10:30:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 10:31:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-82.58 < ₹6.67
+2025-06-09 10:32:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 10:33:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-75.99 < ₹6.67
+2025-06-09 10:34:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-81.48 < ₹6.67
+2025-06-09 10:35:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 10:36:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-83.68 < ₹6.67
+2025-06-09 10:37:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-86.98 < ₹6.67
+2025-06-09 10:38:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-83.68 < ₹6.67
+2025-06-09 10:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-84.78 < ₹6.67
+2025-06-09 10:40:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-86.98 < ₹6.67
+2025-06-09 10:41:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-91.37 < ₹6.67
+2025-06-09 10:42:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-86.98 < ₹6.67
+2025-06-09 10:43:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-86.98 < ₹6.67
+2025-06-09 10:44:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-89.18 < ₹6.67
+2025-06-09 10:45:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-86.98 < ₹6.67
+2025-06-09 10:46:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-86.98 < ₹6.67
+2025-06-09 10:47:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-86.98 < ₹6.67
+2025-06-09 10:48:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 10:49:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-81.48 < ₹6.67
+2025-06-09 10:50:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-89.18 < ₹6.67
+2025-06-09 10:51:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-86.98 < ₹6.67
+2025-06-09 10:52:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-81.48 < ₹6.67
+2025-06-09 10:53:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 10:54:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-85.88 < ₹6.67
+2025-06-09 10:55:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-84.78 < ₹6.67
+2025-06-09 10:56:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-83.68 < ₹6.67
+2025-06-09 10:57:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-90.27 < ₹6.67
+2025-06-09 10:58:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-92.47 < ₹6.67
+2025-06-09 10:59:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-89.18 < ₹6.67
+2025-06-09 11:00:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-89.18 < ₹6.67
+2025-06-09 11:01:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-84.78 < ₹6.67
+2025-06-09 11:02:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-84.78 < ₹6.67
+2025-06-09 11:03:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-89.18 < ₹6.67
+2025-06-09 11:04:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-89.18 < ₹6.67
+2025-06-09 11:05:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-90.27 < ₹6.67
+2025-06-09 11:06:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-91.37 < ₹6.67
+2025-06-09 11:07:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-93.57 < ₹6.67
+2025-06-09 11:08:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-99.07 < ₹6.67
+2025-06-09 11:09:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-95.77 < ₹6.67
+2025-06-09 11:10:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-95.77 < ₹6.67
+2025-06-09 11:11:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-94.67 < ₹6.67
+2025-06-09 11:12:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-95.77 < ₹6.67
+2025-06-09 11:13:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-99.07 < ₹6.67
+2025-06-09 11:14:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-101.26 < ₹6.67
+2025-06-09 11:15:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-103.46 < ₹6.67
+2025-06-09 11:16:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:17:09,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-104.56 < ₹6.67
+2025-06-09 11:18:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:19:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-107.86 < ₹6.67
+2025-06-09 11:20:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:21:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-110.05 < ₹6.67
+2025-06-09 11:22:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-99.07 < ₹6.67
+2025-06-09 11:23:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-106.76 < ₹6.67
+2025-06-09 11:24:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-105.66 < ₹6.67
+2025-06-09 11:25:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-104.56 < ₹6.67
+2025-06-09 11:26:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-105.66 < ₹6.67
+2025-06-09 11:27:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:28:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-111.15 < ₹6.67
+2025-06-09 11:29:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-113.35 < ₹6.67
+2025-06-09 11:30:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-111.15 < ₹6.67
+2025-06-09 11:31:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-110.05 < ₹6.67
+2025-06-09 11:32:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:33:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-107.86 < ₹6.67
+2025-06-09 11:34:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-104.56 < ₹6.67
+2025-06-09 11:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-104.56 < ₹6.67
+2025-06-09 11:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-111.15 < ₹6.67
+2025-06-09 11:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-112.25 < ₹6.67
+2025-06-09 11:40:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-110.05 < ₹6.67
+2025-06-09 11:41:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:42:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-114.45 < ₹6.67
+2025-06-09 11:43:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-116.65 < ₹6.67
+2025-06-09 11:44:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-110.05 < ₹6.67
+2025-06-09 11:45:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-112.25 < ₹6.67
+2025-06-09 11:46:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-112.25 < ₹6.67
+2025-06-09 11:47:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-112.25 < ₹6.67
+2025-06-09 11:48:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-112.25 < ₹6.67
+2025-06-09 11:49:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-111.15 < ₹6.67
+2025-06-09 11:50:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:51:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-111.15 < ₹6.67
+2025-06-09 11:52:16,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-110.05 < ₹6.67
+2025-06-09 11:53:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:54:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-105.66 < ₹6.67
+2025-06-09 11:55:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-106.76 < ₹6.67
+2025-06-09 11:56:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-110.05 < ₹6.67
+2025-06-09 11:57:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:58:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-108.96 < ₹6.67
+2025-06-09 11:59:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-105.66 < ₹6.67
+2025-06-09 12:00:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-95.77 < ₹6.67
+2025-06-09 12:01:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-96.87 < ₹6.67
+2025-06-09 12:02:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-101.26 < ₹6.67
+2025-06-09 12:03:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-100.16 < ₹6.67
+2025-06-09 12:04:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-101.26 < ₹6.67
+2025-06-09 12:05:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-99.07 < ₹6.67
+2025-06-09 12:06:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-97.97 < ₹6.67
+2025-06-09 12:07:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-97.97 < ₹6.67
+2025-06-09 12:08:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-94.67 < ₹6.67
+2025-06-09 12:09:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-91.37 < ₹6.67
+2025-06-09 12:10:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-91.37 < ₹6.67
+2025-06-09 12:11:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-91.37 < ₹6.67
+2025-06-09 12:12:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-88.08 < ₹6.67
+2025-06-09 12:13:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-86.98 < ₹6.67
+2025-06-09 12:14:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-88.08 < ₹6.67
+2025-06-09 12:15:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-91.37 < ₹6.67
+2025-06-09 12:16:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-86.98 < ₹6.67
+2025-06-09 12:17:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-84.78 < ₹6.67
+2025-06-09 12:18:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-81.48 < ₹6.67
+2025-06-09 12:19:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-81.48 < ₹6.67
+2025-06-09 12:20:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-77.09 < ₹6.67
+2025-06-09 12:21:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-79.29 < ₹6.67
+2025-06-09 12:22:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-83.68 < ₹6.67
+2025-06-09 12:23:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 12:24:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-79.29 < ₹6.67
+2025-06-09 12:25:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-81.48 < ₹6.67
+2025-06-09 12:26:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-82.58 < ₹6.67
+2025-06-09 12:27:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-82.58 < ₹6.67
+2025-06-09 12:28:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-83.68 < ₹6.67
+2025-06-09 12:29:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-85.88 < ₹6.67
+2025-06-09 12:30:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-82.58 < ₹6.67
+2025-06-09 12:31:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-79.29 < ₹6.67
+2025-06-09 12:32:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 12:33:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 12:34:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-75.99 < ₹6.67
+2025-06-09 12:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-74.89 < ₹6.67
+2025-06-09 12:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-74.89 < ₹6.67
+2025-06-09 12:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-77.09 < ₹6.67
+2025-06-09 12:38:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-78.19 < ₹6.67
+2025-06-09 12:39:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-78.19 < ₹6.67
+2025-06-09 12:40:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-75.99 < ₹6.67
+2025-06-09 12:41:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-82.58 < ₹6.67
+2025-06-09 12:42:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 12:43:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-78.19 < ₹6.67
+2025-06-09 12:44:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-77.09 < ₹6.67
+2025-06-09 12:45:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-80.38 < ₹6.67
+2025-06-09 12:46:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-81.48 < ₹6.67
+2025-06-09 12:47:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-78.19 < ₹6.67
+2025-06-09 12:48:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-67.2 < ₹6.67
+2025-06-09 12:49:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-70.5 < ₹6.67
+2025-06-09 12:50:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-67.2 < ₹6.67
+2025-06-09 12:51:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-67.2 < ₹6.67
+2025-06-09 12:52:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-68.3 < ₹6.67
+2025-06-09 12:53:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-68.3 < ₹6.67
+2025-06-09 12:54:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-68.3 < ₹6.67
+2025-06-09 12:55:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-69.4 < ₹6.67
+2025-06-09 12:56:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-71.59 < ₹6.67
+2025-06-09 12:57:07,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-66.1 < ₹6.67
+2025-06-09 12:58:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-65.0 < ₹6.67
+2025-06-09 12:59:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-09 13:00:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-09 13:01:08,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹3.13 < ₹6.67
+2025-06-09 13:02:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-3.46 < ₹6.67
+2025-06-09 13:03:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹-1.27 < ₹6.67
+2025-06-09 13:04:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,JIOFIN | 💸 Blocked by Net Profit Rule: ₹0.93 < ₹6.67
+2025-06-09 15:30:03,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-09 15:31:03,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-09 15:32:03,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-09 15:33:03,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-09 15:34:03,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-09 15:45:02,daily_growth_logger.py,Growth Log Update,✅ COMPLETE,Profit: ₹-2063.43 | Capital: ₹3333.04
