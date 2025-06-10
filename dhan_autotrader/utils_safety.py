@@ -25,10 +25,8 @@ def safe_read_csv(filepath):
     except Exception as e:
         backup_path = filepath + f".bak_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         shutil.copy(filepath, backup_path)
-        raise RuntimeError(
-            f"⚠️ CSV Health Check Failed: {filepath}\n"
-            f"Backup saved at: {backup_path}\nError: {e}"
-        )
+        print(f"⚠️ CSV load failed: {filepath} — {str(e)}")
+        return []  # Skip processing, do not raise or backup
         
 def retry(max_attempts=3, delay=2):
     def decorator(func):

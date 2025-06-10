@@ -44,7 +44,7 @@ def log_to_postgres(timestamp, script, status, message):
         if conn:
             conn.close()
         
-def insert_live_trail_to_db(timestamp, symbol, price, change_pct):
+def insert_live_trail_to_db(timestamp, symbol, price, change_pct, order_id=None):
     """
     Inserts live trail data into the live_trail_buffer table in PostgreSQL.
     Creates table if it does not exist.
@@ -64,13 +64,14 @@ def insert_live_trail_to_db(timestamp, symbol, price, change_pct):
                 timestamp TIMESTAMP,
                 symbol TEXT,
                 price NUMERIC,
-                change_pct NUMERIC
+                change_pct NUMERIC,
+                order_id TEXT
             )
         """)
         cur.execute("""
-            INSERT INTO live_trail_buffer (timestamp, symbol, price, change_pct)
-            VALUES (%s, %s, %s, %s)
-        """, (timestamp, symbol, price, change_pct))
+            INSERT INTO live_trail_buffer (timestamp, symbol, price, change_pct, order_id)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (timestamp, symbol, price, change_pct, order_id))        
         conn.commit()
         cur.close()
         print(f"🗃️ DB Logged live trail for {symbol}")
@@ -80,7 +81,7 @@ def insert_live_trail_to_db(timestamp, symbol, price, change_pct):
         if conn:
             conn.close()
 
-def insert_portfolio_log_to_db(trade_date, symbol, security_id, qty, buy_price, stop_pct):
+def insert_portfolio_log_to_db(trade_date, symbol, security_id, qty, buy_price, stop_pct, order_id=None):
     conn = None
     try:
         conn = psycopg2.connect(
@@ -98,13 +99,14 @@ def insert_portfolio_log_to_db(trade_date, symbol, security_id, qty, buy_price, 
                 security_id TEXT,
                 quantity INTEGER,
                 buy_price NUMERIC,
-                stop_pct NUMERIC
+                stop_pct NUMERIC,
+                order_id TEXT
             )
         """)
         cur.execute("""
-            INSERT INTO portfolio_log (trade_date, symbol, security_id, quantity, buy_price, stop_pct)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (trade_date, symbol, security_id, qty, buy_price, stop_pct))
+            INSERT INTO portfolio_log (trade_date, symbol, security_id, quantity, buy_price, stop_pct, order_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (trade_date, symbol, security_id, qty, buy_price, stop_pct, order_id))        
         conn.commit()
         cur.close()
     except Exception as e:

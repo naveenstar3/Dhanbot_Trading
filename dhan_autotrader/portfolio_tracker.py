@@ -14,6 +14,7 @@ from utils_safety import safe_read_csv
 import pandas as pd
 import portalocker 
 from db_logger import insert_live_trail_to_db, insert_portfolio_log_to_db
+from utils_safety import safe_read_csv
 
 # ✅ Trailing Exit Config
 LIVE_BUFFER_FILE = "live_trail_BUFFER.csv"
@@ -330,8 +331,11 @@ def check_portfolio():
         print("📁 Created new portfolio_log.csv with headers only.")
         return
 
-    from utils_safety import safe_read_csv
+    
     raw_lines = safe_read_csv(PORTFOLIO_LOG)
+    if not raw_lines:
+        print("⚠️ Skipping: portfolio_log.csv is empty or corrupted.")
+        return
     reader = csv.DictReader(raw_lines)
     existing_rows = list(reader)
     
@@ -518,11 +522,29 @@ def check_portfolio():
         updated_rows = [r for r in results if r]
 
     if updated_rows:
+        # 🔁 Load original rows
+        with open(PORTFOLIO_LOG, newline="", encoding="utf-8") as f:
+            original = list(csv.DictReader(f))
+    
+        # 🧠 Build updated map
+        updated_map = {row["symbol"]: row for row in updated_rows}
+    
+        # 🛡️ Merge updates into original rows
+        final_rows = []
+        for row in original:
+            symbol = row.get("symbol")
+            if symbol in updated_map and row.get("status") != "SOLD":
+                final_rows.append(updated_map[symbol])
+            else:
+                final_rows.append(row)
+    
+        # ✅ Now write back merged data
         with open(PORTFOLIO_LOG, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
-            writer.writerows(updated_rows)
-        print("✅ Portfolio updated.")
+            writer.writerows(final_rows)
+    
+        print("✅ Portfolio updated with merged changes only.")
 
         # ✅ Also log to PostgreSQL DB for each row
         for row in updated_rows:
@@ -534,7 +556,8 @@ def check_portfolio():
                     row["security_id"],
                     int(row["quantity"]),
                     float(row["buy_price"]),
-                    float(row.get("stop_pct", 1))
+                    float(row.get("stop_pct", 1)),
+                    row.get("order_id", "") 
                 )
 
     

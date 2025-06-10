@@ -225,14 +225,16 @@ def place_buy_order(symbol, security_id, price, qty):
             print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
             
             try:
-                stop_pct = log_trade(symbol, security_id, qty, buffer_price)
+                stop_pct = log_trade(symbol, security_id, qty, buffer_price, order_id)
                 insert_portfolio_log_to_db(
-                    trade_date=datetime.datetime.now(pytz.timezone("Asia/Kolkata")),
+                    trade_date=datetime.now(pytz.timezone("Asia/Kolkata")),
                     symbol=symbol,
                     security_id=security_id,
                     qty=qty,
                     buy_price=buffer_price,
-                    stop_pct=stop_pct
+                    stop_pct=stop_pct,
+                    status="HOLD",
+                    order_id=order_id
                 )
                 
                 print(f"✅ log_trade() succeeded for {symbol}")
@@ -298,7 +300,7 @@ def get_atr(security_id, period=14, interval="15m"):
     except:
         return None
 
-def log_trade(symbol, security_id, qty, price):
+def log_trade(symbol, security_id, qty, price, order_id):
     timestamp = datetime.now().strftime("%m/%d/%Y %H:%M")
     # Get ATR dynamically (past 14 periods)
     atr = get_atr(security_id, period=14)
@@ -317,11 +319,11 @@ def log_trade(symbol, security_id, qty, price):
             writer.writerow([
                 "timestamp", "symbol", "security_id", "quantity", "buy_price",
                 "momentum_5min", "target_pct", "stop_pct", "live_price",
-                "change_pct", "last_checked", "status", "exit_price"
+                "change_pct", "last_checked", "status", "exit_price", "order_id"
             ])
         writer.writerow([
             timestamp, symbol, security_id, qty, price,
-            0, target_pct, stop_pct, '', '', '', 'HOLD', ''
+            0, target_pct, stop_pct, '', '', '', 'HOLD', '', order_id
         ])
         print(f"✅ Portfolio log updated for {symbol} — Qty: {qty} @ ₹{price}")
         return stop_pct
@@ -466,6 +468,7 @@ def is_nse_trading_day():
 
 
 def run_autotrade():
+    global trade_executed  # ✅ Ensures outer-level flag is respected
     if not is_market_open() or not is_nse_trading_day():
         print("⛔ Market is closed today (weekend or holiday). Exiting auto-trade.")
         log_bot_action("autotrade.py", "market_status", "INFO", "Skipped: Market closed or holiday.")
@@ -608,10 +611,10 @@ def run_autotrade():
             best = top_candidates[0]
             fallbacks = top_candidates[1:]
             print(f"✅ Best candidate selected: {best['symbol']} @ ₹{best['price']} (Score: {best['score']})")
-
+        
             success, order_id_or_msg = place_buy_order(best["symbol"], best["security_id"], best["price"], best["qty"])
             systime.sleep(1.2)
-
+        
             if success:
                 order_status = get_trade_status(order_id_or_msg)
                 print(f"🛰️ Order status for {best['symbol']} is {order_status}")
@@ -622,20 +625,21 @@ def run_autotrade():
                 trade_executed = True
                 bought_stocks.add(best["symbol"])
                 s = best
-                break
-
+                print("✅ Final trade completed. Terminating auto-trade script.")
+                return  # 🔥 Hard exit after one successful order
+        
             else:
                 send_telegram_message(f"❌ Order failed for {best['symbol']}: {order_id_or_msg}")
                 log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{best['symbol']} → {order_id_or_msg}")
-
+        
                 for alt in fallbacks:
                     if alt["symbol"] in bought_stocks:
                         continue
-
+        
                     print(f"⚠️ Trying fallback candidate: {alt['symbol']}")
                     success, order_id_or_msg = place_buy_order(alt["symbol"], alt["security_id"], alt["price"], alt["qty"])
                     systime.sleep(1.2)
-
+        
                     if success:
                         order_status = get_trade_status(order_id_or_msg)
                         print(f"🛰️ Order status for {alt['symbol']} is {order_status}")
@@ -644,7 +648,9 @@ def run_autotrade():
                             continue
                         trade_executed = True
                         s = alt
-                        break
+                        print("✅ Fallback trade completed. Terminating auto-trade script.")
+                        return  # 🔥 Hard exit on fallback success
+        
 
         now_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
         if not trade_executed and now_time >= time(14, 15):
@@ -658,7 +664,7 @@ def run_autotrade():
         
     
     # 🕒 3:25 PM End-of-Day Telegram Report
-    now_ist = dt.now(pytz.timezone("Asia/Kolkata")).strftime('%d-%b-%Y')
+    now_ist = datetime.now(pytz.timezone("Asia/Kolkata")).strftime('%d-%b-%Y')
     
     if trade_executed and s:
         try:
