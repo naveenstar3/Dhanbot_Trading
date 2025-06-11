@@ -9,6 +9,7 @@ from dhan_api import get_live_price
 import pytz
 import time
 from nsepython import nsefetch  # Using your working library
+from db_logger import log_dynamic_stock_list, log_to_postgres
 
 # ======== CONFIGURATION ========
 start_time = datetime.now()
@@ -25,9 +26,14 @@ def is_trading_day():
         return False
     return True
 
-if not is_trading_day():
+# ======== TEST MODE CONTROL =========
+FORCE_TEST = len(sys.argv) > 1 and sys.argv[1].strip().upper() == "NO"
+
+if not is_trading_day() and not FORCE_TEST:
     print("⛔ Non-trading day. Exiting.")
     sys.exit(0)
+elif not is_trading_day() and FORCE_TEST:
+    print("🧪 Force test mode enabled via argument: market is OFF but proceeding.")
 
 # ======== LOAD CREDENTIALS & CAPITAL ========
 with open(CONFIG_PATH, 'r') as f:
@@ -43,8 +49,10 @@ HEADERS = {
 try:
     CAPITAL = float(pd.read_csv(CAPITAL_PATH, header=None).iloc[0, 0])
     print(f"💰 Capital Loaded: ₹{CAPITAL:,.2f}")
+    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "INFO", f"Capital loaded: ₹{CAPITAL:,.2f}")    
 except Exception as e:
     print(f"❌ Capital loading failed: {e}")
+    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "ERROR", f"Capital loading failed: {e}")   
     sys.exit(1)
 
 # ======== RELIABLE NIFTY 100 FETCH ========
@@ -71,12 +79,63 @@ if not nifty100_symbols:
 # Save/update cache
 pd.DataFrame(nifty100_symbols, columns=["symbol"]).to_csv(NIFTY100_CACHE, index=False)
 
+def build_sector_map(nifty100_symbols):
+    """Fetch sector-wise members from NSE and map symbols to sectors (dynamic)"""
+    sector_index_map = {
+        "NIFTY BANK": "NIFTY%20BANK",
+        "NIFTY IT": "NIFTY%20IT",
+        "NIFTY FMCG": "NIFTY%20FMCG",
+        "NIFTY FIN SERVICE": "NIFTY%20FIN%20SERVICE",
+        "NIFTY AUTO": "NIFTY%20AUTO",
+        "NIFTY PHARMA": "NIFTY%20PHARMA",
+        "NIFTY REALTY": "NIFTY%20REALTY",
+        "NIFTY METAL": "NIFTY%20METAL",
+        "NIFTY ENERGY": "NIFTY%20ENERGY"
+    }
+
+    symbol_sector_map = {}
+    for sector_name, index_code in sector_index_map.items():
+        try:
+            url = f"https://www.nseindia.com/api/equity-stockIndices?index={index_code}"
+            data = nsefetch(url)
+            for item in data["data"]:
+                symbol = item["symbol"].strip().upper()
+                if symbol in nifty100_symbols:
+                    symbol_sector_map[symbol] = sector_name
+        except Exception as e:
+            print(f"⚠️ Failed sector map: {sector_name} – {str(e)[:60]}")
+            continue
+        time.sleep(0.8)
+    
+    return symbol_sector_map
+
+def get_sector_strength():
+    sector_indices = [
+        "NIFTY BANK", "NIFTY IT", "NIFTY FMCG", "NIFTY FIN SERVICE", "NIFTY AUTO",
+        "NIFTY PHARMA", "NIFTY REALTY", "NIFTY METAL", "NIFTY ENERGY"
+    ]
+    sector_gains = {}
+    for sector in sector_indices:
+        try:
+            url = f"https://www.nseindia.com/api/equity-stockIndices?index={sector.replace(' ', '%20')}"
+            data = nsefetch(url)
+            change = float(data["data"][0]["change"])
+            sector_gains[sector] = change
+        except Exception as e:
+            print(f"⚠️ Sector fetch failed: {sector} → {str(e)[:50]}")
+    # Return top 3 sectors by % gain
+    top_sectors = sorted(sector_gains.items(), key=lambda x: x[1], reverse=True)[:7]
+    print("📈 Top sectors today:", top_sectors)
+    return [s[0] for s in top_sectors]
+
 # ======== LOAD MASTER SECURITY LIST ========
 try:
     master_df = pd.read_csv(MASTER_CSV)
-    # Create clean symbol for matching
+    symbol_sector_map = build_sector_map(nifty100_symbols)
     master_df["base_symbol"] = master_df["SEM_TRADING_SYMBOL"].str.replace("-EQ", "").str.strip().str.upper()
-    nifty100_df = master_df[master_df["base_symbol"].isin(nifty100_symbols)]
+    master_df["sector"] = master_df["base_symbol"].map(symbol_sector_map)
+    top_sectors = get_sector_strength()
+    nifty100_df = master_df[(master_df["base_symbol"].isin(nifty100_symbols))]
     print(f"📊 Master list filtered to {len(nifty100_df)} Nifty 100 stocks")
     
     if len(nifty100_df) == 0:
@@ -88,20 +147,30 @@ except Exception as e:
 
 # ======== PRE-MARKET SCAN ========
 results = []
-MIN_VOLUME = 500000  # 5 lakh shares
-MIN_ATR = 2.0  # ₹2 minimum daily range
+MIN_VOLUME = 300000  # 5 lakh shares
+MIN_ATR = 1.2  # ₹2 minimum daily range
 
 print("\n🚀 Starting pre-market scan...")
 for idx, row in nifty100_df.iterrows():
     symbol = row["base_symbol"]
-    secid = str(row["SEM_SMST_SECURITY_ID"])
+    secid = str(row["SEM_SMST_SECURITY_ID"])  
     print(f"\n🔍 [{len(results)+1}/{len(nifty100_df)}] Scanning {symbol}")
 
     try:
         # Step 1: Get pre-market LTP
-        ltp = get_live_price(symbol, secid, premarket=True)
-        if not ltp or ltp > CAPITAL:
-            print(f"⛔ Unaffordable: ₹{ltp or 0:,.2f} > ₹{CAPITAL:,.2f}")
+        ltp = get_live_price(symbol, secid, premarket=True)       
+        # NEW: Fetch yesterday's close for bullish confirmation
+        try:
+            quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}&exchange=NSE"
+            quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
+            quote_data = quote_resp.json()
+            prev_close = float(quote_data.get("previousClose", 0))
+        
+            if ltp <= prev_close * 0.995:
+                print(f"⛔ Not bullish: LTP ₹{ltp:.2f} ≤ Prev Close ₹{prev_close:.2f}")
+                continue
+        except Exception as e:
+            print(f"⚠️ Close fetch failed: {str(e)[:60]}")
             continue
         
         # Step 2: Volume check (last 5 trading days)
@@ -155,7 +224,11 @@ for idx, row in nifty100_df.iterrows():
 
         # Step 4: Calculate position size
         quantity = int(CAPITAL // ltp)
+        if quantity <= 0:
+            print(f"⛔ Unaffordable: ₹{ltp:,.2f} > ₹{CAPITAL:,.2f}")
+            continue
         capital_used = quantity * ltp
+        
         
         results.append({
             "symbol": symbol,
@@ -180,12 +253,18 @@ if results:
     # Prioritize high volatility and volume
     results_df["priority_score"] = results_df["avg_range"] * results_df["avg_volume"]
     results_df = results_df.sort_values("priority_score", ascending=False)
-    results_df.to_csv(OUTPUT_CSV, index=False)
+    # 🔗 Merge sector info from master_df before saving
+    sector_map = master_df.set_index("base_symbol")["sector"].to_dict()
+    results_df["sector"] = results_df["symbol"].map(sector_map)   
+    results_df.to_csv(OUTPUT_CSV, index=False)   
+    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "SUCCESS", f"{len(results_df)} stocks saved to dynamic_stock_list and DB.")
+    log_dynamic_stock_list(results_df)
     print(f"\n✅ Saved {len(results_df)} stocks to {OUTPUT_CSV}")
     print(f"📊 Top 5 opportunities:")
     print(results_df[["symbol", "ltp", "quantity", "potential_profit"]].head().to_string(index=False))
 else:
     print("\n❌ No stocks passed all filters")
+    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "WARNING", "No stocks selected today.")
 
 # ======== PERFORMANCE METRICS ========
 elapsed = datetime.now() - start_time

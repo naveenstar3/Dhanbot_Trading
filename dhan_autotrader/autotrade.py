@@ -16,6 +16,7 @@ import random
 from utils_safety import safe_read_csv
 import time as tm 
 from db_logger import insert_portfolio_log_to_db
+import math
 
 
 # ✅ Load Dhan credentials
@@ -135,6 +136,9 @@ def has_open_position():
     today = datetime.now().date()
     try:
         raw_lines = safe_read_csv(PORTFOLIO_LOG)
+        if len(raw_lines) <= 1:
+            print(f"ℹ️ No trades yet in {PORTFOLIO_LOG}. File has only header.")
+            return False           
         reader = csv.DictReader(raw_lines)
         for row in reader:
             if row.get("status", "").upper() != "SOLD":
@@ -179,7 +183,7 @@ def place_buy_order(symbol, security_id, price, qty):
         return False, "Invalid input"
 
     tick_size = 0.05
-    buffer_price = round(round(price * 1.002 / tick_size) * tick_size, 2)
+    buffer_price = round(math.floor(price * 1.002 / tick_size) * tick_size, 2)
     
     payload = {
         "transactionType": "BUY",
@@ -223,7 +227,7 @@ def place_buy_order(symbol, security_id, price, qty):
         if (response.get("status", "").lower() == "success" or response.get("orderStatus", "").upper() == "TRANSIT") and order_id:
             send_telegram_message(f"✅ Order Placed: {symbol} | Qty: {qty} @ ₹{buffer_price}")
             print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
-            
+        
             try:
                 stop_pct = log_trade(symbol, security_id, qty, buffer_price, order_id)
                 insert_portfolio_log_to_db(
@@ -236,16 +240,15 @@ def place_buy_order(symbol, security_id, price, qty):
                     status="HOLD",
                     order_id=order_id
                 )
-                
                 print(f"✅ log_trade() succeeded for {symbol}")
             except Exception as e:
                 print(f"❌ log_trade() failed for {symbol}: {e}")
                 send_telegram_message(f"⚠️ Order placed for {symbol}, but logging failed: {e}")
                 log_bot_action("autotrade.py", "LOG_ERROR", "❌ Logging Failed", f"{symbol} → {e}")
                 return False, f"Order Placed but Logging Failed: {e}"
-            
+        
             log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{symbol} @ ₹{buffer_price}")
-            return True, order_id
+            return True, order_id       
         
         else:
             reason = response.get("remarks") or response.get("message")
@@ -308,25 +311,48 @@ def log_trade(symbol, security_id, qty, price, order_id):
         target_pct = round((atr / price) * 100 * 1.2, 2)  # 1.2x ATR for target
         stop_pct = round((atr / price) * 100 * 0.8, 2)   # 0.8x ATR for stop
     else:
-        target_pct = 0.7
-        stop_pct = 0.4
-        
+        err = f"❌ ATR fetch failed for {symbol}. Trade log aborted."
+        print(err)
+        send_telegram_message(err)
+        raise ValueError(err)   
+
     file_exists = os.path.isfile(PORTFOLIO_LOG)
     print(f"🛠️ Attempting to write to portfolio log: {PORTFOLIO_LOG}")
-    with open(PORTFOLIO_LOG, mode='a', newline='') as f:
-        writer = csv.writer(f)
-        if not file_exists or os.stat(PORTFOLIO_LOG).st_size == 0:
+
+    # ❗ Pre-check: Is file write-locked?
+    if os.path.exists(PORTFOLIO_LOG) and not os.access(PORTFOLIO_LOG, os.W_OK):
+        error_msg = f"🚫 Cannot write to {PORTFOLIO_LOG}. File is locked or opened by another program (e.g., Excel)."
+        print(error_msg)
+        send_telegram_message(error_msg)
+        raise PermissionError(error_msg)
+
+    try:
+        # Create file with headers if it doesn't exist
+        if not os.path.exists(PORTFOLIO_LOG):
+            with open(PORTFOLIO_LOG, mode='w', newline='') as f_init:
+                writer = csv.writer(f_init)
+                writer.writerow([
+                    "timestamp", "symbol", "security_id", "quantity", "buy_price",
+                    "momentum_5min", "target_pct", "stop_pct", "live_price",
+                    "change_pct", "last_checked", "status", "exit_price", "order_id"
+                ])
+                print(f"📄 Created new portfolio log file with headers: {PORTFOLIO_LOG}")
+    
+        # Append trade row
+        with open(PORTFOLIO_LOG, mode='a', newline='') as f:
+            writer = csv.writer(f)
             writer.writerow([
-                "timestamp", "symbol", "security_id", "quantity", "buy_price",
-                "momentum_5min", "target_pct", "stop_pct", "live_price",
-                "change_pct", "last_checked", "status", "exit_price", "order_id"
+                timestamp, symbol, security_id, qty, price,
+                0, target_pct, stop_pct, '', '', '', 'HOLD', '', order_id
             ])
-        writer.writerow([
-            timestamp, symbol, security_id, qty, price,
-            0, target_pct, stop_pct, '', '', '', 'HOLD', '', order_id
-        ])
-        print(f"✅ Portfolio log updated for {symbol} — Qty: {qty} @ ₹{price}")
-        return stop_pct
+            print(f"✅ Portfolio log updated for {symbol} — Qty: {qty} @ ₹{price}")
+            return stop_pct
+    
+    except Exception as e:
+        err_msg = f"❌ Failed to write {symbol} to CSV: {e}"
+        print(err_msg)
+        send_telegram_message(err_msg)
+        raise   
     
 best_candidate = None
 trade_lock = threading.Lock()
@@ -490,7 +516,7 @@ def run_autotrade():
         print(f"⛔ {csv_path} not found. Falling back to dynamic_stock_list.csv")
         csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
 
-    if os.path.exists(csv_path) and os.path.getsize(csv_path) <= 30:
+    if not os.path.exists(csv_path) or pd.read_csv(csv_path).empty:
         send_telegram_message(f"⚠️ {os.path.basename(csv_path)} is empty or invalid. Auto-trade skipped.")
         return
 
@@ -580,25 +606,37 @@ def run_autotrade():
         candidate_scores = []
         top_candidates = []
 
-        while not trade_executed:
-            for symbol in ranked_stocks:
-                print(f"🔁 Checking breakout for {symbol}...")
+        from concurrent.futures import ThreadPoolExecutor
+        
+        def monitor_wrapper(symbol):
+            try:
                 security_id = dhan_symbol_map.get(symbol)
                 high_trigger = first_15min_high.get(symbol)
-                result = monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map)
-
-                if not result:
-                    continue
-
-                buffer_price = round(result["price"] * 1.0045, 2)
-                qty = result["qty"]
-
-                success, order_id = place_buy_order(symbol, security_id, buffer_price, qty)
-
+                return monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map)
+            except Exception as e:
+                print(f"⚠️ Monitor wrapper error for {symbol}: {e}")
+                return None
+        
+        scan_round = 1
+        while not trade_executed and datetime.now(pytz.timezone("Asia/Kolkata")).time() <= time(14, 30):
+            print(f"🌀 Scan Round #{scan_round} — {datetime.now().strftime('%H:%M:%S')}")
+        
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                results = list(executor.map(monitor_wrapper, ranked_stocks[:30]))
+        
+            valid_candidates = [r for r in results if r]
+            if valid_candidates:
+                best = max(valid_candidates, key=lambda x: x["score"])
+                print(f"✅ Best candidate selected: {best['symbol']} with score {best['score']}")
+                success, order_id = place_buy_order(best["symbol"], best["security_id"], round(best["price"] * 1.0045, 2), best["qty"])
                 if success:
                     trade_executed = True
-                    print(f"✅ Trade executed for {symbol}, stopping scan.")
+                    s = best
                     break
+            else:
+                print("⏳ No valid breakout found. Retrying in 3 sec...")
+                systime.sleep(3)
+                scan_round += 1
 
             if not trade_executed:
                 print("⏳ No valid breakout yet. Retrying in 15 seconds...")

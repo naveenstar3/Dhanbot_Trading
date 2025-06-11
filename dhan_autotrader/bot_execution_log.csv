@@ -2806,3 +2806,39 @@ timestamp,script_name,action,status,message
 2025-06-10 13:06:50,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
 2025-06-10 13:09:06,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,5 stocks processed
 2025-06-10 13:09:10,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['ADANIENSOL', 'INFY', 'AMBUJACEM', 'SUNPHARMA', 'HINDUNILVR']"
+2025-06-10 22:29:52,daily_growth_logger.py,Growth Log Skipped,⏹️ NO TRADE,No SELL trade found for today
+2025-06-10 22:29:55,git_sync.py,Git Push,✅ COMPLETE,33 file(s) pushed
+2025-06-11 09:32:55,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-11 09:32:55,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-11 09:33:21,Dynamic_Gpt_Momentum.py,prepare_data,❌ NO STOCKS,Cleared stale trade list
+2025-06-11 09:56:59,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-11 09:56:59,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-11 09:58:14,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,10 stocks processed
+2025-06-11 09:58:18,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['LODHA', 'JIOFIN', 'CGPOWER', 'ADANIGREEN', 'JSWENERGY']"
+2025-06-11 09:58:50,autotrade.py,CRASH,❌ ERROR,cannot access local variable 'success' where it is not associated with a value
+2025-06-11 09:58:50,autotrade.py,end,NO TRADE,No stock bought today.
+2025-06-11 10:13:38,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-11 10:13:38,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-11 10:14:45,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,4 stocks processed
+2025-06-11 10:14:49,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['HDFCBANK', 'HINDALCO', 'SUNPHARMA', 'PFC']"
+2025-06-11 10:27:51,autotrade.py,LOG_ERROR,❌ Logging Failed,HDFCBANK → insert_portfolio_log_to_db() got an unexpected keyword argument 'status'
+2025-06-11 10:37:25,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-11 10:37:38,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-11 10:43:38,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-11 10:43:38,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-11 10:44:49,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,10 stocks processed
+2025-06-11 10:44:53,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['HINDALCO', 'BAJAJFINSV', 'TATAPOWER', 'TATAMOTORS', 'CIPLA']"
+2025-06-11 10:45:49,autotrade.py,BUY,✅ EXECUTED,TATAMOTORS @ ₹736.6
+2025-06-11 10:47:40,portfolio_tracker.py,SELL skipped,⚠️ HOLD,TATAMOTORS | 💸 Blocked by Net Profit Rule: ₹-35.14 < ₹5
+2025-06-11 11:11:12,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-11 11:11:12,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-11 11:12:16,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,3 stocks processed
+2025-06-11 11:12:20,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['ADANIPOWER', 'VEDL', 'SBIN']"
+2025-06-11 11:47:52,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-11 11:47:52,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-11 11:48:55,Dynamic_Gpt_Momentum.py,prepare_data,✅ COMPLETE,2 stocks processed
+2025-06-11 11:48:58,Dynamic_Gpt_Momentum.py,ask_gpt_to_rank_stocks,⚠️ GPT SKIP → FORCED PICK,"Fallback: ['VEDL', 'COALINDIA']"
+2025-06-11 12:21:37,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-11 12:21:37,Dynamic_Gpt_Momentum.py,prepare_data,START,Preparing momentum + delivery + RSI + 15min
+2025-06-11 12:23:11,Dynamic_Gpt_Momentum.py,prepare_data,❌ NO STOCKS,Cleared stale trade list
+2025-06-11 15:45:02,daily_growth_logger.py,Growth Log Skipped,⏹️ NO TRADE,No SELL trade found for today

@@ -1,6 +1,3 @@
 symbol,5min_change_pct,15min_change_pct,gap_pct,delivery_pct,rsi,trend_strength,momentum_score,volume_value,score,sentiment,security_id
-INFY,0.06,0.06,0.0,35.0,51.72,Weak,7.05,3032.0,7.05,neutral,1594
-ADANIENSOL,0.09,0.13,0.03,35.0,52.87,Weak,7.1,14349.0,7.1,neutral,10217
-SUNPHARMA,0.05,0.05,0.0,35.0,25.71,Weak,7.04,9362.0,7.04,neutral,3351
-HINDUNILVR,0.04,0.01,0.0,35.0,57.14,Weak,7.02,1093.0,7.02,neutral,1394
-AMBUJACEM,0.05,0.05,0.0,35.0,62.5,Weak,7.05,11048.0,7.05,neutral,1270
+VEDL,0.02,0.03,0.01,35.0,67.86,Weak,7.02,2039.0,7.02,neutral,3063
+COALINDIA,0.02,0.02,0.0,35.0,47.62,Weak,7.02,5554.0,7.02,neutral,20374

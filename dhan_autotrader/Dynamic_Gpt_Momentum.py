@@ -281,18 +281,25 @@ def prepare_data():
             )
             momentum_score = round(score, 2)
 
-            # --- Filter Conditions
-            reason = []
+            # --- Filter Conditions (Hard Reject Rules)
+            if rsi >= 70:
+                print(f"❌ Hard Reject {symbol} — RSI too high: {rsi}")
+                continue
+            if rsi < 25:
+                print(f"❌ Hard Reject {symbol} — RSI too low: {rsi}")
+                continue
             if delivery < 30:
-                reason.append(f"Delivery={delivery}%")
-            if rsi > 70:
-                reason.append(f"RSI={rsi:.2f}")
-            if gap_pct > 5:
-                reason.append(f"Gap={gap_pct:.2f}%")
-            if change_pct_5m < 0.05:
-                reason.append(f"5m={change_pct_5m:.2f}%")
-            if change_pct_15m < 0.02:
-                reason.append(f"15m={change_pct_15m:.2f}%")            
+                print(f"❌ Hard Reject {symbol} — Delivery too low: {delivery}%")
+                continue
+            if change_pct_5m < 0.3:
+                print(f"❌ Hard Reject {symbol} — 5m momentum too low: {change_pct_5m:.2f}%")
+                continue
+            if change_pct_15m < 0.2:
+                print(f"❌ Hard Reject {symbol} — 15m momentum too low: {change_pct_15m:.2f}%")
+                continue
+            if trend_strength != "Strong":
+                print(f"❌ Hard Reject {symbol} — Weak trend: {trend_strength}")
+                continue                  
             
             print(f"{total_attempted}/{len(STOCKS_TO_WATCH)} ❌ Skipped {symbol}: " + ", ".join(reason))
 
@@ -405,7 +412,7 @@ Stock Data:
 {df.to_string(index=False)}
 
 📌 Instructions:
-- Rank stocks (up to 15) using:
+- Rank stocks (up to 25) using:
     • 5min_change_pct > 0.5%
     • 15min_change_pct > 0.3%
     • RSI < 68
