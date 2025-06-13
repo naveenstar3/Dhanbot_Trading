@@ -18,13 +18,10 @@ def safe_read_csv(filepath):
 
         # Enforce minimum 2 lines for proper CSV (header + data)
         if len(lines) < 2:
-            raise ValueError(f"Corrupt or empty file: {filepath}")
-
-        return lines
-
+            print(f"ℹ️ CSV has only header: {filepath}")
+            return lines  # Valid empty CSV with just header
+        
     except Exception as e:
-        backup_path = filepath + f".bak_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        shutil.copy(filepath, backup_path)
         print(f"⚠️ CSV load failed: {filepath} — {str(e)}")
         return []  # Skip processing, do not raise or backup
         

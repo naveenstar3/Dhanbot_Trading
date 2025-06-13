@@ -1,3 +1,1 @@
-symbol,5min_change_pct,15min_change_pct,gap_pct,delivery_pct,rsi,trend_strength,momentum_score,volume_value,score,sentiment,security_id
-VEDL,0.02,0.03,0.01,35.0,67.86,Weak,7.02,2039.0,7.02,neutral,3063
-COALINDIA,0.02,0.02,0.0,35.0,47.62,Weak,7.02,5554.0,7.02,neutral,20374
+symbol,security_id

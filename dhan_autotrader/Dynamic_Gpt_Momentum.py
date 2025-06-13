@@ -355,9 +355,9 @@ def prepare_data():
     print(f"📊 Completed: {len(records)}/{total_attempted} passed filters")
 
     if df.empty:
-        print("⚠️ No valid data fetched. Clearing stale live_stocks_trade_today.csv")
-        with open("D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv", "w") as f:
-            f.write("symbol,security_id\n")  # Empty header
+        print("⚠️ No valid data fetched. Clearing stale Today_Trade_Stocks.csv")
+        with open("D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv", "w") as f:
+            f.write("symbol,security_id\n")  # Empty header       
         log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "❌ NO STOCKS", "Cleared stale trade list")
         exit(0)   
 
@@ -492,6 +492,6 @@ if __name__ == "__main__":
     live_df = live_df[["symbol", "security_id"]].dropna().drop_duplicates()
 
     # ✅ Save live stock list for autotrade.py
-    live_df.to_csv("D:/Downloads/Dhanbot/dhan_autotrader/live_stocks_trade_today.csv", index=False)
-    print(f"✅ Saved GPT-ranked stocks to live_stocks_trade_today.csv → {len(live_df)} stocks")
+    live_df.to_csv("D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv", index=False)
+    print(f"✅ Saved GPT-ranked stocks to Today_Trade_Stocks.csv → {len(live_df)} stocks")
         
