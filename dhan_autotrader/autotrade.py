@@ -17,6 +17,23 @@ from utils_safety import safe_read_csv
 import time as tm 
 from db_logger import insert_portfolio_log_to_db
 import math
+import io
+
+# 🧾 Setup TeeLogger to capture print statements
+log_buffer = io.StringIO()
+class TeeLogger:
+    def __init__(self, *streams):
+        self.streams = streams
+    def write(self, message):
+        for s in self.streams:
+            s.write(message)
+            s.flush()
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+
+sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
+
 
 
 # ✅ Load Dhan credentials
@@ -47,7 +64,7 @@ TELEGRAM_CHAT_ID = config.get("telegram_chat_id")
 LIVEMONEYDEDUCTION = True
 if len(sys.argv) > 1 and sys.argv[1].strip().upper() == "NO":
     LIVEMONEYDEDUCTION = False
-    
+
     
 # 📦 Dynamic Delivery % Estimator
 def get_estimated_delivery_percentage(security_id):
@@ -821,3 +838,7 @@ if __name__ == "__main__":
 
     if not has_open_position():
         log_bot_action("autotrade.py", "end", "NO TRADE", "No stock bought today.")
+    
+    # 📝 Save all captured print outputs to a .txt log file
+    with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/autotrade.txt", "w", encoding="utf-8") as f:
+        f.write(log_buffer.getvalue())

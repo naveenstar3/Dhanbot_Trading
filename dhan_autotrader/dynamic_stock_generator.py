@@ -10,6 +10,24 @@ import pytz
 import time
 from nsepython import nsefetch  # Using your working library
 from db_logger import log_dynamic_stock_list, log_to_postgres
+import io
+import sys
+
+log_buffer = io.StringIO()
+class TeeLogger:
+    def __init__(self, *streams):
+        self.streams = streams
+    def write(self, message):
+        for s in self.streams:
+            s.write(message)
+            s.flush()
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+
+log_buffer = io.StringIO()
+sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
+
 
 # ======== CONFIGURATION ========
 start_time = datetime.now()
@@ -147,11 +165,20 @@ except Exception as e:
 
 # ======== PRE-MARKET SCAN ========
 results = []
+total_scanned = 0
+affordable = 0
+technical_passed = 0
+volume_passed = 0
+sentiment_passed = 0  # Placeholder for future
+rsi_passed = 0        # Placeholder for future
+final_selected = 0
+
 MIN_VOLUME = 300000  # 5 lakh shares
 MIN_ATR = 1.2  # ₹2 minimum daily range
 
 print("\n🚀 Starting pre-market scan...")
 for idx, row in nifty100_df.iterrows():
+    total_scanned += 1
     symbol = row["base_symbol"]
     secid = str(row["SEM_SMST_SECURITY_ID"])  
     print(f"\n🔍 [{len(results)+1}/{len(nifty100_df)}] Scanning {symbol}")
@@ -206,7 +233,8 @@ for idx, row in nifty100_df.iterrows():
         if pd.isna(avg_volume) or avg_volume < MIN_VOLUME:
             print(f"⛔ Low volume: {avg_volume:,.0f} < {MIN_VOLUME:,.0f}")
             continue
-
+        volume_passed += 1
+        
         # Step 3: Volatility check (ATR proxy)
         if "high" in vol_data and "low" in vol_data:
             df_vol["high"] = vol_data["high"]
@@ -221,15 +249,17 @@ for idx, row in nifty100_df.iterrows():
         if pd.isna(atr) or atr < MIN_ATR:
             print(f"⛔ Low volatility: ₹{atr:.2f} < ₹{MIN_ATR:.2f}")
             continue
-
+        technical_passed += 1
+        
         # Step 4: Calculate position size
         quantity = int(CAPITAL // ltp)
         if quantity <= 0:
             print(f"⛔ Unaffordable: ₹{ltp:,.2f} > ₹{CAPITAL:,.2f}")
             continue
+        affordable += 1        
         capital_used = quantity * ltp
         
-        
+        final_selected += 1
         results.append({
             "symbol": symbol,
             "security_id": secid,
@@ -260,6 +290,28 @@ if results:
     log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "SUCCESS", f"{len(results_df)} stocks saved to dynamic_stock_list and DB.")
     log_dynamic_stock_list(results_df)
     print(f"\n✅ Saved {len(results_df)} stocks to {OUTPUT_CSV}")
+    # 📄 Save summary to filter_summary_log.csv
+    summary_path = "D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_log.csv"
+    summary_row = {
+        "date": datetime.now().strftime("%m/%d/%Y %H:%M"),
+        "Script_Name": "dynamic_stock_generator.py",
+        "total_scanned": total_scanned,
+        "affordable": affordable,
+        "technical_passed": technical_passed,
+        "volume_passed": volume_passed,
+        "sentiment_passed": sentiment_passed,
+        "rsi_passed": rsi_passed,
+        "final_selected": final_selected
+    }
+    
+    try:
+        if os.path.exists(summary_path):
+            pd.DataFrame([summary_row]).to_csv(summary_path, mode='a', header=False, index=False)
+        else:
+            pd.DataFrame([summary_row]).to_csv(summary_path, mode='w', header=True, index=False)
+    except Exception as e:
+        print(f"⚠️ Could not write to filter_summary_log.csv: {e}")
+    
     print(f"📊 Top 5 opportunities:")
     print(results_df[["symbol", "ltp", "quantity", "potential_profit"]].head().to_string(index=False))
 else:
@@ -271,3 +323,6 @@ elapsed = datetime.now() - start_time
 print(f"\n⏱️ Total scan time: {elapsed.total_seconds():.1f} seconds")
 print(f"💵 Capital available: ₹{CAPITAL:,.2f}")
 print(f"📈 Potential positions: {len(results)}")
+# 📝 Save all captured print outputs to a .txt log file
+with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/dynamic_stock_generator.txt", "w", encoding="utf-8") as f:
+    f.write(log_buffer.getvalue())

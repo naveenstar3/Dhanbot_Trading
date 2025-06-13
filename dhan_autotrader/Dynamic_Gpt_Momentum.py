@@ -1,4 +1,4 @@
-
+    
 from itertools import islice
 
 def batched(iterable, size):
@@ -25,6 +25,35 @@ import datetime as dt
 from textblob import TextBlob
 import time
 from datetime import datetime, timedelta
+import io
+import sys
+import atexit
+
+log_buffer = io.StringIO()
+
+class TeeLogger:
+    def __init__(self, *streams):
+        self.streams = streams
+    def write(self, message):
+        for s in self.streams:
+            s.write(message)
+            s.flush()
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+
+sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
+
+# ✅ Save logs automatically at end of script
+def save_logs_on_exit():
+    try:
+        log_file_path = "D:/Downloads/Dhanbot/dhan_autotrader/Logs/Dynamic_Gpt_Momentum.txt"
+        with open(log_file_path, "w", encoding="utf-8") as f:
+            f.write(log_buffer.getvalue())
+    except Exception as e:
+        print(f"⚠️ Log write failed: {e}")
+
+atexit.register(save_logs_on_exit)
 
 now = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
 # ✅ Load config.json (OpenAI Key inside)
@@ -101,8 +130,11 @@ def is_positive_sentiment(symbol, api_key):
         time.sleep(0.2)
 
         if data.get("status") != "ok":
+            if data.get("code") == "rateLimited":
+                print(f"⛔ Sentiment skipped for {symbol} due to 50-request limit. Treated as neutral/pass.")
+                return True
             print(f"⚠️ News API error for {symbol}: {data}")
-            return True  # Fail open
+            return True        
 
         articles = data.get("articles", [])
         if not articles:
@@ -205,10 +237,15 @@ def calculate_rsi(close_prices, period=14):
     delta = close_prices.diff()
     gain = delta.where(delta > 0, 0)
     loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window=period).mean()
-    avg_loss = loss.rolling(window=period).mean()
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+    
+    # Use EMA instead of SMA for better accuracy
+    avg_gain = gain.ewm(alpha=1/period, min_periods=period).mean()
+    avg_loss = loss.ewm(alpha=1/period, min_periods=period).mean()
+    
+    # Handle division by zero
+    rs = avg_gain / avg_loss.replace(0, float('nan'))
+    rsi = 100 - (100 / (1 + rs))
+    return rsi.fillna(50)  # Neutral 50 when no loss
         
 # ✅ Prepare Live Intraday Data
 def prepare_data():
@@ -221,31 +258,80 @@ def prepare_data():
 
     for symbol, secid in STOCKS_TO_WATCH:
         print(f"⏳ Processing {total_attempted+1}/{len(STOCKS_TO_WATCH)} — {symbol}")
-        # ✅ Apply sentiment filter before expensive API calls
-        if not is_positive_sentiment(symbol, config.get("news_api_key", "")):
-            print(f"❌ Skipping {symbol}: Negative news sentiment")
-            continue
-
-        total_attempted += 1
-
+        total_attempted += 1  # Moved up before technical checks
+        
         try:
             data_5, data_15 = fetch_candle_data(symbol, secid)
-            time.sleep(0.6)  # Throttle API requests to prevent rate limiting
-
+            time.sleep(0.6)
+            
             if data_5 is None or data_5.empty or data_15 is None or data_15.empty:
                 print(f"⚠️ Skipping {symbol}: Empty candle data (5m or 15m)")
                 continue
-
+        
             # --- 5m Metrics
             open_price = data_5['Open'].iloc[-1]
             close_price = data_5['Close'].iloc[-1]
-            volume_value = data_5['Volume'].iloc[-1]
-            # ❌ Skip if recent volume is too low to be meaningful
+            volume_shares = data_5['Volume'].iloc[-1]
+            price = close_price
+            volume_value = volume_shares * price
+            
+            # --- Volume check happens here (Fix 1 goes here) ---
+            
+            # Only run sentiment on technically qualified stocks
+            if volume_value > vol_threshold and change_pct_5m > 0.1:
+                sentiment_check = is_positive_sentiment(symbol, config.get("news_api_key", ""))
+                if sentiment_check == "error":
+                    print(f"⚠️ API limit hit - skipping sentiment for {symbol}")
+                elif not sentiment_check:
+                    print(f"❌ Skipping {symbol}: Negative news sentiment")
+                    continue
+        try:
+            data_5, data_15 = fetch_candle_data(symbol, secid)
+            time.sleep(0.6)  # Throttle API requests to prevent rate limiting
+        
+            if data_5 is None or data_5.empty or data_15 is None or data_15.empty:
+                print(f"⚠️ Skipping {symbol}: Empty candle data (5m or 15m)")
+                continue
+        
+            # --- 5m Metrics
+            open_price = data_5['Open'].iloc[-1]
+            close_price = data_5['Close'].iloc[-1]
+            volume_shares = data_5['Volume'].iloc[-1]
+            
+            # ✅ Compute ₹ turnover
+            price = close_price
+            volume_value = volume_shares * price
+            
+            # ✅ Smart volume threshold (time-based + price-adjusted)
             capital = float(open('D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv').read().strip())
-            vol_threshold = max(1000, int(capital / 100))
+            india = pytz.timezone("Asia/Kolkata")
+            now_india = dt.datetime.now(india)
+            current_hour = now_india.hour
+            
+            # Time-based base threshold
+            if current_hour < 11:  # Before 11 AM
+                base_threshold = max(150_000, capital * 0.005)
+            elif current_hour < 14:  # 11 AM - 2 PM
+                base_threshold = max(100_000, capital * 0.003)
+            else:  # After 2 PM
+                base_threshold = max(50_000, capital * 0.002)
+            
+            # Price adjustment
+            if price > 5000:  # Large-cap stocks
+                vol_threshold = base_threshold * 0.7
+            elif price > 1000:
+                vol_threshold = base_threshold
+            else:  # Small/mid caps
+                vol_threshold = base_threshold * 1.3
+            
+            # ❌ Skip if ₹ turnover too low
             if volume_value < vol_threshold:
-                print(f"⛔ Skipping {symbol}: Low 5-min volume = {volume_value} < {vol_threshold}")
-                continue                   
+                if price > 1500 and volume_value >= 30000:
+                    print(f"⚠️ Low turnover ₹{volume_value:.0f} but high price ₹{price:.2f} — Accepting")
+                else:
+                    print(f"⛔ Skipping {symbol}: Low ₹ volume = {volume_value:.0f} < ₹{vol_threshold:.0f}")
+                    continue       
+                                        
             change_pct_5m = round(((close_price - open_price) / open_price) * 100, 2)
 
             # --- 15m Metrics
@@ -282,26 +368,54 @@ def prepare_data():
             momentum_score = round(score, 2)
 
             # --- Filter Conditions (Hard Reject Rules)
-            if rsi >= 70:
-                print(f"❌ Hard Reject {symbol} — RSI too high: {rsi}")
-                continue
+            if rsi >= 74:
+                if momentum_score >= 65:
+                    print(f"⚠️ RSI High ({rsi:.2f}) but Accepted due to strong score: {momentum_score}")
+                else:
+                    print(f"❌ Hard Reject {symbol} — RSI too high: {rsi}")
+                    continue           
             if rsi < 25:
                 print(f"❌ Hard Reject {symbol} — RSI too low: {rsi}")
                 continue
             if delivery < 30:
                 print(f"❌ Hard Reject {symbol} — Delivery too low: {delivery}%")
                 continue
-            if change_pct_5m < 0.3:
-                print(f"❌ Hard Reject {symbol} — 5m momentum too low: {change_pct_5m:.2f}%")
-                continue
-            if change_pct_15m < 0.2:
-                print(f"❌ Hard Reject {symbol} — 15m momentum too low: {change_pct_15m:.2f}%")
-                continue
-            if trend_strength != "Strong":
-                print(f"❌ Hard Reject {symbol} — Weak trend: {trend_strength}")
-                continue                  
+                        # Get current market time
+            current_hour = now_india.hour
             
-            print(f"{total_attempted}/{len(STOCKS_TO_WATCH)} ❌ Skipped {symbol}: " + ", ".join(reason))
+            # Set dynamic thresholds
+            if current_hour < 11:  # Morning
+                min_5m = 0.25
+                min_15m = 0.20
+            elif current_hour < 14:  # Midday
+                min_5m = 0.15
+                min_15m = 0.10
+            else:  # Afternoon
+                min_5m = 0.10
+                min_15m = 0.05
+
+            if change_pct_5m < min_5m:
+                if (momentum_score >= 60 and delivery >= 30):
+                    print(f"⚠️ Fallback Accept {symbol} — 5m low ({change_pct_5m:.2f}%) but score strong ({momentum_score})")
+                else:
+                    print(f"❌ Hard Reject {symbol} — 5m momentum too low: {change_pct_5m:.2f}% < {min_5m}%")
+                    continue
+            
+            if change_pct_15m < min_15m:
+                if (momentum_score >= 65 and change_pct_5m >= min_5m):
+                    print(f"⚠️ Fallback Accept {symbol} — 15m weak but strong score+5m")
+                else:
+                    print(f"❌ Hard Reject {symbol} — 15m momentum too low: {change_pct_15m:.2f}% < {min_15m}%")
+                    continue
+            
+            if trend_strength != "Strong":
+                if momentum_score >= 65 and change_pct_15m >= 0.2:
+                    print(f"⚠️ Trend '{trend_strength}' but Accepted — momentum strong")
+                else:
+                    print(f"❌ Hard Reject {symbol} — Weak trend: {trend_strength}")
+                    continue                    
+            
+            print(f"{total_attempted}/{len(STOCKS_TO_WATCH)} ✅ Passed filters: {symbol} | Score={momentum_score}")
 
             # ⚠️ Soft Fallback Logic: Relaxed to support low-volatility market days
             if change_pct_5m >= 0.01 and change_pct_15m >= 0.005 and rsi < 74 and delivery >= 20:
@@ -405,23 +519,28 @@ def ask_gpt_to_rank_stocks(df):
         prompt = f"""
 📅 Today is {now} IST.
 
-You are an intraday stock advisor. Analyze the filtered candidates below using strict hybrid momentum criteria.
+You are an intraday stock advisor. Analyze the filtered candidates below using hybrid momentum + fallback safety rules.
 
 Stock Data:
 
 {df.to_string(index=False)}
 
 📌 Instructions:
-- Rank stocks (up to 25) using:
-    • 5min_change_pct > 0.5%
-    • 15min_change_pct > 0.3%
-    • RSI < 68
+- Select up to 25 best stocks using:
+    • Prefer 5min_change_pct ≥ 0.3% (fallback OK ≥ 0.2% with strong score)
+    • Prefer 15min_change_pct ≥ 0.2% (fallback OK ≥ 0.15% with score ≥ 65)
+    • RSI should be < 68
     • delivery_pct ≥ 30
-    • trend_strength must be "Strong"
+    • trend_strength = Strong preferred (fallback OK if score ≥ 65 or change_pct_5m ≥ 0.3)
     • volume_value > ₹5L
-- Prefer higher momentum_score
-- Format: RELIANCE, TCS, INFY, ...
-- If **none** qualify, respond only with: SKIP
+
+- Rank using: momentum_score, recent % change, safety
+- Format output: RELIANCE, TCS, INFY, ...
+- If none strictly match, fallback to top 5 by momentum_score where:
+    • RSI < 72
+    • delivery_pct ≥ 20
+    • tick_align_ok = true
+
 """
 
         response = openai.chat.completions.create(
@@ -474,24 +593,88 @@ if __name__ == "__main__":
         print("⚠️ No valid data to analyze. Skipping GPT call.")
         log_bot_action("Dynamic_Gpt_Momentum.py", "main", "❌ SKIPPED", "No valid records to rank")
         exit(0)
-
+    
+    print(f"✅ RSI-passed count (<70): {df[df['rsi'] < 70].shape[0]}")
+    print(f"✅ Sentiment passed count: {df.shape[0]}")
+    print(f"✅ GPT will now evaluate these {df.shape[0]} stocks")
     print("\n📊 Live Data:\n", df)
     print("\n🤖 Sending to GPT for analysis...\n")
+    
     decision = ask_gpt_to_rank_stocks(df)
-
-    print(f"\n✅ GPT Decision: {decision}")
-
+    
+    # 🔁 Fallback if GPT returns SKIP
+    if not decision or decision == "SKIP":
+        print("⚠️ GPT returned SKIP. Attempting fallback from live filtered list...")
+        fallback_df = df[
+            (df["rsi"] < 74) &
+            (df["delivery_pct"] >= 30) &
+            (df["tick_align_ok"] == True)
+        ]
+        fallback_df = fallback_df.sort_values(by=["momentum_score", "delivery_pct"], ascending=False)
+        if fallback_df.empty:
+            print("⛔ No fallback stock found in filtered list")
+            decision = []
+        else:
+            fallback_pick = fallback_df.iloc[0]["symbol"]
+            print(f"✅ Fallback selected from live filtered data: {fallback_pick}")
+            decision = [fallback_pick]
+    
+    print(f"\n✅ Final Selection: {decision}")
+    
     # 🟢 Save GPT-final list to new CSV for autotrade
     live_df = df[df["symbol"].isin(decision)][["symbol"]].copy()
-
+    
     # Reload original security_id map from dynamic_stock_list.csv
     map_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv")
     live_df = pd.merge(live_df, map_df, on="symbol", how="left")
-
+    
     # Ensure clean structure and drop duplicates
     live_df = live_df[["symbol", "security_id"]].dropna().drop_duplicates()
-
+    
     # ✅ Save live stock list for autotrade.py
     live_df.to_csv("D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv", index=False)
     print(f"✅ Saved GPT-ranked stocks to Today_Trade_Stocks.csv → {len(live_df)} stocks")
+    
+    try:
+        summary_path = "D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_log.csv"
+        prev_summary = pd.read_csv(summary_path) if os.path.exists(summary_path) else pd.DataFrame()
+    
+        latest = {
+            "total_scanned": 0,
+            "affordable": 0,
+            "technical_passed": 0,
+            "volume_passed": 0
+        }
+    
+        if not prev_summary.empty:
+            latest_row = prev_summary.iloc[-1].to_dict()
+            latest.update({k: latest_row[k] for k in latest.keys() if k in latest_row})
+    
+        summary_row = {
+            "date": datetime.now().strftime("%m/%d/%Y %H:%M"),
+            "Script_Name": "Dynamic_Gpt_Momentum.py",
+            "total_scanned": latest["total_scanned"],
+            "affordable": latest["affordable"],
+            "technical_passed": latest["technical_passed"],
+            "volume_passed": latest["volume_passed"],
+            "sentiment_passed": len(df) if 'df' in locals() else 0,
+            "rsi_passed": df[df["rsi"] < 70].shape[0] if 'df' in locals() and not df.empty else 0,
+            "final_selected": len(live_df) if 'live_df' in locals() else 0
+        }
+    
+        pd.DataFrame([summary_row]).to_csv(summary_path, mode='a', header=not os.path.exists(summary_path), index=False)
+    
+    except Exception as e:
+        print(f"⚠️ Could not update filter_summary_log.csv from GPT script: {e}")
+
+    # ✅ Always save print logs — even on early exits
+    try:
+        log_file_path = "D:/Downloads/Dhanbot/dhan_autotrader/Logs/Dynamic_Gpt_Momentum.txt"
+        with open(log_file_path, "w", encoding="utf-8") as f:
+            f.write(log_buffer.getvalue())
+    except Exception as e:
+        print(f"⚠️ Log write failed: {e}")
+    
+    
+    
         
