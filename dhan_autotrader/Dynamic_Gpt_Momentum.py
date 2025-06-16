@@ -1,4 +1,3 @@
-    
 from itertools import islice
 
 def batched(iterable, size):
@@ -13,7 +12,6 @@ def batched(iterable, size):
 
 import pandas as pd
 import openai
-import yfinance as yf
 import pytz
 import json
 import os
@@ -30,6 +28,9 @@ import sys
 import atexit
 
 log_buffer = io.StringIO()
+
+# Initialize global sentiment counter
+sentiment_call_count = 0
 
 class TeeLogger:
     def __init__(self, *streams):
@@ -97,10 +98,7 @@ def is_positive_sentiment(symbol, api_key):
     Fetch recent news articles for the stock and evaluate average sentiment.
     Applies API call throttling and respects a 50-call rate limit.
     """
-    # Global API call limiter
     global sentiment_call_count
-    if 'sentiment_call_count' not in globals():
-        sentiment_call_count = 0
 
     if sentiment_call_count >= 50:
         print(f"⛔ Sentiment skipped for {symbol} due to 50-request limit. Treated as neutral/pass.")
@@ -262,7 +260,7 @@ def prepare_data():
         
         try:
             data_5, data_15 = fetch_candle_data(symbol, secid)
-            time.sleep(0.6)
+            systime.sleep(0.6)
             
             if data_5 is None or data_5.empty or data_15 is None or data_15.empty:
                 print(f"⚠️ Skipping {symbol}: Empty candle data (5m or 15m)")
@@ -275,35 +273,14 @@ def prepare_data():
             price = close_price
             volume_value = volume_shares * price
             
-            # --- Volume check happens here (Fix 1 goes here) ---
+            # ✅ Calculate volume threshold AFTER getting price
+            try:
+                with open('D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv') as f:
+                    capital = float(f.read().strip())
+            except Exception as e:
+                capital = 500000  # Default fallback
+                print(f"⚠️ Error reading capital file: {e}. Using fallback ₹{capital:,.2f}")
             
-            # Only run sentiment on technically qualified stocks
-            if volume_value > vol_threshold and change_pct_5m > 0.1:
-                sentiment_check = is_positive_sentiment(symbol, config.get("news_api_key", ""))
-                if sentiment_check == "error":
-                    print(f"⚠️ API limit hit - skipping sentiment for {symbol}")
-                elif not sentiment_check:
-                    print(f"❌ Skipping {symbol}: Negative news sentiment")
-                    continue
-        try:
-            data_5, data_15 = fetch_candle_data(symbol, secid)
-            time.sleep(0.6)  # Throttle API requests to prevent rate limiting
-        
-            if data_5 is None or data_5.empty or data_15 is None or data_15.empty:
-                print(f"⚠️ Skipping {symbol}: Empty candle data (5m or 15m)")
-                continue
-        
-            # --- 5m Metrics
-            open_price = data_5['Open'].iloc[-1]
-            close_price = data_5['Close'].iloc[-1]
-            volume_shares = data_5['Volume'].iloc[-1]
-            
-            # ✅ Compute ₹ turnover
-            price = close_price
-            volume_value = volume_shares * price
-            
-            # ✅ Smart volume threshold (time-based + price-adjusted)
-            capital = float(open('D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv').read().strip())
             india = pytz.timezone("Asia/Kolkata")
             now_india = dt.datetime.now(india)
             current_hour = now_india.hour
@@ -333,21 +310,39 @@ def prepare_data():
                     continue       
                                         
             change_pct_5m = round(((close_price - open_price) / open_price) * 100, 2)
+            
+            # --- Run sentiment ONLY AFTER technical calculations
+            if volume_value > vol_threshold and change_pct_5m > 0.1:
+                sentiment_check = is_positive_sentiment(symbol, config.get("news_api_key", ""))
+                if sentiment_check == "error":
+                    print(f"⚠️ API limit hit - skipping sentiment for {symbol}")
+                elif not sentiment_check:
+                    print(f"❌ Skipping {symbol}: Negative news sentiment")
+                    continue
 
             # --- 15m Metrics
             prev_close_15 = data_15['Close'].iloc[-2] if len(data_15) > 1 else data_15['Close'].iloc[-1]
             close_15 = data_15['Close'].iloc[-1]
             change_pct_15m = round(((close_15 - prev_close_15) / prev_close_15) * 100, 2)
 
-            last_5_candles = data_15.tail(5)
-            trend_strength = "Strong" if all(
-                last_5_candles['Close'].iloc[i] > last_5_candles['Open'].iloc[i]
-                for i in range(len(last_5_candles))
-            ) else "Weak"
+            # --- Trend Strength (safe calculation)
+            if len(data_15) >= 5:
+                last_5_candles = data_15.tail(5)
+                trend_strength = "Strong" if all(
+                    last_5_candles['Close'].iloc[i] > last_5_candles['Open'].iloc[i]
+                    for i in range(len(last_5_candles))
+                ) else "Weak"
+            else:
+                trend_strength = "Insufficient Data"
+                print(f"⚠️ Only {len(data_15)} candles for trend check on {symbol}")
 
-            # --- Gap %
-            prev_close_5 = data_5['Close'].iloc[-2]
-            gap_pct = round(((open_price - prev_close_5) / prev_close_5) * 100, 2)
+            # --- Gap % (safe calculation)
+            if len(data_5) > 1:
+                prev_close_5 = data_5['Close'].iloc[-2]
+                gap_pct = round(((open_price - prev_close_5) / prev_close_5) * 100, 2)
+            else:
+                gap_pct = 0.0  # Default if not enough data
+                print(f"⚠️ Insufficient data for gap calculation on {symbol}")
 
             # --- RSI
             rsi_series = calculate_rsi(data_15['Close'])
@@ -380,7 +375,8 @@ def prepare_data():
             if delivery < 30:
                 print(f"❌ Hard Reject {symbol} — Delivery too low: {delivery}%")
                 continue
-                        # Get current market time
+                        
+            # Get current market time
             current_hour = now_india.hour
             
             # Set dynamic thresholds
@@ -454,7 +450,8 @@ def prepare_data():
                 "rsi": rsi,
                 "trend_strength": trend_strength,
                 "momentum_score": momentum_score,
-                "volume_value": volume_value
+                "volume_value": volume_value,
+                "tick_align_ok": tick_align_ok
             }
             records.append(record)
             print(f"{total_attempted}/{len(STOCKS_TO_WATCH)} ✅ Added: {symbol} | Score={momentum_score}")
@@ -469,12 +466,8 @@ def prepare_data():
     print(f"📊 Completed: {len(records)}/{total_attempted} passed filters")
 
     if df.empty:
-        print("⚠️ No valid data fetched. Clearing stale Today_Trade_Stocks.csv")
-        with open("D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv", "w") as f:
-            f.write("symbol,security_id\n")  # Empty header       
-        log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "❌ NO STOCKS", "Cleared stale trade list")
-        exit(0)   
-
+        print("⚠️ No valid data fetched. Attempting fallback to skipped candidates...")
+        
         fallback = sorted(
             [s for s in skipped_candidates if s["tick_align_ok"] and s["rsi"] < 75],
             key=lambda x: (x["ml_score"], x["momentum_5m"] + x["momentum_15m"]),
@@ -492,20 +485,33 @@ def prepare_data():
                 "rsi": best["rsi"],
                 "trend_strength": "Weak",
                 "momentum_score": best["ml_score"],
-                "volume_value": 500000
+                "volume_value": 500000,
+                "tick_align_ok": True
             }
             print(f"🛟 Fallback candidate: {best['symbol']} | ML={best['ml_score']}")
             df = pd.DataFrame([fallback_record])
         else:
+            print("⚠️ No fallback candidates available")
+            with open("D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv", "w") as f:
+                f.write("symbol,security_id\n")
             log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "❌ EMPTY", "No stocks passed filters")
-            return df
+            return pd.DataFrame()  # Return empty DF instead of exiting
     else:
         log_bot_action("Dynamic_Gpt_Momentum.py", "prepare_data", "✅ COMPLETE", f"{len(df)} stocks processed")
 
     df["score"] = df["momentum_score"]
     df["sentiment"] = "neutral"
-    map_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv")
-    df = pd.merge(df, map_df[["symbol", "security_id"]], on="symbol", how="left")
+    
+    # Create security_id map from original list
+    security_id_map = {symbol: secid for symbol, secid in STOCKS_TO_WATCH}
+    df["security_id"] = df["symbol"].map(security_id_map)
+    
+    # Handle missing security IDs
+    missing_ids = df[df["security_id"].isna()]
+    if not missing_ids.empty:
+        print(f"⚠️ Missing security IDs for: {', '.join(missing_ids['symbol'].tolist())}")
+        df = df.dropna(subset=["security_id"])
+    
     df.to_csv("D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv", index=False)    
     print(f"📁 Exported: Today_Trade_Stocks.csv with {len(df)} records.")
 
@@ -624,9 +630,9 @@ if __name__ == "__main__":
     # 🟢 Save GPT-final list to new CSV for autotrade
     live_df = df[df["symbol"].isin(decision)][["symbol"]].copy()
     
-    # Reload original security_id map from dynamic_stock_list.csv
-    map_df = pd.read_csv("D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv")
-    live_df = pd.merge(live_df, map_df, on="symbol", how="left")
+    # Create security_id map from original list
+    security_id_map = {symbol: secid for symbol, secid in STOCKS_TO_WATCH}
+    live_df["security_id"] = live_df["symbol"].map(security_id_map)
     
     # Ensure clean structure and drop duplicates
     live_df = live_df[["symbol", "security_id"]].dropna().drop_duplicates()
@@ -674,7 +680,3 @@ if __name__ == "__main__":
             f.write(log_buffer.getvalue())
     except Exception as e:
         print(f"⚠️ Log write failed: {e}")
-    
-    
-    
-        
