@@ -8,7 +8,7 @@ import time as systime
 import pandas as pd
 import os
 from dhan_api import get_live_price, get_historical_price, compute_rsi, calculate_qty, get_stock_volume
-from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_rank_stocks
+from Dynamic_Gpt_Momentum import find_intraday_opportunities
 from utils_logger import log_bot_action
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
@@ -562,11 +562,14 @@ def run_autotrade():
 
     if not os.path.exists(csv_path) or pd.read_csv(csv_path).empty:
         print(f"⚠️ {os.path.basename(csv_path)} is empty. Attempting dynamic regeneration...")
-    
-        # 🧠 Run GPT-based momentum generation script
-        os.system("python D:/Downloads/Dhanbot/dhan_autotrader/Dynamic_Gpt_Momentum.py")
-        systime.sleep(15)
-    
+
+        # 🧠 Run GPT-based momentum generation directly
+        opportunities = find_intraday_opportunities()
+        if not opportunities:
+            send_telegram_message("⚠️ No stocks qualified by GPT filter. Skipping trading today.")
+            with open(momentum_csv, "w") as f:
+                f.write("symbol,security_id\n")
+            return
     momentum_flag = "D:/Downloads/Dhanbot/dhan_autotrader/momentum_ready.txt"
     momentum_csv = csv_path
     now = datetime.now()

@@ -8,7 +8,7 @@ import time as systime
 import pandas as pd
 import os
 from dhan_api import get_live_price, get_historical_price, compute_rsi, calculate_qty, get_stock_volume
-from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_rank_stocks
+from Dynamic_Gpt_Momentum import find_intraday_opportunities
 from utils_logger import log_bot_action
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
@@ -410,11 +410,12 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
             
         # Add volume check to breakout logic
         if price > high_15min:
-            current_volume = get_stock_volume(security_id)  # Implement volume fetch           
-            # Volume must be > 150% of 15-min average
+            current_volume = get_stock_volume(security_id)
+            # Volume must meet minimum threshold
             capital = get_available_capital()
             volume_threshold = max(50000, capital // 2)
 
+            # 🔄 Apply fallback adjustment BEFORE threshold check
             if fallback_mode == "volume":
                 volume_threshold = volume_threshold * 0.5
             
@@ -561,9 +562,13 @@ def run_autotrade():
     if not os.path.exists(csv_path) or pd.read_csv(csv_path).empty:
         print(f"⚠️ {os.path.basename(csv_path)} is empty. Attempting dynamic regeneration...")
     
-        # 🧠 Run GPT-based momentum generation script
-        os.system("python D:/Downloads/Dhanbot/dhan_autotrader/Dynamic_Gpt_Momentum.py")
-        systime.sleep(15)
+        # 🧠 Run GPT-based momentum generation directly
+        opportunities = find_intraday_opportunities()
+        if not opportunities:
+            send_telegram_message("⚠️ No stocks qualified by GPT filter. Skipping trading today.")
+            with open(momentum_csv, "w") as f:
+                f.write("symbol,security_id\n")
+            return
     
     momentum_flag = "D:/Downloads/Dhanbot/dhan_autotrader/momentum_ready.txt"
     momentum_csv = csv_path
@@ -582,13 +587,13 @@ def run_autotrade():
 
     if should_run_momentum and now.time() >= datetime.strptime("09:30", "%H:%M").time():
         print("⚙️ Running GPT Momentum Filter...")
-        df_generated = prepare_data()
-        if df_generated.empty or df_generated["symbol"].nunique() == 0:
-            send_telegram_message("⚠️ No stocks qualified by GPT filter. Skipping trading today.")
-            with open(momentum_csv, "w") as f:
-                f.write("symbol,security_id\n")
-            return
-        ask_gpt_to_rank_stocks(df_generated)
+    opportunities = find_intraday_opportunities()
+    if not opportunities:
+        send_telegram_message("⚠️ No stocks qualified by GPT filter. Skipping trading today.")
+        with open(momentum_csv, "w") as f:
+            f.write("symbol,security_id\n")
+        return
+        
         with open(momentum_flag, "w") as f:
             f.write(now.strftime("%Y-%m-%d %H:%M:%S"))
     elif now.time() < datetime.strptime("09:30", "%H:%M").time():
@@ -745,7 +750,7 @@ def run_autotrade():
                 log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{best['symbol']} → {order_id_or_msg}")
         
                 for alt in fallbacks:
-                    if alt["symbol"] in bought_stocks:
+                    if not alt or alt["symbol"] in bought_stocks:
                         continue
         
                     print(f"⚠️ Trying fallback candidate: {alt['symbol']}")
@@ -780,9 +785,9 @@ def run_autotrade():
     
     if trade_executed and s:
         try:
-            ltp_candle = get_live_price(s["symbol"])
+            ltp_candle = get_live_price(s["symbol"], s["security_id"])
             systime.sleep(0.5)
-            ltp = ltp_candle if ltp_candle else s["price"]
+            ltp = ltp_candle if isinstance(ltp_candle, (int, float)) and ltp_candle > 0 else s["price"]
             profit = round((ltp - s["price"]) * s["qty"], 2)
             pnl_pct = round(((ltp - s['price']) / s['price']) * 100, 2)
             
