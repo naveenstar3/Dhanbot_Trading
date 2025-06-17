@@ -121,6 +121,9 @@ def get_available_capital():
             f.write(str(base_capital))
 
     try:
+        if raw_lines is None:  # Handle safe_read_csv returning None
+            print("⚠️ GROWTH_LOG read returned None")
+            return base_capital
         raw_lines = safe_read_csv(GROWTH_LOG)
         rows = list(csv.DictReader(raw_lines))
         if rows:
@@ -239,7 +242,10 @@ def place_buy_order(symbol, security_id, price, qty):
             print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
         
             try:
+                # First log to CSV
                 stop_pct = log_trade(symbol, security_id, qty, buffer_price, order_id)
+                
+                # Then log to database
                 insert_portfolio_log_to_db(
                     trade_date=datetime.now(pytz.timezone("Asia/Kolkata")),
                     symbol=symbol,
@@ -250,7 +256,7 @@ def place_buy_order(symbol, security_id, price, qty):
                     status="HOLD",
                     order_id=order_id
                 )
-                print(f"✅ log_trade() succeeded for {symbol}")
+                print(f"✅ Trade logged to CSV and DB for {symbol}")
             except Exception as e:
                 print(f"❌ log_trade() failed for {symbol}: {e}")
                 send_telegram_message(f"⚠️ Order placed for {symbol}, but logging failed: {e}")
@@ -321,17 +327,7 @@ def log_trade(symbol, security_id, qty, price, order_id):
         err = f"❌ ATR fetch failed for {symbol}. Trade log aborted."
         print(err)
         send_telegram_message(err)
-        raise ValueError(err)   
-
-    # 🔒 Enforce minimum profit rule
-    capital = get_available_capital()
-    min_profit = get_dynamic_minimum_net_profit(capital)
-    expected_profit = (target_pct / 100) * price * qty
-    if expected_profit < min_profit:
-        err_msg = f"❌ Target profit ₹{expected_profit:.2f} < min ₹{min_profit} for {symbol}"
-        print(err_msg)
-        send_telegram_message(err_msg)
-        raise ValueError(err_msg)
+        raise ValueError(err)
 
     file_exists = os.path.isfile(PORTFOLIO_LOG)
     print(f"🛠️ Attempting to write to portfolio log: {PORTFOLIO_LOG}")
@@ -411,9 +407,12 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
         # Add volume check to breakout logic
         if price > high_15min:
             current_volume = get_stock_volume(security_id)
-            # Volume must meet minimum threshold
+            if current_volume is None or current_volume <= 0:
+                print(f"⚠️ Invalid volume for {symbol}")
+                return
+            
             capital = get_available_capital()
-            volume_threshold = max(50000, capital // 2)
+            volume_threshold = max(50000, capital * 0.0002)  # Use percentage instead of fixed division
 
             # 🔄 Apply fallback adjustment BEFORE threshold check
             if fallback_mode == "volume":
@@ -538,9 +537,27 @@ def is_nse_trading_day():
 
 def run_autotrade():
     global trade_executed  # ✅ Ensures outer-level flag is respected
-    if not is_market_open() or not is_nse_trading_day():
-        print("⛔ Market is closed today (weekend or holiday). Exiting auto-trade.")
-        log_bot_action("autotrade.py", "market_status", "INFO", "Skipped: Market closed or holiday.")
+    # First check if it's a trading day
+    if not is_nse_trading_day():
+        print("⛔ Market is closed today (holiday). Exiting auto-trade.")
+        log_bot_action("autotrade.py", "market_status", "INFO", "Skipped: Market holiday.")
+        return
+    
+    # Wait until market opens if before 9:15 AM
+    now_ist = datetime.now(pytz.timezone("Asia/Kolkata"))
+    if now_ist.time() < time(9, 15):
+        # Calculate precise wait time
+        market_open_time = now_ist.replace(hour=9, minute=15, second=0, microsecond=0)
+        seconds_to_wait = (market_open_time - now_ist).total_seconds()
+        
+        if seconds_to_wait > 0:
+            print(f"🕒 Current time: {now_ist.strftime('%H:%M:%S')}. Waiting {seconds_to_wait:.0f} seconds until market open...")
+            systime.sleep(seconds_to_wait)
+    
+    # Final market open check after waiting
+    if not is_market_open():
+        print("⛔ Market is closed for the day. Exiting auto-trade.")
+        log_bot_action("autotrade.py", "market_status", "INFO", "Skipped: Market closed.")
         return
 
     csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv"
@@ -607,7 +624,7 @@ def run_autotrade():
         return
 
     df = pd.read_csv(csv_path)
-    required_cols = ['symbol', 'security_id', 'score', 'rsi', 'sentiment']
+    required_cols = ['symbol', 'security_id', 'momentum_score', 'rsi']
     missing_cols = [col for col in required_cols if col not in df.columns]
     if missing_cols:
         raise ValueError(f"Missing required columns in CSV: {missing_cols}")
@@ -641,6 +658,10 @@ def run_autotrade():
                 continue
 
             candles = get_historical_price(security_id, interval="15m")
+            if not candles or not isinstance(candles, list):
+                print(f"⚠️ No candles returned for {symbol}")
+                continue  # Skip this stock
+            
             systime.sleep(0.6)
             highs = [c['high'] for c in candles if 'high' in c]
             if highs:
@@ -692,12 +713,26 @@ def run_autotrade():
             candidate_scores.clear()
             filter_failures.update({k: 0 for k in filter_failures})
     
-            with ThreadPoolExecutor(max_workers=4) as executor:
-                futures = [executor.submit(monitor_wrapper, stock, filter_failures, failures_lock) 
-                          for stock in ranked_stocks[:30]]
-                results = [f.result() for f in as_completed(futures)]
-    
-            valid_candidates = [r for r in results if r]
+            valid_candidates = []
+            with ThreadPoolExecutor(max_workers=2) as executor:  # Reduced workers
+                futures = {}
+                # Only scan top 20 stocks with delays between submissions
+                for stock in ranked_stocks[:20]:
+                    future = executor.submit(
+                        monitor_wrapper, 
+                        stock, 
+                        filter_failures, 
+                        failures_lock
+                    )
+                    futures[future] = stock
+                    systime.sleep(0.3)  # Add delay between submissions
+                
+                # Process results as they complete
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result:
+                        valid_candidates.append(result)
+                        
             if valid_candidates:
                 best = max(valid_candidates, key=lambda x: x["score"])
                 print(f"✅ Best candidate: {best['symbol']} with score {best['score']}")
@@ -705,7 +740,8 @@ def run_autotrade():
                 if success:
                     trade_executed = True
                     s = best
-                    break
+                    print("✅ Final trade completed. Terminating auto-trade script.")
+                    return
             else:
                 # 🔍 Fallback analysis
                 total_blocks = sum(filter_failures.values())
