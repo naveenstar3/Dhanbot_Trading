@@ -128,7 +128,7 @@ def log_live_trail(symbol, live_price, change_pct):
 
             now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
             writer.writerow([now, symbol, round(live_price, 2), round(change_pct, 2)])
-            insert_live_trail_to_db(now, symbol, round(live_price, 2), round(change_pct, 2))
+            insert_live_trail_to_db(now, symbol, round(live_price, 2), round(change_pct, 2), order_id=order_id if 'order_id' in locals() else None)
             print(f"✅ Successfully wrote to {LIVE_BUFFER_FILE}")
 
     except PermissionError as e:
@@ -328,7 +328,7 @@ def check_portfolio():
 
     now = ist_now.strftime("%Y-%m-%d %H:%M")
     headers = ["timestamp", "symbol", "security_id", "quantity", "buy_price", "momentum_5min",
-               "target_pct", "stop_pct", "live_price", "change_pct", "last_checked", "status", "exit_price"]
+               "target_pct", "stop_pct", "live_price", "change_pct", "last_checked", "status", "exit_price", "order_id"]
 
     if not os.path.exists(PORTFOLIO_LOG) or os.stat(PORTFOLIO_LOG).st_size == 0:
         with open(PORTFOLIO_LOG, "w", newline="") as f:
@@ -336,14 +336,25 @@ def check_portfolio():
             writer.writerow(headers)
         print("📁 Created new portfolio_log.csv with headers only.")
         return
-
     
-    raw_lines = safe_read_csv(PORTFOLIO_LOG)
-    if not raw_lines:
-        print("⚠️ Skipping: portfolio_log.csv is empty or corrupted.")
+    try:
+        with portalocker.Lock(PORTFOLIO_LOG, 'r', timeout=5) as f:
+            # Verify file is not empty
+            if os.stat(PORTFOLIO_LOG).st_size == 0:
+                print("⚠️ Skipping: portfolio_log.csv is empty.")
+                return
+                
+            # Read and parse CSV content
+            reader = csv.DictReader(f)
+            existing_rows = list(reader)
+            
+            if not existing_rows:
+                print("⚠️ Skipping: No valid rows found in portfolio_log.csv")
+                return
+                
+    except Exception as e:
+        print(f"⚠️ Error reading portfolio_log.csv: {e}")
         return
-    reader = csv.DictReader(raw_lines)
-    existing_rows = list(reader)
     
     def process_sell_logic(row):
         print(f"🔍 Starting processing for {row.get('symbol')}")
@@ -476,7 +487,8 @@ def check_portfolio():
                             buy_price,
                             stop_pct,
                             status="SOLD",
-                            exit_price=exit_price
+                            exit_price=exit_price,
+                            order_id=order_id
                         )
                         
                         profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"

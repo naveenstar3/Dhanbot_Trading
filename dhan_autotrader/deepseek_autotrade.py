@@ -110,31 +110,19 @@ def is_market_open():
 
 def get_available_capital():
     try:
-        raw_lines = safe_read_csv(CURRENT_CAPITAL_FILE)
-        if not raw_lines or not raw_lines[0].strip().replace('.', '', 1).isdigit():
-            raise ValueError(f"Corrupt or empty file: {CURRENT_CAPITAL_FILE}")
-        base_capital = float(raw_lines[0].strip())
+        # ✅ Simplified capital file reading - single value in first cell
+        with open(CURRENT_CAPITAL_FILE, "r") as f:
+            capital_value = f.read().strip()
+            if not capital_value.replace('.', '', 1).isdigit():
+                raise ValueError(f"Invalid number in capital file: {capital_value}")
+            return float(capital_value)
     except Exception as e:
         print(f"⚠️ Failed to read capital file: {e}")
         base_capital = float(input("Enter your starting capital: "))
         with open(CURRENT_CAPITAL_FILE, "w") as f:
             f.write(str(base_capital))
-
-    try:
-        if raw_lines is None:  # Handle safe_read_csv returning None
-            print("⚠️ GROWTH_LOG read returned None")
-            return base_capital
-        raw_lines = safe_read_csv(GROWTH_LOG)
-        rows = list(csv.DictReader(raw_lines))
-        if rows:
-            last_growth = float(rows[-1].get("profits_realized", 0))
-            if last_growth >= 5:
-                base_capital += last_growth
-    except Exception as e:
-        print(f"⚠️ Skipping growth file update: {e}")
-
-    return base_capital
-
+        return base_capital
+        
 def compute_trade_score(stock):
     """
     Simple scoring logic: You can customize this.
@@ -151,7 +139,7 @@ def has_open_position():
     today = datetime.now().date()
     try:
         raw_lines = safe_read_csv(PORTFOLIO_LOG)
-        if len(raw_lines) <= 1:
+        if not raw_lines or len(raw_lines) <= 1:
             print(f"ℹ️ No trades yet in {PORTFOLIO_LOG}. File has only header.")
             return False           
         reader = csv.DictReader(raw_lines)
@@ -237,7 +225,7 @@ def place_buy_order(symbol, security_id, price, qty):
         else:
             order_id = None
                
-        if (response.get("status", "").lower() == "success" or response.get("orderStatus", "").upper() == "TRANSIT") and order_id:
+        if (response.get("status", "").lower() == "success" or response.get("orderStatus", "").upper() in ["TRADED", "TRANSIT"]) and order_id:
             send_telegram_message(f"✅ Order Placed: {symbol} | Qty: {qty} @ ₹{buffer_price}")
             print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
         
@@ -253,9 +241,13 @@ def place_buy_order(symbol, security_id, price, qty):
                     qty=qty,
                     buy_price=buffer_price,
                     stop_pct=stop_pct,
+                    target_pct=target_pct,
+                    stop_price=round(buffer_price * (1 - stop_pct / 100), 2),
+                    target_price=round(buffer_price * (1 + target_pct / 100), 2),
                     status="HOLD",
                     order_id=order_id
                 )
+                
                 print(f"✅ Trade logged to CSV and DB for {symbol}")
             except Exception as e:
                 print(f"❌ log_trade() failed for {symbol}: {e}")
@@ -346,18 +338,21 @@ def log_trade(symbol, security_id, qty, price, order_id):
                 writer = csv.writer(f_init)
                 writer.writerow([
                     "timestamp", "symbol", "security_id", "quantity", "buy_price",
-                    "momentum_5min", "target_pct", "stop_pct", "live_price",
-                    "change_pct", "last_checked", "status", "exit_price", "order_id"
-                ])
+                    "momentum_5min", "target_pct", "stop_pct", "target_price", "stop_price",
+                    "live_price", "change_pct", "last_checked", "status", "exit_price", "order_id"
+                ])               
                 print(f"📄 Created new portfolio log file with headers: {PORTFOLIO_LOG}")
     
         # Append trade row
         with open(PORTFOLIO_LOG, mode='a', newline='') as f:
             writer = csv.writer(f)
+            target_price = round(price * (1 + target_pct / 100), 2)
+            stop_price = round(price * (1 - stop_pct / 100), 2)
             writer.writerow([
                 timestamp, symbol, security_id, qty, price,
-                0, target_pct, stop_pct, '', '', '', 'HOLD', '', order_id
-            ])
+                0, target_pct, stop_pct, target_price, stop_price,
+                '', '', '', 'HOLD', '', order_id
+            ])          
             print(f"✅ Portfolio log updated for {symbol} — Qty: {qty} @ ₹{price}")
             return stop_pct
     except Exception as e:
@@ -406,18 +401,42 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
             
         # Add volume check to breakout logic
         if price > high_15min:
-            current_volume = get_stock_volume(security_id)
+            # Add delay before volume check API call
+            systime.sleep(0.8)
+            
+            try:
+                candles = get_historical_price(security_id, interval="15m")
+                if not candles or not isinstance(candles, list):
+                    print(f"⚠️ No candle data to compute volume for {symbol}")
+                    return None
+                current_volume = sum(c.get("volume", 0) for c in candles if "volume" in c)
+            except Exception as e:
+                if "429" in str(e) or "Rate_Limit" in str(e):
+                    print(f"⏳ Volume API rate limit hit for {symbol}. Sleeping 15s...")
+                    systime.sleep(15)
+                    try:
+                        candles = get_historical_price(security_id, interval="15m")
+                        if not candles or not isinstance(candles, list):
+                            print(f"⚠️ No candle data to compute volume for {symbol} after retry")
+                            return None
+                        current_volume = sum(c.get("volume", 0) for c in candles if "volume" in c)
+                    except:
+                        print(f"⚠️ Failed volume check after retry for {symbol}")
+                        return None
+                else:
+                    print(f"⚠️ Volume check error for {symbol}: {e}")
+                    return None
+        
             if current_volume is None or current_volume <= 0:
                 print(f"⚠️ Invalid volume for {symbol}")
                 return
-            
+                    
             capital = get_available_capital()
-            volume_threshold = max(50000, capital * 0.0002)  # Use percentage instead of fixed division
-
-            # 🔄 Apply fallback adjustment BEFORE threshold check
+            volume_threshold = max(50000, capital * 0.0002)
+            
             if fallback_mode == "volume":
                 volume_threshold = volume_threshold * 0.5
-            
+                
             if current_volume < volume_threshold:
                 print(f"⛔ Breakout rejected: volume {current_volume} < threshold {volume_threshold}")
                 with failures_lock:
@@ -566,6 +585,7 @@ def run_autotrade():
 
     if has_open_position():
         print("📌 Existing position found. Skipping new trades.")
+        trade_executed = True
         return
 
     if emergency_exit_active():
@@ -645,8 +665,12 @@ def run_autotrade():
     bought_stocks = set()
     capital = get_available_capital()
     first_15min_high = {}
-
-    for stock in ranked_stocks:
+    
+    # ✅ Add initial delay to prevent burst API requests
+    systime.sleep(1.0)
+    
+    # 🔄 Process stocks with progressive delays
+    for i, stock in enumerate(ranked_stocks):
         try:
             if not stock or not isinstance(stock, str) or stock.strip() == "":
                 print(f"⚠️ Skipping empty or invalid symbol: {stock}")
@@ -657,18 +681,34 @@ def run_autotrade():
                 print(f"⛔ {stock} Skipped — Missing security_id in CSV.")
                 continue
 
+            # 🕒 Add progressive delay - increases with each stock
+            delay = 0.8 + (i * 0.1)
+            systime.sleep(min(delay, 2.0))  # Cap at 2 seconds max
+            
             candles = get_historical_price(security_id, interval="15m")
             if not candles or not isinstance(candles, list):
-                print(f"⚠️ No candles returned for {symbol}")
+                print(f"⚠️ No candles returned for {stock}")
                 continue  # Skip this stock
             
-            systime.sleep(0.6)
             highs = [c['high'] for c in candles if 'high' in c]
             if highs:
                 first_15min_high[stock] = max(highs[:3])
+                
         except Exception as e:
-            print(f"⚠️ Skipping {stock} — could not fetch 15min high. Reason: {e}")
-
+            if "429" in str(e) or "Rate_Limit" in str(e):
+                print(f"⏳ Rate limit hit. Sleeping for 10 seconds before retrying {stock}...")
+                systime.sleep(10)
+                # Retry this stock after delay
+                try:
+                    candles = get_historical_price(security_id, interval="15m")
+                    if candles and isinstance(candles, list):
+                        highs = [c['high'] for c in candles if 'high' in c]
+                        if highs:
+                            first_15min_high[stock] = max(highs[:3])
+                except:
+                    print(f"⚠️ Skipping {stock} — failed after rate limit recovery")
+            else:
+                print(f"⚠️ Skipping {stock} — could not fetch 15min high. Reason: {e}")
     trade_executed = False
     # 🚦 Dynamic Filter Failure Tracking
     filter_failures = {
@@ -714,18 +754,15 @@ def run_autotrade():
             filter_failures.update({k: 0 for k in filter_failures})
     
             valid_candidates = []
-            with ThreadPoolExecutor(max_workers=2) as executor:  # Reduced workers
+            with ThreadPoolExecutor(max_workers=1) as executor:  # Reduced to single worker
                 futures = {}
-                # Only scan top 20 stocks with delays between submissions
-                for stock in ranked_stocks[:20]:
-                    future = executor.submit(
-                        monitor_wrapper, 
-                        stock, 
-                        filter_failures, 
-                        failures_lock
-                    )
+                for stock in ranked_stocks[:10]:  # Only scan top 10 stocks
+                    # Add random delay between submissions
+                    delay = random.uniform(0.8, 1.5)
+                    systime.sleep(delay)
+                    
+                    future = executor.submit(monitor_wrapper, stock, filter_failures, failures_lock)
                     futures[future] = stock
-                    systime.sleep(0.3)  # Add delay between submissions
                 
                 # Process results as they complete
                 for future in as_completed(futures):
@@ -741,7 +778,7 @@ def run_autotrade():
                     trade_executed = True
                     s = best
                     print("✅ Final trade completed. Terminating auto-trade script.")
-                    return
+                    sys.exit(0)
             else:
                 # 🔍 Fallback analysis
                 total_blocks = sum(filter_failures.values())
@@ -779,7 +816,7 @@ def run_autotrade():
                 bought_stocks.add(best["symbol"])
                 s = best
                 print("✅ Final trade completed. Terminating auto-trade script.")
-                return  # 🔥 Hard exit after one successful order
+                sys.exit(0)  # 🔥 Hard exit after one successful order
         
             else:
                 send_telegram_message(f"❌ Order failed for {best['symbol']}: {order_id_or_msg}")
@@ -802,7 +839,7 @@ def run_autotrade():
                         trade_executed = True
                         s = alt
                         print("✅ Fallback trade completed. Terminating auto-trade script.")
-                        return  # 🔥 Hard exit on fallback success
+                        sys.exit(0)  # 🔥 Hard exit on fallback success
         
 
         now_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()

@@ -3042,3 +3042,234 @@ timestamp,script_name,action,status,message
 2025-06-21 19:31:03,git_sync.py,Git Push,✅ COMPLETE,41 file(s) pushed
 2025-06-24 09:22:05,daily_growth_logger.py,Growth Log Skipped,⏹️ NO TRADE,No SELL trade found for today
 2025-06-24 09:22:06,git_sync.py,Git Push,✅ COMPLETE,41 file(s) pushed
+2025-06-24 09:27:50,git_sync.py,Git Push,✅ COMPLETE,41 file(s) pushed
+2025-06-24 09:27:50,daily_growth_logger.py,Growth Log Skipped,⏹️ NO TRADE,No SELL trade found for today
+2025-06-24 09:37:42,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-24 09:37:42,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-24 09:38:17,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-24 09:38:17,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-24 09:52:30,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-24 09:52:30,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-24 09:53:00,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-24 09:53:00,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-24 09:53:06,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,JSWENERGY - Rate limit hit
+2025-06-24 10:07:26,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-24 10:07:26,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-24 10:08:02,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-24 10:08:02,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-24 10:18:05,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-24 10:18:05,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-24 10:19:27,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-24 10:19:27,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-24 10:19:45,autotrade.py,BUY,✅ EXECUTED,NTPC @ ₹326.0
+2025-06-24 10:39:24,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-24 10:39:24,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-24 10:40:43,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-24 10:40:43,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-24 10:41:04,autotrade.py,BUY,❌ FAILED,"DABUR → Dhan API gave no reason. Raw:
+{
+  ""orderId"": ""1125062414154"",
+  ""orderStatus"": ""TRANSIT""
+}"
+2025-06-24 10:53:11,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-24 10:53:11,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-24 10:53:56,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-24 10:53:56,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-24 11:00:32,autotrade.py,BUY,❌ FAILED,"ITC → Dhan API gave no reason. Raw:
+{
+  ""orderId"": ""4125062419984"",
+  ""orderStatus"": ""TRANSIT""
+}"
+2025-06-24 11:00:40,autotrade.py,BUY,❌ FAILED,"ITC → Dhan API gave no reason. Raw:
+{
+  ""orderId"": ""9125062419734"",
+  ""orderStatus"": ""TRANSIT""
+}"
+2025-06-24 11:11:23,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-24 11:11:23,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-24 11:11:48,GPT Ranking,Success,Selected 2,"ADANIENT, ASIANPAINT"
+2025-06-24 11:11:48,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 2 opportunities
+2025-06-24 11:23:40,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-24 11:23:40,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-24 11:24:14,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-24 11:24:14,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-24 11:24:31,autotrade.py,BUY,✅ EXECUTED,INDHOTEL @ ₹777.6
+2025-06-24 12:02:46,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-43.51 < ₹5
+2025-06-24 12:03:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-42.31 < ₹5
+2025-06-24 12:04:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-40.51 < ₹5
+2025-06-24 12:05:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-43.11 < ₹5
+2025-06-24 12:06:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-40.11 < ₹5
+2025-06-24 12:07:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-39.31 < ₹5
+2025-06-24 12:08:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-41.71 < ₹5
+2025-06-24 12:09:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-38.71 < ₹5
+2025-06-24 12:10:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-41.71 < ₹5
+2025-06-24 12:11:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-38.91 < ₹5
+2025-06-24 12:12:01,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-39.31 < ₹5
+2025-06-24 12:13:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-38.71 < ₹5
+2025-06-24 12:14:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-45.9 < ₹5
+2025-06-24 12:15:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-46.5 < ₹5
+2025-06-24 12:16:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-46.5 < ₹5
+2025-06-24 12:17:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-45.5 < ₹5
+2025-06-24 12:18:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-45.5 < ₹5
+2025-06-24 12:19:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-45.3 < ₹5
+2025-06-24 12:20:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-48.3 < ₹5
+2025-06-24 12:21:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.1 < ₹5
+2025-06-24 12:22:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.3 < ₹5
+2025-06-24 12:23:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.3 < ₹5
+2025-06-24 12:24:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.3 < ₹5
+2025-06-24 12:25:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-51.9 < ₹5
+2025-06-24 12:26:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.7 < ₹5
+2025-06-24 12:27:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-52.3 < ₹5
+2025-06-24 12:28:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.9 < ₹5
+2025-06-24 12:29:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-48.5 < ₹5
+2025-06-24 12:30:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-46.5 < ₹5
+2025-06-24 12:31:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.7 < ₹5
+2025-06-24 12:32:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.9 < ₹5
+2025-06-24 12:33:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-48.3 < ₹5
+2025-06-24 12:34:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.7 < ₹5
+2025-06-24 12:35:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.7 < ₹5
+2025-06-24 12:36:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-45.7 < ₹5
+2025-06-24 12:37:07,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-46.1 < ₹5
+2025-06-24 12:38:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.9 < ₹5
+2025-06-24 12:39:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.9 < ₹5
+2025-06-24 12:40:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-46.1 < ₹5
+2025-06-24 12:41:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.9 < ₹5
+2025-06-24 12:42:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-52.1 < ₹5
+2025-06-24 12:43:09,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-51.3 < ₹5
+2025-06-24 12:44:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-54.69 < ₹5
+2025-06-24 12:45:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-52.3 < ₹5
+2025-06-24 12:46:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-51.9 < ₹5
+2025-06-24 12:47:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-50.1 < ₹5
+2025-06-24 12:48:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-48.5 < ₹5
+2025-06-24 12:49:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.9 < ₹5
+2025-06-24 12:50:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.7 < ₹5
+2025-06-24 12:51:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-50.3 < ₹5
+2025-06-24 12:52:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.5 < ₹5
+2025-06-24 12:53:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-48.7 < ₹5
+2025-06-24 12:54:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.5 < ₹5
+2025-06-24 12:55:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.3 < ₹5
+2025-06-24 12:56:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-45.9 < ₹5
+2025-06-24 12:57:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-45.1 < ₹5
+2025-06-24 12:58:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-48.3 < ₹5
+2025-06-24 12:59:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.9 < ₹5
+2025-06-24 13:00:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.9 < ₹5
+2025-06-24 13:01:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-51.7 < ₹5
+2025-06-24 13:02:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.1 < ₹5
+2025-06-24 13:03:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-50.9 < ₹5
+2025-06-24 13:04:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.3 < ₹5
+2025-06-24 13:05:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-48.1 < ₹5
+2025-06-24 13:06:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-50.3 < ₹5
+2025-06-24 13:07:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-48.3 < ₹5
+2025-06-24 13:08:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-47.3 < ₹5
+2025-06-24 13:09:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-49.7 < ₹5
+2025-06-24 13:10:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-50.5 < ₹5
+2025-06-24 13:11:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-51.9 < ₹5
+2025-06-24 13:12:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-54.09 < ₹5
+2025-06-24 13:13:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-53.89 < ₹5
+2025-06-24 13:14:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-54.09 < ₹5
+2025-06-24 13:15:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-24 13:16:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-24 13:17:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-24 13:18:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-59.69 < ₹5
+2025-06-24 13:19:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-57.89 < ₹5
+2025-06-24 13:20:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-56.29 < ₹5
+2025-06-24 13:21:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-56.69 < ₹5
+2025-06-24 13:22:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-58.49 < ₹5
+2025-06-24 13:23:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-56.69 < ₹5
+2025-06-24 13:24:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-59.09 < ₹5
+2025-06-24 13:25:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-60.69 < ₹5
+2025-06-24 13:26:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-58.89 < ₹5
+2025-06-24 13:27:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-60.69 < ₹5
+2025-06-24 13:28:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-59.89 < ₹5
+2025-06-24 13:29:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-58.89 < ₹5
+2025-06-24 13:30:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-59.49 < ₹5
+2025-06-24 13:31:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-59.09 < ₹5
+2025-06-24 13:32:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-62.69 < ₹5
+2025-06-24 13:33:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-24 13:34:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-65.28 < ₹5
+2025-06-24 13:35:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-65.88 < ₹5
+2025-06-24 13:36:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-66.28 < ₹5
+2025-06-24 13:37:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-24 13:38:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-24 13:39:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-24 13:40:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-24 13:41:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-70.08 < ₹5
+2025-06-24 13:42:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-66.28 < ₹5
+2025-06-24 13:43:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-68.48 < ₹5
+2025-06-24 13:44:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-70.88 < ₹5
+2025-06-24 13:45:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-69.68 < ₹5
+2025-06-24 13:46:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-72.28 < ₹5
+2025-06-24 13:47:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-24 13:48:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-06-24 13:49:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-73.87 < ₹5
+2025-06-24 13:50:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-72.87 < ₹5
+2025-06-24 13:51:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-75.87 < ₹5
+2025-06-24 13:52:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-73.27 < ₹5
+2025-06-24 13:53:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-70.48 < ₹5
+2025-06-24 13:54:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-70.08 < ₹5
+2025-06-24 13:55:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-70.08 < ₹5
+2025-06-24 13:56:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-73.47 < ₹5
+2025-06-24 13:57:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-73.47 < ₹5
+2025-06-24 13:58:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-78.67 < ₹5
+2025-06-24 13:59:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.07 < ₹5
+2025-06-24 14:00:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-71.08 < ₹5
+2025-06-24 14:01:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-71.08 < ₹5
+2025-06-24 14:02:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-74.27 < ₹5
+2025-06-24 14:03:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-75.27 < ₹5
+2025-06-24 14:04:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-76.27 < ₹5
+2025-06-24 14:05:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.07 < ₹5
+2025-06-24 14:06:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-78.07 < ₹5
+2025-06-24 14:07:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-81.27 < ₹5
+2025-06-24 14:08:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-80.07 < ₹5
+2025-06-24 14:09:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-79.67 < ₹5
+2025-06-24 14:10:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.87 < ₹5
+2025-06-24 14:11:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-78.87 < ₹5
+2025-06-24 14:12:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-80.07 < ₹5
+2025-06-24 14:13:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-80.07 < ₹5
+2025-06-24 14:14:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.27 < ₹5
+2025-06-24 14:15:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-76.87 < ₹5
+2025-06-24 14:16:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-78.87 < ₹5
+2025-06-24 14:17:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-79.87 < ₹5
+2025-06-24 14:18:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.47 < ₹5
+2025-06-24 14:19:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-76.07 < ₹5
+2025-06-24 14:20:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-75.47 < ₹5
+2025-06-24 14:21:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-74.87 < ₹5
+2025-06-24 14:22:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-76.67 < ₹5
+2025-06-24 14:23:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-76.87 < ₹5
+2025-06-24 14:24:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.47 < ₹5
+2025-06-24 14:25:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.67 < ₹5
+2025-06-24 14:26:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-76.07 < ₹5
+2025-06-24 14:27:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.47 < ₹5
+2025-06-24 14:28:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.87 < ₹5
+2025-06-24 14:29:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-82.46 < ₹5
+2025-06-24 14:30:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-76.87 < ₹5
+2025-06-24 14:31:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.67 < ₹5
+2025-06-24 14:32:06,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-76.67 < ₹5
+2025-06-24 14:33:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-76.87 < ₹5
+2025-06-24 14:34:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-78.27 < ₹5
+2025-06-24 14:35:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-78.07 < ₹5
+2025-06-24 14:36:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.27 < ₹5
+2025-06-24 14:37:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-77.67 < ₹5
+2025-06-24 14:38:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-75.27 < ₹5
+2025-06-24 14:39:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-72.08 < ₹5
+2025-06-24 14:40:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-72.87 < ₹5
+2025-06-24 14:41:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-72.67 < ₹5
+2025-06-24 14:42:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-72.87 < ₹5
+2025-06-24 14:43:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-73.47 < ₹5
+2025-06-24 14:44:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-73.27 < ₹5
+2025-06-24 14:45:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-73.07 < ₹5
+2025-06-24 14:46:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-72.87 < ₹5
+2025-06-24 14:47:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-73.87 < ₹5
+2025-06-24 14:48:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-72.87 < ₹5
+2025-06-24 14:49:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-74.47 < ₹5
+2025-06-24 14:50:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-73.47 < ₹5
+2025-06-24 14:51:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-72.67 < ₹5
+2025-06-24 14:52:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-76.67 < ₹5
+2025-06-24 14:53:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,INDHOTEL | 💸 Blocked by Net Profit Rule: ₹-74.47 < ₹5
+2025-06-24 15:30:01,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-24 15:31:01,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-24 15:31:58,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-24 15:33:01,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-24 15:34:01,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-24 15:35:01,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-06-24 15:45:02,daily_growth_logger.py,Growth Log Skipped,⏹️ NO TRADE,No SELL trade found for today
