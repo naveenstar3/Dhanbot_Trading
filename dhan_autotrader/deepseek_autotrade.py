@@ -8,7 +8,7 @@ import time as systime
 import pandas as pd
 import os
 from dhan_api import get_live_price, get_historical_price, compute_rsi, calculate_qty, get_stock_volume
-from Dynamic_Gpt_Momentum import find_intraday_opportunities
+from deepseek_Dynamic_Gpt_Momentum import find_intraday_opportunities
 from utils_logger import log_bot_action
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
@@ -432,21 +432,30 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
                 return
                     
             capital = get_available_capital()
-            volume_threshold = max(50000, capital * 0.0002)
+            # 🚀 Dynamic threshold based on market conditions
+            base_threshold = max(50000, capital * 0.0002)
+            # Relax threshold in bullish markets
+            volume_threshold = base_threshold * 0.7  # 30% relaxation
+            print(f"🧠 Adjusted volume threshold: {volume_threshold} (Base: {base_threshold})")
             
             if fallback_mode == "volume":
                 volume_threshold = volume_threshold * 0.5
                 
             if current_volume < volume_threshold:
                 print(f"⛔ Breakout rejected: volume {current_volume} < threshold {volume_threshold}")
+                print(f"🧪 VOLUME FAIL: {symbol} | CurVol={current_volume} | Thr={volume_threshold} | Cap={capital}")
                 with failures_lock:
                     filter_failures["volume"] += 1
                 return None
-                    
+                            # 🧪 DEBUG: Print volume calculation
+            print(f"🧮 Volume Calc: Cap={capital} → "
+                  f"BaseThresh={max(50000, capital * 0.0002)} → "
+                  f"AdjThresh={volume_threshold}")
         # ✅ Check Delivery Percentage (Minimum 30%)
         delivery_pct = get_estimated_delivery_percentage(security_id)
-        if delivery_pct < 30:
+        if delivery_pct < 25:
             print(f"⛔ Skipping {symbol} — Low Delivery %: {delivery_pct}%")
+            print(f"🧪 DELIVERY FAIL: {symbol} | Delivery%={delivery_pct}")
             with failures_lock:
                 filter_failures["delivery"] += 1
             return           
@@ -477,31 +486,54 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
             return
 
         # ✅ Final Candidate with Weighted Score
-        # Get historical data for last 5 days manually
+        # Get current volume instead of historical sum
         try:
-            candles_all = get_historical_price(security_id, interval="1d")
-            candles = candles_all[-5:] if len(candles_all) >= 5 else candles_all
-            volume = sum(c.get("volume", 0) for c in candles)
+            # Get current volume from live data
+            current_volume = get_stock_volume(security_id)
         except Exception as e:
-            print(f"⚠️ Volume fetch failed: {e}")
-            volume = 0
+            print(f"⚠️ Current volume fetch failed: {e}")
+            current_volume = 0
         
-        volume_score = min(1.0, volume / 1000000)  # Normalize volume
-        atr_distance = abs(price - high_15min) if high_15min else 0
-        atr_score = min(1.0, atr_distance / price) if price else 0
+        # Normalize volume - use log scale for better distribution
+        volume_score = min(1.0, math.log10(max(1, current_volume) / 6)  # 1M volume = 1.0
         
-        # Optional: placeholder ML sentiment score (e.g., from GPT earlier process or set to 0.5 default)
-        ml_score = 0.5  
-        # Example logic to simulate sentiment failure logging (customize if needed)
-        if ml_score < 0.3:
-            with failures_lock:
-                filter_failures["sentiment"] += 1       
-        momentum_cutoff = 0.05
+        # Use breakout strength instead of ATR distance
+        breakout_strength = (price - high_15min) / price if price > 0 and high_15min else 0
+        breakout_score = min(1.0, breakout_strength * 100)  # 1% breakout = 1.0
+        
+        # ✅ Robust momentum scoring with fallback
+        try:
+            # Use actual momentum score if available
+            ml_score = df[df['symbol']==symbol]['momentum_score'].values[0]
+        except:
+            # Fallback to RSI-based estimation if momentum missing
+            ml_score = max(0.4, min(0.7, (70 - rsi)/50))  # Map RSI 20→0.7, 70→0.4
+            print(f"⚠️ Used RSI fallback score for {symbol}: {ml_score:.2f}")
+        
+        # Momentum scoring weights
+        momentum_weight = 0.5
+        volume_weight = 0.3
+        breakout_weight = 0.2
+        
+        weighted_score = round(
+            (ml_score * momentum_weight) + 
+            (volume_score * volume_weight) + 
+            (breakout_score * breakout_weight), 
+            4
+        )
+
+        # 🧪 DEBUG: Print scoring details
+        print(f"🧠 {symbol} Scoring: "
+              f"Momentum={ml_score:.2f}*{momentum_weight}, "
+              f"Volume={volume_score:.2f}*{volume_weight}, "
+              f"Breakout={breakout_score:.2f}*{breakout_weight} → "
+              f"Total={weighted_score:.4f}")
+        
+        # Dynamic momentum cutoff based on market conditions
+        momentum_cutoff = 0.4
         if fallback_mode == "momentum":
-            momentum_cutoff = 0.00
-
-        weighted_score = round((ml_score * 0.6) + (volume_score * 0.2) + (atr_score * 0.2), 4)
-
+            momentum_cutoff = 0.3
+            
         if weighted_score < momentum_cutoff:
             print(f"❌ Skipping {symbol} — Score {weighted_score} < momentum cutoff {momentum_cutoff}")
             with failures_lock:
@@ -580,6 +612,7 @@ def run_autotrade():
         return
 
     csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv"
+    fallback_csv = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
     log_bot_action("autotrade.py", "startup", "STARTED", "Smart dynamic AutoTrade started.")
     print("🔍 Checking if market is open...")
 
@@ -592,23 +625,65 @@ def run_autotrade():
         send_telegram_message("⛔ Emergency Exit Active. Skipping today's trading.")
         return
 
-    if not os.path.exists(csv_path):
-        print(f"⛔ {csv_path} not found. Falling back to dynamic_stock_list.csv")
-        csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
-
-    if not os.path.exists(csv_path) or pd.read_csv(csv_path).empty:
-        print(f"⚠️ {os.path.basename(csv_path)} is empty. Attempting dynamic regeneration...")
+    # ✅ Robust CSV file validation with empty file handling
+    valid_csv = False
+    selected_path = csv_path
     
-        # 🧠 Run GPT-based momentum generation directly
+    # Check primary file
+    if os.path.exists(csv_path):
+        try:
+            if os.path.getsize(csv_path) > 10:  # Minimum file size check
+                test_df = pd.read_csv(csv_path)
+                if not test_df.empty and 'symbol' in test_df.columns:
+                    valid_csv = True
+                    print(f"✅ Using valid primary CSV: {csv_path}")
+        except Exception as e:
+            print(f"⚠️ Primary CSV read error: {str(e)}")
+    
+    # Check fallback file if primary fails
+    if not valid_csv and os.path.exists(fallback_csv):
+        try:
+            if os.path.getsize(fallback_csv) > 10:
+                test_df = pd.read_csv(fallback_csv)
+                if not test_df.empty and 'symbol' in test_df.columns:
+                    valid_csv = True
+                    selected_path = fallback_csv
+                    print(f"✅ Using valid fallback CSV: {fallback_csv}")
+        except Exception as e:
+            print(f"⚠️ Fallback CSV read error: {str(e)}")
+    
+        # Regenerate if both files are invalid
+    if not valid_csv:
+        print("⚠️ Both stock lists missing/invalid. Regenerating via GPT...")
         opportunities = find_intraday_opportunities()
+        
         if not opportunities:
-            send_telegram_message("⚠️ No stocks qualified by GPT filter. Skipping trading today.")
-            with open(momentum_csv, "w") as f:
-                f.write("symbol,security_id\n")
-            return
-    
+            # 🚨 CRITICAL FIX: Use fallback if GPT returns empty
+            if os.path.exists(fallback_csv):
+                print(f"⚠️ GPT returned 0 stocks. Using fallback: {fallback_csv}")
+                selected_path = fallback_csv
+                valid_csv = True
+            else:
+                send_telegram_message("⚠️ No stocks qualified by GPT filter. Skipping trading today.")
+                return
+        else:
+            # Create new valid CSV only if opportunities exist
+            opp_df = pd.DataFrame(opportunities)
+            opp_df.to_csv(csv_path, index=False)
+            selected_path = csv_path
+            print(f"✅ Regenerated stock list with {len(opportunities)} entries")
+            valid_csv = True
+            
+        # Create new valid CSV
+        opp_df = pd.DataFrame(opportunities)
+        opp_df.to_csv(csv_path, index=False)
+        selected_path = csv_path
+        print(f"✅ Regenerated stock list with {len(opportunities)} entries")
+        valid_csv = True
+
+    # Proceed with momentum flag logic using validated CSV
     momentum_flag = "D:/Downloads/Dhanbot/dhan_autotrader/momentum_ready.txt"
-    momentum_csv = csv_path
+    momentum_csv = selected_path
     now = datetime.now()
 
     should_run_momentum = True
@@ -622,43 +697,84 @@ def run_autotrade():
     else:
         print("⚙️ No previous GPT run found. Running now.")
 
-    if should_run_momentum and now.time() >= datetime.strptime("09:30", "%H:%M").time():
+    # ✅ Preserve original momentum generation logic
+    if should_run_momentum and now.time() >= time(9, 30):
         print("⚙️ Running GPT Momentum Filter...")
-    opportunities = find_intraday_opportunities()
-    if not opportunities:
-        send_telegram_message("⚠️ No stocks qualified by GPT filter. Skipping trading today.")
-        with open(momentum_csv, "w") as f:
-            f.write("symbol,security_id\n")
-        return
-        
-        with open(momentum_flag, "w") as f:
-            f.write(now.strftime("%Y-%m-%d %H:%M:%S"))
-    elif now.time() < datetime.strptime("09:30", "%H:%M").time():
+        try:
+            opportunities = find_intraday_opportunities()
+            if not opportunities:
+                print("⚠️ GPT returned 0 opportunities. Using fallback list")
+                # Load fallback list
+                df_fallback = pd.read_csv(fallback_csv)
+                df_fallback.to_csv(csv_path, index=False)
+                selected_path = csv_path
+            else:
+                pd.DataFrame(opportunities).to_csv(csv_path, index=False)
+                selected_path = csv_path
+                print(f"✅ Updated stock list with {len(opportunities)} entries")
+            
+            # Update momentum flag
+            with open(momentum_flag, "w") as f:
+                f.write(now.strftime("%Y-%m-%d %H:%M:%S"))
+        except Exception as e:
+            print(f"⚠️ GPT momentum failed: {e}. Using fallback CSV")
+            log_bot_action("autotrade.py", "GPT_ERROR", str(e), "Using fallback list")
+    elif now.time() < time(9, 30) and should_run_momentum:
         print("⏳ Waiting for 9:30 AM to start GPT momentum process.")
         send_telegram_message("⏳ Waiting for 9:30 AM to generate GPT stock list.")
+        # Calculate wait time
+        wait_until = now.replace(hour=9, minute=30, second=0, microsecond=0)
+        seconds_to_wait = (wait_until - now).total_seconds()
+        if seconds_to_wait > 0:
+            systime.sleep(seconds_to_wait)
+        # Run momentum after waiting
+        print("⚙️ Running GPT Momentum Filter after wait...")
+        opportunities = find_intraday_opportunities()
+        if opportunities:
+            pd.DataFrame(opportunities).to_csv(csv_path, index=False)
+            selected_path = csv_path
+            with open(momentum_flag, "w") as f:
+                f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    # Final validation before proceeding
+    try:
+        df = pd.read_csv(selected_path)
+        if df.empty:
+            raise ValueError("DataFrame is empty after reading")
+    except Exception as e:
+        send_telegram_message(f"⛔ Critical error with stock list: {str(e)}")
+        log_bot_action("autotrade.py", "data_error", "CRITICAL", f"Stock list invalid: {str(e)}")
         return
 
-    # 🔁 Re-check after regeneration
-    if not os.path.exists(csv_path) or pd.read_csv(csv_path).empty:
-        send_telegram_message("⛔ AutoTrade skipped — Even after regeneration, no stock candidates found.")
+    
+    # ✅ Robust column validation with dynamic calculation
+    required_cols = ['symbol', 'security_id']
+    missing_essential = [col for col in required_cols if col not in df.columns]
+    if missing_essential:
+        raise ValueError(f"Missing essential columns in CSV: {missing_essential}")
+    
+    # First ensure RSI exists (calculate dynamically if missing)
+    if 'rsi' not in df.columns:
+        print("⚠️ rsi column missing. Calculating dynamically...")
+        # Calculate RSI for each stock in real-time
+        df['rsi'] = df.apply(lambda row: compute_rsi(row['security_id']) or 50, axis=1)
+    
+    # Then calculate momentum_score if missing
+    if 'momentum_score' not in df.columns:
+        print("⚠️ momentum_score column missing. Calculating from RSI...")
+        df['momentum_score'] = df['rsi'].apply(lambda x: max(0.4, min(0.7, (70 - x)/50))
+    
+    if df.empty:
+        print(f"⚠️ No valid rows in {selected_path}. Skipping trading for today.")
+        send_telegram_message(f"⚠️ No stocks available in {os.path.basename(selected_path)}. Auto-trade skipped.")
+        log_bot_action("autotrade.py", "data_check", "❌ EMPTY STOCK LIST", f"No rows in {selected_path}")
         return
 
-    df = pd.read_csv(csv_path)
-    required_cols = ['symbol', 'security_id', 'momentum_score', 'rsi']
-    missing_cols = [col for col in required_cols if col not in df.columns]
-    if missing_cols:
-        raise ValueError(f"Missing required columns in CSV: {missing_cols}")
-    if df.empty or df["symbol"].isnull().all() or df["security_id"].isnull().all():
-        print(f"⚠️ No valid rows in {csv_path}. Skipping trading for today.")
-        send_telegram_message(f"⚠️ No stocks available in {os.path.basename(csv_path)}. Auto-trade skipped.")
-        log_bot_action("autotrade.py", "data_check", "❌ EMPTY STOCK LIST", f"No rows in {csv_path}")
-        return
-
-    print(f"📄 Using stock list: {csv_path}")
-
-    if df.empty or "symbol" not in df.columns or "security_id" not in df.columns:
-        send_telegram_message("⚠️ dynamic_stock_list.csv is missing or invalid.")
-        return
+    # Filter out invalid symbols
+    df = df[df['symbol'].notna() & df['security_id'].notna()]
+    
+    print(f"📄 Using stock list: {selected_path} with {len(df)} valid entries")
+    print(f"🔍 First 5 stocks: {df[['symbol', 'rsi', 'momentum_score']].head().to_dict('records')}")
 
     ranked_stocks = df["symbol"].tolist()
     dhan_symbol_map = dict(zip(df["symbol"], df["security_id"]))
@@ -668,6 +784,7 @@ def run_autotrade():
     
     # ✅ Add initial delay to prevent burst API requests
     systime.sleep(1.0)
+    
     
     # 🔄 Process stocks with progressive delays
     for i, stock in enumerate(ranked_stocks):

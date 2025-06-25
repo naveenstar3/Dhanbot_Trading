@@ -8,7 +8,7 @@ import time as systime
 import pandas as pd
 import os
 from dhan_api import get_live_price, get_historical_price, compute_rsi, calculate_qty, get_stock_volume
-from Dynamic_Gpt_Momentum import find_intraday_opportunities
+from Dynamic_Gpt_Momentum import prepare_data, ask_gpt_to_rank_stocks
 from utils_logger import log_bot_action
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
@@ -17,23 +17,6 @@ from utils_safety import safe_read_csv
 import time as tm 
 from db_logger import insert_portfolio_log_to_db
 import math
-import io
-
-# 🧾 Setup TeeLogger to capture print statements
-log_buffer = io.StringIO()
-class TeeLogger:
-    def __init__(self, *streams):
-        self.streams = streams
-    def write(self, message):
-        for s in self.streams:
-            s.write(message)
-            s.flush()
-    def flush(self):
-        for s in self.streams:
-            s.flush()
-
-sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
-
 
 
 # ✅ Load Dhan credentials
@@ -64,7 +47,7 @@ TELEGRAM_CHAT_ID = config.get("telegram_chat_id")
 LIVEMONEYDEDUCTION = True
 if len(sys.argv) > 1 and sys.argv[1].strip().upper() == "NO":
     LIVEMONEYDEDUCTION = False
-
+    
     
 # 📦 Dynamic Delivery % Estimator
 def get_estimated_delivery_percentage(security_id):
@@ -374,7 +357,7 @@ def log_trade(symbol, security_id, qty, price, order_id):
 best_candidate = None
 trade_lock = threading.Lock()
 
-def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map, avg_volume=100000, fallback_mode=None):
+def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map, avg_volume=100000):
     try:
         send_telegram_message(f"🔎 Scanning {symbol}...")
 
@@ -416,39 +399,23 @@ def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map, a
             current_volume = get_stock_volume(security_id)  # Implement volume fetch           
             # Volume must be > 150% of 15-min average
             capital = get_available_capital()
-            volume_threshold = max(50000, capital // 2)
-
-            if fallback_mode == "volume":
-                volume_threshold = volume_threshold * 0.5
-            
+            volume_threshold = max(50000, capital // 2)  # Example: ₹50,000 capital → 25,000 volume
             if current_volume < volume_threshold:
                 print(f"⛔ Breakout rejected: volume {current_volume} < threshold {volume_threshold}")
-                filter_failures["volume"] += 1
                 return None
-                    
         # ✅ Check Delivery Percentage (Minimum 30%)
         delivery_pct = get_estimated_delivery_percentage(security_id)
         if delivery_pct < 30:
             print(f"⛔ Skipping {symbol} — Low Delivery %: {delivery_pct}%")
-            filter_failures["delivery"] += 1
-            return           
+            return       
 
         # RSI Check
         rsi = compute_rsi(security_id)
         if rsi is None:
             print(f"⚠️ Skipping {symbol} — Unable to compute RSI.")
             return
-        rsi_limit = 70
-        if fallback_mode == "rsi_high":
-            rsi_limit = 75
-        
-        if rsi >= rsi_limit:
+        if rsi >= 70:
             print(f"⚠️ Skipping {symbol} — RSI too high: {rsi}")
-            filter_failures["rsi_high"] += 1
-            return
-        elif rsi < 25:
-            print(f"⚠️ Skipping {symbol} — RSI too low: {rsi}")
-            filter_failures["rsi_low"] += 1
             return
 
         qty = calculate_qty(price, capital)
@@ -474,20 +441,9 @@ def monitor_stock_for_breakout(symbol, high_trigger, capital, dhan_symbol_map, a
         
         # Optional: placeholder ML sentiment score (e.g., from GPT earlier process or set to 0.5 default)
         ml_score = 0.5  
-        # Example logic to simulate sentiment failure logging (customize if needed)
-        if ml_score < 0.3:
-            filter_failures["sentiment"] += 1       
-        momentum_cutoff = 0.05
-        if fallback_mode == "momentum":
-            momentum_cutoff = 0.00
-
+        
         weighted_score = round((ml_score * 0.6) + (volume_score * 0.2) + (atr_score * 0.2), 4)
-
-        if weighted_score < momentum_cutoff:
-            print(f"❌ Skipping {symbol} — Score {weighted_score} < momentum cutoff {momentum_cutoff}")
-            filter_failures["momentum"] += 1
-            return
-
+        
         return {
             "symbol": symbol,
             "security_id": security_id,
@@ -561,15 +517,9 @@ def run_autotrade():
         csv_path = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
 
     if not os.path.exists(csv_path) or pd.read_csv(csv_path).empty:
-        print(f"⚠️ {os.path.basename(csv_path)} is empty. Attempting dynamic regeneration...")
+        send_telegram_message(f"⚠️ {os.path.basename(csv_path)} is empty or invalid. Auto-trade skipped.")
+        return
 
-        # 🧠 Run GPT-based momentum generation directly
-        opportunities = find_intraday_opportunities()
-        if not opportunities:
-            send_telegram_message("⚠️ No stocks qualified by GPT filter. Skipping trading today.")
-            with open(momentum_csv, "w") as f:
-                f.write("symbol,security_id\n")
-            return
     momentum_flag = "D:/Downloads/Dhanbot/dhan_autotrader/momentum_ready.txt"
     momentum_csv = csv_path
     now = datetime.now()
@@ -599,11 +549,6 @@ def run_autotrade():
     elif now.time() < datetime.strptime("09:30", "%H:%M").time():
         print("⏳ Waiting for 9:30 AM to start GPT momentum process.")
         send_telegram_message("⏳ Waiting for 9:30 AM to generate GPT stock list.")
-        return
-
-    # 🔁 Re-check after regeneration
-    if not os.path.exists(csv_path) or pd.read_csv(csv_path).empty:
-        send_telegram_message("⛔ AutoTrade skipped — Even after regeneration, no stock candidates found.")
         return
 
     df = pd.read_csv(csv_path)
@@ -650,15 +595,6 @@ def run_autotrade():
             print(f"⚠️ Skipping {stock} — could not fetch 15min high. Reason: {e}")
 
     trade_executed = False
-    # 🚦 Dynamic Filter Failure Tracking
-    filter_failures = {
-        "momentum": 0,
-        "rsi_high": 0,
-        "rsi_low": 0,
-        "volume": 0,
-        "delivery": 0,
-        "sentiment": 0
-    }   
     s = None
 
     # ✅ Exit monitoring loop once trade is executed
@@ -682,41 +618,29 @@ def run_autotrade():
                 return None
         
         scan_round = 1
-        fallback_mode = None
-        fallback_pass = 0
-        max_fallback_passes = 2  # You can increase to 3 if needed
-    
-        while not trade_executed and fallback_pass <= max_fallback_passes:
-            print(f"🌀 Fallback Pass #{fallback_pass + 1} — Mode: {fallback_mode or 'Strict'}")
-            candidate_scores.clear()
-            filter_failures.update({k: 0 for k in filter_failures})
-    
+        while not trade_executed and datetime.now(pytz.timezone("Asia/Kolkata")).time() <= time(14, 30):
+            print(f"🌀 Scan Round #{scan_round} — {datetime.now().strftime('%H:%M:%S')}")
+        
             with ThreadPoolExecutor(max_workers=4) as executor:
                 results = list(executor.map(monitor_wrapper, ranked_stocks[:30]))
-    
+        
             valid_candidates = [r for r in results if r]
             if valid_candidates:
                 best = max(valid_candidates, key=lambda x: x["score"])
-                print(f"✅ Best candidate: {best['symbol']} with score {best['score']}")
+                print(f"✅ Best candidate selected: {best['symbol']} with score {best['score']}")
                 success, order_id = place_buy_order(best["symbol"], best["security_id"], round(best["price"] * 1.0045, 2), best["qty"])
                 if success:
                     trade_executed = True
                     s = best
                     break
             else:
-                # 🔍 Fallback analysis
-                total_blocks = sum(filter_failures.values())
-                if total_blocks == 0:
-                    fallback_mode = None
-                else:
-                    fallback_mode = max(filter_failures, key=filter_failures.get)
-                    dominant_pct = (filter_failures[fallback_mode] / total_blocks) * 100
-                    print(f"⚠️ Dominant filter: {fallback_mode} blocked {dominant_pct:.1f}% of candidates")
-    
-                fallback_pass += 1
-                print("🔁 Retrying with relaxed filter...\n")
-                pd.DataFrame([filter_failures]).to_csv("D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_today.csv", index=False)
-                systime.sleep(5)  
+                print("⏳ No valid breakout found. Retrying in 3 sec...")
+                systime.sleep(3)
+                scan_round += 1
+
+            if not trade_executed:
+                print("⏳ No valid breakout yet. Retrying in 15 seconds...")
+                systime.sleep(15)
 
         pd.DataFrame(candidate_scores).to_csv("D:/Downloads/Dhanbot/dhan_autotrader/scanned_candidates_today.csv", index=False)
 
@@ -841,7 +765,3 @@ if __name__ == "__main__":
 
     if not has_open_position():
         log_bot_action("autotrade.py", "end", "NO TRADE", "No stock bought today.")
-    
-    # 📝 Save all captured print outputs to a .txt log file
-    with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/autotrade.txt", "w", encoding="utf-8") as f:
-        f.write(log_buffer.getvalue())

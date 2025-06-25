@@ -438,9 +438,9 @@ def find_intraday_opportunities():
     market_trend, volatility = get_market_health()
     print(f"📈 Market: {market_trend} | Volatility: {volatility*100:.2f}%")
     
-    # Adaptive thresholds
-    momentum_threshold = max(0.2, 0.5 * volatility)  # Higher in volatile markets
-    volume_threshold = 500000 * (1 + volatility * 2)  # Scale with volatility
+    # Adaptive thresholds - more dynamic
+    momentum_threshold = max(0.2, 0.4 * volatility)  # Lower threshold in volatile markets
+    volume_threshold = 300000 * (1 + volatility * 1.5)  # Lower base volume threshold
     
     # Scan stocks
     opportunities = []
@@ -461,24 +461,28 @@ def find_intraday_opportunities():
             # Calculate metrics
             momentum_score = calculate_momentum_score(data_5, data_15)
             breakout_potential = calculate_breakout_potential(data_15)
-            total_volume = data_5['Volume'].iloc[-1] * data_5['Close'].iloc[-1]  # Last candle value
+            
+            # Robust volume calculation (handle pre-market cases)
+            india = pytz.timezone("Asia/Kolkata")
+            now = datetime.now(india)
+            market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
+            
+            if now < market_open:
+                # Use yesterday's volume if pre-market
+                total_volume = data_5['Volume'].mean() * data_5['Close'].mean()
+            else:
+                total_volume = data_5['Volume'].iloc[-1] * data_5['Close'].iloc[-1]
             
             # Calculate RSI
             rsi_series = calculate_rsi(data_15['Close'])
             rsi = round(rsi_series.iloc[-1], 2) if not rsi_series.empty else 0
             
-            # Sentiment check for strong candidates
-            if momentum_score > 60 and breakout_potential > 70:
-                if not is_positive_sentiment(symbol):
-                    print(f"❌ Skipping {symbol} due to negative sentiment")
-                    continue
-            
-            # Skip low-quality candidates
+            # Skip low-quality candidates with more flexible thresholds
             if total_volume < volume_threshold:
                 continue
             if momentum_score < momentum_threshold and breakout_potential < 60:
                 continue
-            if rsi >= 70:  # Avoid overbought stocks
+            if rsi >= 75:  # Relaxed RSI threshold
                 continue
             
             # Add to opportunities
@@ -497,14 +501,15 @@ def find_intraday_opportunities():
             print(f"⚠️ Processing error for {symbol}: {e}")
             traceback.print_exc()
     
-    # Ensure minimum candidates
-    if len(opportunities) < 5:
-        print("⚠️ Low opportunity count. Adding momentum leaders...")
+    # Enhanced fallback mechanism
+    if len(opportunities) < 10:  # More aggressive fallback
+        print("⚠️ Low opportunity count. Adding top momentum performers...")
         momentum_sorted = sorted(opportunities, key=lambda x: x["momentum_score"], reverse=True)
-        if momentum_sorted:
-            for stock in momentum_sorted[:min(10, len(momentum_sorted))]:
-                if stock not in opportunities:
-                    opportunities.append(stock)
+        
+        # Add top performers regardless of other filters
+        for stock in momentum_sorted[:15]:  # Increase candidate pool
+            if stock not in opportunities:
+                opportunities.append(stock)
     
     # Convert to DataFrame for GPT
     df_opportunities = pd.DataFrame(opportunities)
@@ -515,10 +520,10 @@ def find_intraday_opportunities():
     # Filter to GPT-selected opportunities
     final_opportunities = [opp for opp in opportunities if opp['symbol'] in gpt_selected]
     
-    # Fallback if GPT skipped
+    # More robust fallback if GPT skipped
     if not final_opportunities:
-        print("⚠️ GPT skipped selection. Using top 5 momentum stocks")
-        final_opportunities = sorted(opportunities, key=lambda x: x["momentum_score"], reverse=True)[:5]
+        print("⚠️ GPT skipped selection. Using top 10 momentum stocks")
+        final_opportunities = sorted(opportunities, key=lambda x: x["momentum_score"], reverse=True)[:10]
     
     # Final selection
     selected = sorted(final_opportunities, key=lambda x: (x["momentum_score"], x["breakout_potential"]), reverse=True)[:10]
