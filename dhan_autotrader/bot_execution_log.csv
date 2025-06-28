@@ -3314,3 +3314,49 @@ timestamp,script_name,action,status,message
 2025-06-25 15:34:02,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
 2025-06-25 15:35:02,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
 2025-06-25 15:45:02,daily_growth_logger.py,Growth Log Skipped,⏹️ NO TRADE,No SELL trade found for today
+2025-06-25 16:00:06,git_sync.py,Git Push,✅ COMPLETE,41 file(s) pushed
+2025-06-26 09:45:58,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-26 09:45:58,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-26 09:46:30,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-26 09:46:30,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-26 09:46:47,autotrade.py,LOG_ERROR,❌ Logging Failed,BAJAJFINSV → name 'target_pct' is not defined
+2025-06-26 09:47:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,BAJAJFINSV | 💸 Blocked by Net Profit Rule: ₹-29.13 < ₹5
+2025-06-26 10:17:20,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-26 10:17:20,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-26 10:18:02,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-26 10:18:02,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-26 11:48:00,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-26 11:48:00,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-26 11:48:31,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-26 11:48:31,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-26 11:48:31,autotrade.py,GPT_ERROR,module 'pandas.compat' has no attribute 'StringIO',Using fallback list
+2025-06-26 11:51:48,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-26 11:51:48,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-26 11:52:22,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-26 11:52:22,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-26 11:52:22,autotrade.py,GPT_ERROR,module 'pandas.compat' has no attribute 'StringIO',Using fallback list
+2025-06-26 12:04:25,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-26 12:04:25,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-26 12:04:59,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-26 12:04:59,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-26 12:04:59,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-06-26 12:22:49,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-26 12:22:49,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-26 12:23:19,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-26 12:23:19,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-26 12:23:19,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-06-26 13:14:38,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-26 13:14:38,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-26 13:15:12,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-26 13:15:12,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-26 13:15:12,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-06-26 13:48:07,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-26 13:48:07,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-26 13:48:43,GPT Ranking,Success,Selected 2,"ADANIENSOL, JINDALSTEL"
+2025-06-26 13:48:43,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 2 opportunities
+2025-06-26 13:48:43,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-06-26 13:57:48,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-06-26 13:57:48,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-06-26 13:58:27,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-06-26 13:58:27,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-06-28 19:52:31,daily_growth_logger.py,Growth Log Skipped,⏹️ NO TRADE,No SELL trade found for today

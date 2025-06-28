@@ -361,7 +361,7 @@ def ask_gpt_to_rank_stocks(df):
 5. Consider market volatility: {volatility*100:.2f}%
 
 💡 Output Format: 
-- Only stock symbols in ranking order (max 10)
+- Only stock symbols in ranking order (max 15)
 - Comma-separated, uppercase: RELIANCE, TCS, INFY
 - If no good options, say "SKIP"
 """
@@ -398,18 +398,37 @@ def find_intraday_opportunities():
     """Main function to scan for intraday opportunities"""
     log_bot_action("Dynamic_Gpt_Momentum.py", "start", "MARKET_SCAN", "Starting intraday scan")
     
+    # Get market context first
+    market_trend, volatility = get_market_health()
+    print(f"📈 Market: {market_trend} | Volatility: {volatility*100:.2f}%")
+    
+    # Adaptive thresholds - more dynamic
+    momentum_threshold = max(0.2, 0.4 * volatility)  # Lower threshold in volatile markets
+    volume_threshold = 300000 * (1 + volatility * 1.5)  # Lower base volume threshold
+    
     # Load stock universe
+    stocks = []
     if STOCKS_TO_WATCH:
         stocks = STOCKS_TO_WATCH
         print(f"📊 Scanning {len(stocks)} stocks from dynamic list")
     else:
         # Fallback to Nifty 100 + sector leaders
         try:
-            stocks = []
-            with open("D:/Downloads/Dhanbot/dhan_autotrader/nifty100_constituents.csv", "r") as f:
+            # Create a dictionary to map symbols to security IDs
+            stock_dict = {}
+            
+            # Load Nifty 100 constituents
+            nifty_path = "D:/Downloads/Dhanbot/dhan_autotrader/nifty100_constituents.csv"
+            with open(nifty_path, "r") as f:
                 reader = csv.reader(f)
                 next(reader)  # Skip header
-                stocks = [row[0] for row in reader if row]
+                nifty_symbols = [row[0] for row in reader if row]
+                
+            # Add Nifty 100 symbols with security IDs
+            for symbol in nifty_symbols:
+                secid = get_security_id(symbol)
+                if secid:
+                    stock_dict[symbol] = secid
             
             # Add sector leaders from strongest sectors
             strong_sectors = get_sector_strength()
@@ -425,30 +444,30 @@ def find_intraday_opportunities():
             
             for sector in strong_sectors:
                 if sector in sector_leaders:
-                    stocks.extend(sector_leaders[sector])
+                    for symbol in sector_leaders[sector]:
+                        secid = get_security_id(symbol)
+                        if secid:
+                            stock_dict[symbol] = secid
             
-            stocks = list(set(stocks))  # Deduplicate
+            # Convert to list of tuples
+            stocks = [(symbol, secid) for symbol, secid in stock_dict.items()]
             print(f"⚠️ Using fallback stock list: {len(stocks)} stocks")
         except Exception as e:
             print(f"⚠️ Stock universe error: {e}")
-            stocks = ["RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS", 
-                     "HINDUNILVR", "ITC", "KOTAKBANK", "SBIN", "AXISBANK"]
-    
-    # Get market context
-    market_trend, volatility = get_market_health()
-    print(f"📈 Market: {market_trend} | Volatility: {volatility*100:.2f}%")
-    
-    # Adaptive thresholds - more dynamic
-    momentum_threshold = max(0.2, 0.4 * volatility)  # Lower threshold in volatile markets
-    volume_threshold = 300000 * (1 + volatility * 1.5)  # Lower base volume threshold
+            # Hardcoded fallback with security IDs
+            default_symbols = ["RELIANCE", "HDFCBANK", "ICICIBANK", "INFY", "TCS", 
+                              "HINDUNILVR", "ITC", "KOTAKBANK", "SBIN", "AXISBANK"]
+            stocks = []
+            for symbol in default_symbols:
+                secid = get_security_id(symbol)
+                if secid:
+                    stocks.append((symbol, secid))
+            print(f"⚠️ Using hardcoded list: {len(stocks)} stocks")
     
     # Scan stocks
     opportunities = []
-    for i, symbol in enumerate(stocks):
-        if isinstance(symbol, tuple):  # Handle (symbol, security_id) tuples
-            symbol, secid = symbol
-        else:
-            secid = None
+    for i, stock_tuple in enumerate(stocks):
+        symbol, secid = stock_tuple
             
         print(f"⏳ Processing {i+1}/{len(stocks)}: {symbol}")
         
@@ -493,7 +512,7 @@ def find_intraday_opportunities():
                 "rsi": rsi,
                 "volume": total_volume,
                 "last_price": data_5['Close'].iloc[-1],
-                "security_id": secid or get_security_id(symbol)
+                "security_id": secid
             })
             
             time.sleep(0.3)  # Rate limit protection

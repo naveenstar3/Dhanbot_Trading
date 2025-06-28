@@ -18,6 +18,8 @@ import time as tm
 from db_logger import insert_portfolio_log_to_db
 import math
 import io
+from io import StringIO
+
 
 # 🧾 Setup TeeLogger to capture print statements
 log_buffer = io.StringIO()
@@ -158,7 +160,7 @@ def has_open_position():
 
 def load_dynamic_stocks(filepath="D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"):
     raw_lines = safe_read_csv(filepath)
-    df = pd.read_csv(pd.compat.StringIO("".join(raw_lines)))
+    df = pd.read_csv(StringIO("".join(raw_lines)))
     return list(zip(df["symbol"], df["security_id"]))
     
 # ✅ Buy Logic + Order Execution
@@ -184,7 +186,7 @@ def place_buy_order(symbol, security_id, price, qty):
         return False, "Invalid input"
 
     tick_size = 0.05
-    buffer_price = round(math.floor(price * 1.002 / tick_size) * tick_size, 2)
+    buffer_price = round(round(price * 1.002 / tick_size) * tick_size, 2)
     
     payload = {
         "transactionType": "BUY",
@@ -231,7 +233,7 @@ def place_buy_order(symbol, security_id, price, qty):
         
             try:
                 # First log to CSV
-                stop_pct = log_trade(symbol, security_id, qty, buffer_price, order_id)
+                stop_pct, target_pct = log_trade(symbol, security_id, qty, buffer_price, order_id)
                 
                 # Then log to database
                 insert_portfolio_log_to_db(
@@ -253,7 +255,8 @@ def place_buy_order(symbol, security_id, price, qty):
                 print(f"❌ log_trade() failed for {symbol}: {e}")
                 send_telegram_message(f"⚠️ Order placed for {symbol}, but logging failed: {e}")
                 log_bot_action("autotrade.py", "LOG_ERROR", "❌ Logging Failed", f"{symbol} → {e}")
-                return False, f"Order Placed but Logging Failed: {e}"
+                # Still return True since order was placed
+                return True, order_id
         
             log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{symbol} @ ₹{buffer_price}")
             return True, order_id       
@@ -354,7 +357,7 @@ def log_trade(symbol, security_id, qty, price, order_id):
                 '', '', '', 'HOLD', '', order_id
             ])          
             print(f"✅ Portfolio log updated for {symbol} — Qty: {qty} @ ₹{price}")
-            return stop_pct
+            return stop_pct, target_pct 
     except Exception as e:
         err_msg = f"❌ Failed to write {symbol} to CSV: {e}"
         print(err_msg)
@@ -432,10 +435,14 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
                 return
                     
             capital = get_available_capital()
-            # 🚀 Dynamic threshold based on market conditions
-            base_threshold = max(50000, capital * 0.0002)
-            # Relax threshold in bullish markets
-            volume_threshold = base_threshold * 0.7  # 30% relaxation
+
+            # 🚀 Realistic volume threshold based on capital
+            base_threshold = max(10000, capital * 0.05)  # 5% of capital, min 10k
+            # Add time-based relaxation
+            if datetime.now().time() > time(11, 0):
+                volume_threshold = base_threshold * 0.5  # 50% relaxation after 11AM
+            else:
+                volume_threshold = base_threshold * 0.7  # 30% relaxation
             print(f"🧠 Adjusted volume threshold: {volume_threshold} (Base: {base_threshold})")
             
             if fallback_mode == "volume":
@@ -469,18 +476,23 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
         if fallback_mode == "rsi_high":
             rsi_limit = 75
         
+        # Allow high RSI if price is near breakout level
         if rsi >= rsi_limit:
-            print(f"⚠️ Skipping {symbol} — RSI too high: {rsi}")
-            with failures_lock:
-                filter_failures["rsi_high"] += 1
-            return
+            if price > (high_15min * 0.995):  # Within 0.5% of high
+                print(f"⚠️ High RSI but near breakout: {symbol} ({rsi})")
+            else:
+                print(f"⚠️ Skipping {symbol} — RSI too high: {rsi}")
+                with failures_lock:
+                    filter_failures["rsi_high"] += 1
+                return
         elif rsi < 25:
             print(f"⚠️ Skipping {symbol} — RSI too low: {rsi}")
             with failures_lock:
                 filter_failures["rsi_low"] += 1
             return
 
-        qty = calculate_qty(price, capital)
+        # Ensure minimum 1 lot purchase
+        qty = max(1, calculate_qty(price, capital))
         if qty <= 0:
             print(f"❌ Skipping {symbol} — Insufficient qty for price ₹{price}")
             return
@@ -495,7 +507,8 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
             current_volume = 0
         
         # Normalize volume - use log scale for better distribution
-        volume_score = min(1.0, math.log10(max(1, current_volume) / 6)  # 1M volume = 1.0
+        log_val = math.log10(max(1, current_volume))
+        volume_score = min(1.0, log_val / 6.0)   # 1M volume = 1.0
         
         # Use breakout strength instead of ATR distance
         breakout_strength = (price - high_15min) / price if price > 0 and high_15min else 0
@@ -529,10 +542,16 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
               f"Breakout={breakout_score:.2f}*{breakout_weight} → "
               f"Total={weighted_score:.4f}")
         
-        # Dynamic momentum cutoff based on market conditions
+
+        # Time-based momentum relaxation
         momentum_cutoff = 0.4
         if fallback_mode == "momentum":
             momentum_cutoff = 0.3
+            
+        # After 11AM, relax momentum cutoff
+        if datetime.now().time() > time(11, 0):
+            momentum_cutoff *= 0.8  # 20% relaxation
+            print(f"🕒 Relaxing momentum cutoff to {momentum_cutoff:.2f} after 11AM")
             
         if weighted_score < momentum_cutoff:
             print(f"❌ Skipping {symbol} — Score {weighted_score} < momentum cutoff {momentum_cutoff}")
@@ -585,6 +604,18 @@ def is_nse_trading_day():
         return today not in holiday_dates
     except:
         return True  # fallback to assume trading
+        
+def get_rolling_high(security_id, window=3):
+    """Get highest price from last N candles"""
+    try:
+        candles = get_historical_price(security_id, interval="15m")
+        if not candles or len(candles) < window:
+            return None
+        return max(c['high'] for c in candles[-window:])
+    except Exception as e:
+        print(f"⚠️ Rolling high error: {e}")
+        return None
+        
 
 def run_autotrade():
     global trade_executed  # ✅ Ensures outer-level flag is respected
@@ -673,13 +704,6 @@ def run_autotrade():
             selected_path = csv_path
             print(f"✅ Regenerated stock list with {len(opportunities)} entries")
             valid_csv = True
-            
-        # Create new valid CSV
-        opp_df = pd.DataFrame(opportunities)
-        opp_df.to_csv(csv_path, index=False)
-        selected_path = csv_path
-        print(f"✅ Regenerated stock list with {len(opportunities)} entries")
-        valid_csv = True
 
     # Proceed with momentum flag logic using validated CSV
     momentum_flag = "D:/Downloads/Dhanbot/dhan_autotrader/momentum_ready.txt"
@@ -702,6 +726,17 @@ def run_autotrade():
         print("⚙️ Running GPT Momentum Filter...")
         try:
             opportunities = find_intraday_opportunities()
+            if not isinstance(opportunities, list):
+                print(f"⚠️ GPT returned unexpected type: {type(opportunities)}. Forcing fallback.")
+                opportunities = []           
+            # Ensure minimum 15 stocks in watchlist
+            if len(opportunities) < 5:
+               print(f"⚠️ Only {len(opportunities)} stocks. Adding fallback candidates")
+               fallback_stocks = load_dynamic_stocks()
+               # Convert tuples to dictionaries to match opportunities structure
+               fallback_dicts = [{'symbol': s, 'security_id': sid} for s, sid in fallback_stocks]
+               # Add 10 random stocks from fallback list
+               opportunities.extend(random.sample(fallback_dicts, min(10, len(fallback_dicts))))
             if not opportunities:
                 print("⚠️ GPT returned 0 opportunities. Using fallback list")
                 # Load fallback list
@@ -745,7 +780,6 @@ def run_autotrade():
         send_telegram_message(f"⛔ Critical error with stock list: {str(e)}")
         log_bot_action("autotrade.py", "data_error", "CRITICAL", f"Stock list invalid: {str(e)}")
         return
-
     
     # ✅ Robust column validation with dynamic calculation
     required_cols = ['symbol', 'security_id']
@@ -762,7 +796,7 @@ def run_autotrade():
     # Then calculate momentum_score if missing
     if 'momentum_score' not in df.columns:
         print("⚠️ momentum_score column missing. Calculating from RSI...")
-        df['momentum_score'] = df['rsi'].apply(lambda x: max(0.4, min(0.7, (70 - x)/50))
+        df['momentum_score'] = df['rsi'].apply(lambda x: max(0.4, min(0.7, (70 - x)/50)))
     
     if df.empty:
         print(f"⚠️ No valid rows in {selected_path}. Skipping trading for today.")
@@ -781,6 +815,42 @@ def run_autotrade():
     bought_stocks = set()
     capital = get_available_capital()
     first_15min_high = {}
+    # ✅ Periodic refresh of 15-min highs (top 10 only)
+    def refresh_highs():
+        """Refresh 15-min highs for top 10 stocks in watchlist"""
+        now_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
+        if now_time >= time(14, 45):
+            print("⏰ Skipping refresh - too close to market close")
+        return
+        top_stocks = ranked_stocks[:10]   # Only top 10
+        n = len(top_stocks)
+        print(f"■■ Refreshing 15-min highs for top {n} stocks...")
+        for i, stock in enumerate(top_stocks):
+            security_id = dhan_symbol_map.get(stock)
+            if security_id:
+                try:
+                    candles = get_historical_price(security_id, interval="15m")
+                    if candles and isinstance(candles, list):
+                        # Get the last 3 candles instead of first 3
+                        if len(candles) >= 3:
+                            last_three_highs = [candle['high'] for candle in candles[-3:]]
+                            new_high = max(last_three_highs)
+                            first_15min_high[stock] = new_high
+                            print(f"▲ Updated high for {stock}: ₹{new_high}")
+                        else:
+                            # If we don't have 3 candles, take the max of what we have
+                            highs = [candle['high'] for candle in candles if 'high' in candle]
+                            if highs:
+                                new_high = max(highs)
+                                first_15min_high[stock] = new_high
+                                print(f"▲ Updated high (partial) for {stock}: ₹{new_high}")
+                except Exception as e:
+                    print(f"▲ Error refreshing high for {stock}: {e}")
+            # Add a delay to avoid rate limiting, except for the last stock
+            if i < n - 1:
+                delay = random.uniform(0.5, 1.0)
+                systime.sleep(delay)
+        print("■■ Highs refreshed")
     
     # ✅ Add initial delay to prevent burst API requests
     systime.sleep(1.0)
@@ -807,9 +877,9 @@ def run_autotrade():
                 print(f"⚠️ No candles returned for {stock}")
                 continue  # Skip this stock
             
-            highs = [c['high'] for c in candles if 'high' in c]
-            if highs:
-                first_15min_high[stock] = max(highs[:3])
+            rolling_high = get_rolling_high(security_id)
+            if rolling_high:
+                first_15min_high[stock] = rolling_high
                 
         except Exception as e:
             if "429" in str(e) or "Rate_Limit" in str(e):
@@ -819,9 +889,9 @@ def run_autotrade():
                 try:
                     candles = get_historical_price(security_id, interval="15m")
                     if candles and isinstance(candles, list):
-                        highs = [c['high'] for c in candles if 'high' in c]
-                        if highs:
-                            first_15min_high[stock] = max(highs[:3])
+                        rolling_high = get_rolling_high(security_id)
+                        if rolling_high:
+                            first_15min_high[stock] = rolling_high
                 except:
                     print(f"⚠️ Skipping {stock} — failed after rate limit recovery")
             else:
@@ -838,9 +908,17 @@ def run_autotrade():
     }   
     s = None
     failures_lock = threading.Lock()
+    # Initialize last refresh time
+    last_refresh_time = datetime.now(pytz.timezone("Asia/Kolkata"))
 
     # ✅ Exit monitoring loop once trade is executed
     while datetime.now(pytz.timezone("Asia/Kolkata")).time() <= time(14, 30):
+        # ✅ Periodic high refresh every 15 minutes
+        current_time = datetime.now(pytz.timezone("Asia/Kolkata"))
+        if (current_time - last_refresh_time).total_seconds() >= 900:  # 15 minutes = 900 seconds
+            refresh_highs()
+            last_refresh_time = current_time
+            
         if trade_executed:
             print("✅ Trade completed. Exiting monitoring loop.")
             break    
@@ -894,7 +972,8 @@ def run_autotrade():
                 if success:
                     trade_executed = True
                     s = best
-                    print("✅ Final trade completed. Terminating auto-trade script.")
+                    print("✅ Order placement attempted. Terminating auto-trade script.")
+                    send_telegram_message(f"🚀 Order attempt for {best['symbol']} completed. Terminating script.")
                     sys.exit(0)
             else:
                 # 🔍 Fallback analysis
@@ -905,11 +984,52 @@ def run_autotrade():
                     fallback_mode = max(filter_failures, key=filter_failures.get)
                     dominant_pct = (filter_failures[fallback_mode] / total_blocks) * 100
                     print(f"⚠️ Dominant filter: {fallback_mode} blocked {dominant_pct:.1f}% of candidates")
-    
+            
                 fallback_pass += 1
+                
+                # ➕ ADDED NEAR-BREAKOUT FALLBACK
+                if fallback_pass == max_fallback_passes:  # Only on last pass
+                    print("⚠️ Last fallback pass. Trying near-breakout stocks...")
+                    near_breakout_stocks = []
+                    
+                    for stock in ranked_stocks[:10]:  # Only check top 10
+                        security_id = dhan_symbol_map.get(stock)
+                        if not security_id:
+                            continue
+                            
+                        price = get_live_price(stock, security_id)
+                        high = first_15min_high.get(stock)
+                        
+                        if price and high and price > (high * 0.995):  # Within 0.5% of high
+                            print(f"⚠️ Near-breakout candidate: {stock} (Price: {price}, High: {high})")
+                            qty = calculate_qty(price, capital)
+                            if qty > 0:
+                                near_breakout_stocks.append({
+                                    "symbol": stock,
+                                    "security_id": security_id,
+                                    "price": price,
+                                    "qty": qty,
+                                    "score": 0.5  # Medium priority
+                                })
+                    
+                    if near_breakout_stocks:
+                        best_near = max(near_breakout_stocks, key=lambda x: x["price"]/x["qty"])  # Best value
+                        print(f"✅ Best near-breakout: {best_near['symbol']}")
+                        success, order_id = place_buy_order(
+                            best_near["symbol"], 
+                            best_near["security_id"], 
+                            best_near["price"], 
+                            best_near["qty"]
+                        )
+                        if success:
+                            trade_executed = True
+                            s = best_near
+                            print("✅ Near-breakout trade executed. Terminating.")
+                            sys.exit(0)
+                
                 print("🔁 Retrying with relaxed filter...\n")
                 pd.DataFrame([filter_failures]).to_csv("D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_today.csv", index=False)
-                systime.sleep(5)  
+                systime.sleep(5) 
 
         pd.DataFrame(candidate_scores).to_csv("D:/Downloads/Dhanbot/dhan_autotrader/scanned_candidates_today.csv", index=False)
 
