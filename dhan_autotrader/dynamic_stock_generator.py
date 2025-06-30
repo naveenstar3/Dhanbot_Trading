@@ -12,6 +12,8 @@ from nsepython import nsefetch  # Using your working library
 from db_logger import log_dynamic_stock_list, log_to_postgres
 import io
 import sys
+from dhan_api import get_live_price, get_historical_price
+import random 
 
 log_buffer = io.StringIO()
 class TeeLogger:
@@ -169,8 +171,9 @@ total_scanned = 0
 affordable = 0
 technical_passed = 0
 volume_passed = 0
-sentiment_passed = 0  # Placeholder for future
-rsi_passed = 0        # Placeholder for future
+sentiment_passed = 0
+sma_passed = 0
+rsi_passed = 0
 final_selected = 0
 
 MIN_VOLUME = 300000  # 5 lakh shares
@@ -186,10 +189,20 @@ for idx, row in nifty100_df.iterrows():
     try:
         # Step 1: Get pre-market LTP
         ltp = get_live_price(symbol, secid, premarket=True)       
+        
         # NEW: Fetch yesterday's close for bullish confirmation
         try:
             quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}&exchange=NSE"
             quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
+            
+            # Handle rate limiting for quote API
+            if quote_resp.status_code == 429:
+                wait_time = 5 + random.uniform(0, 2)
+                print(f"⏳ Rate limited on quote API. Waiting {wait_time:.1f}s...")
+                time.sleep(wait_time)
+                # Retry once
+                quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
+            
             quote_data = quote_resp.json()
             prev_close = float(quote_data.get("previousClose", 0))
         
@@ -201,55 +214,225 @@ for idx, row in nifty100_df.iterrows():
             continue
         
         # Step 2: Volume check (last 5 trading days)
-        payload = {
-            "securityId": secid,
-            "exchangeSegment": "NSE_EQ",
-            "instrument": "EQUITY",  # ADD THIS MISSING FIELD
-            "interval": "1",
-            "oi": False,  # ADD THIS MISSING FIELD
-            "fromDate": (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d %H:%M:%S'),  # ADD TIME
-            "toDate": (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')  # USE YESTERDAY
-        }
-        vol_response = requests.post(
-            "https://api.dhan.co/v2/charts/intraday", 
-            headers=HEADERS, 
-            json=payload,
-            timeout=10
-        )
-        
-        if vol_response.status_code != 200:
-            print(f"❌ Volume API error: {vol_response.status_code}")
+        try:
+            url = "https://api.dhan.co/v2/charts/intraday"
+            from_date = (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d 09:15:00')
+            to_date = datetime.now().strftime('%Y-%m-%d 15:30:00')
+            payload = {
+                "securityId": secid,
+                "exchangeSegment": "NSE_EQ",
+                "instrument": "EQUITY",
+                "interval": "5",  # 5-minute candles
+                "oi": "false",
+                "fromDate": from_date,
+                "toDate": to_date
+            }
+
+            # Implement retry logic with exponential backoff
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = requests.post(url, headers=HEADERS, json=payload, timeout=10)
+                    
+                    # Handle rate limiting (429 errors)
+                    if response.status_code == 429:
+                        wait_time = (2 ** attempt) + random.uniform(0, 1)
+                        print(f"⏳ Rate limited. Waiting {wait_time:.1f}s (attempt {attempt+1}/{max_retries})...")
+                        time.sleep(wait_time)
+                        continue
+                    
+                    if response.status_code != 200:
+                        print(f"❌ Historical fetch failed: {response.status_code} - {response.text[:100]}")
+                        break
+                    
+                    data = response.json()
+                    
+                    # Validate response structure
+                    required_keys = {"open", "high", "low", "close", "volume", "timestamp"}
+                    if not required_keys.issubset(data.keys()):
+                        print(f"❌ Missing required candle fields for {symbol}")
+                        break
+                
+                    # Build DataFrame with proper timezone handling
+                    df_vol = pd.DataFrame({
+                        "timestamp": pd.to_datetime(data["timestamp"], unit="s", utc=True).tz_convert("Asia/Kolkata"),
+                        "open": data["open"],
+                        "high": data["high"],
+                        "low": data["low"],
+                        "close": data["close"],
+                        "volume": data["volume"]
+                    })
+
+                    # Extract date for grouping
+                    df_vol["date"] = df_vol["timestamp"].dt.date
+                    
+                    # Compute average daily volume over last 5 days
+                    daily_vol = df_vol.groupby("date")["volume"].sum()
+                    avg_volume = daily_vol.tail(5).mean()
+                
+                    if pd.isna(avg_volume) or avg_volume < MIN_VOLUME:
+                        print(f"⛔ Low volume: {avg_volume:,.0f} < {MIN_VOLUME:,.0f}")
+                        break
+                
+                    volume_passed += 1
+                    
+                    # Step 3: Volatility check (ATR proxy) - using same data
+                    df_vol["range"] = df_vol["high"] - df_vol["low"]
+                    daily_range = df_vol.groupby("date")["range"].max()
+                    atr = daily_range.tail(5).mean()
+                
+                    if pd.isna(atr) or atr < MIN_ATR:
+                        print(f"⛔ Low volatility: ₹{atr:.2f} < ₹{MIN_ATR:.2f}")
+                        break
+                    
+                    technical_passed += 1
+                    break  # Success - exit retry loop
+                    
+                except Exception as e:
+                    print(f"⚠️ Volume/ATR check attempt {attempt+1} failed: {str(e)[:70]}")
+                    if attempt == max_retries - 1:
+                        raise  # Re-raise exception on final attempt
+                    time.sleep((2 ** attempt) + random.uniform(0, 1))
+            else:
+                continue  # Skip to next stock if all retries failed
+                
+        except Exception as e:
+            print(f"⚠️ Volume/ATR check failed after retries: {str(e)[:70]}")
             continue
             
-        vol_data = vol_response.json()
-        df_vol = pd.DataFrame({
-            "timestamp": pd.to_datetime(vol_data["timestamp"], unit="s"),
-            "volume": vol_data["volume"]
-        })
-        df_vol["date"] = df_vol["timestamp"].dt.date
-        daily_vol = df_vol.groupby("date")["volume"].sum()
-        avg_volume = daily_vol.tail(5).mean()
+        # ====== SMA and RSI Check (Improved) ======
+        # Initialize technical indicators to None
+        sma_20 = None
+        rsi_value = None
+        technical_ok = False
         
-        if pd.isna(avg_volume) or avg_volume < MIN_VOLUME:
-            print(f"⛔ Low volume: {avg_volume:,.0f} < {MIN_VOLUME:,.0f}")
+        try:
+            # Get historical data with proper datetime formatting
+            from_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d 09:15:00')
+            to_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d 15:30:00')
+            
+            # Implement retry logic for historical price API
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # Use the exact pattern from test_dhan_fixed_candle_fetch_hdfc_Save_Csv.py
+                    url = "https://api.dhan.co/v2/charts/intraday"
+                    payload = {
+                        "securityId": secid,
+                        "exchangeSegment": "NSE_EQ",
+                        "instrument": "EQUITY",
+                        "interval": "1d",  # Daily candles
+                        "oi": "false",
+                        "fromDate": from_date,
+                        "toDate": to_date
+                    }
+                    
+                    # Add jitter to avoid request patterns
+                    time.sleep(0.5 + random.uniform(0, 0.5))
+                    
+                    response = requests.post(url, headers=HEADERS, json=payload, timeout=15)
+                    
+                    # Handle rate limiting (429 errors)
+                    if response.status_code == 429:
+                        wait_time = 5 + random.uniform(0, 2)  # Longer wait for rate limits
+                        print(f"⏳ Rate limited. Waiting {wait_time:.1f}s (attempt {attempt+1}/{max_retries})...")
+                        time.sleep(wait_time)
+                        continue
+                    
+                    # Check for successful response
+                    if response.status_code != 200:
+                        print(f"❌ Historical fetch failed: {response.status_code} - {response.text[:100]}")
+                        continue  # Continue to next retry attempt
+                    
+                    data = response.json()
+                    
+                    # Validate response structure - more robust check
+                    if not isinstance(data, dict):
+                        print(f"❌ Invalid response format: Expected dict, got {type(data)}")
+                        continue
+                    
+                    required_keys = {"open", "high", "low", "close", "volume", "timestamp"}
+                    if not all(key in data for key in required_keys):
+                        print(f"❌ Missing required candle fields in response for {symbol}")
+                        print(f"Response keys: {list(data.keys())}")
+                        continue
+                    
+                    # Convert to DataFrame - exact method from test script
+                    df_hist = pd.DataFrame({
+                        "timestamp": pd.to_datetime(data["timestamp"], unit="s", utc=True).tz_convert("Asia/Kolkata"),
+                        "open": data["open"],
+                        "high": data["high"],
+                        "low": data["low"],
+                        "close": data["close"],
+                        "volume": data["volume"]
+                    })
+                    
+                    # Validate we have data
+                    if df_hist.empty:
+                        print(f"⚠️ Empty DataFrame for {symbol}")
+                        continue
+                    
+                    # Sort by timestamp and extract close prices
+                    df_hist = df_hist.sort_values('timestamp')
+                    closes = df_hist['close'].astype(float)
+                    
+                    # Calculate 20-day SMA
+                    if len(closes) < 20:
+                        print(f"⛔ Insufficient data for SMA20: {len(closes)} days")
+                        continue
+                    sma_20 = closes.tail(20).mean()
+                    
+                    # Calculate RSI(14)
+                    if len(closes) < 15:
+                        print(f"⛔ Insufficient data for RSI: {len(closes)} days")
+                        continue
+                        
+                    delta = closes.diff()
+                    gain = delta.where(delta > 0, 0)
+                    loss = -delta.where(delta < 0, 0)
+                    avg_gain = gain.rolling(14).mean().bfill()
+                    avg_loss = loss.rolling(14).mean().bfill()
+                    
+                    # Handle division by zero
+                    avg_loss = avg_loss.replace(0, 0.01)
+                    rs = avg_gain / avg_loss
+                    rsi = 100 - (100 / (1 + rs))
+                    rsi_value = rsi.iloc[-1]
+                    
+                    # SMA check
+                    if ltp < sma_20:
+                        print(f"⛔ Below SMA20: ₹{ltp:.2f} < ₹{sma_20:.2f}")
+                        continue
+                    sma_passed += 1
+                    
+                    # RSI check
+                    if rsi_value < 50 or rsi_value > 70:
+                        print(f"⛔ RSI out of range: {rsi_value:.2f}")
+                        continue
+                    rsi_passed += 1
+                    
+                    # If we reach here, all checks passed
+                    technical_ok = True
+                    break
+                    
+                except Exception as e:
+                    print(f"⚠️ Technical indicator attempt {attempt+1} error: {str(e)[:70]}")
+                    if attempt < max_retries - 1:
+                        wait_time = (2 ** attempt) + random.uniform(0, 1)
+                        print(f"⏳ Retrying in {wait_time:.1f}s...")
+                        time.sleep(wait_time)
+            else:
+                continue  # Skip to next stock if all retries failed
+                
+        except Exception as e:
+            print(f"⚠️ Technical indicator error: {str(e)[:70]}")
             continue
-        volume_passed += 1
-        
-        # Step 3: Volatility check (ATR proxy)
-        if "high" in vol_data and "low" in vol_data:
-            df_vol["high"] = vol_data["high"]
-            df_vol["low"] = vol_data["low"]
-            df_vol["range"] = df_vol["high"] - df_vol["low"]
-            daily_range = df_vol.groupby("date")["range"].max()
-            atr = daily_range.tail(5).mean()
-        else:
-            print(f"⛔ Missing high/low data for volatility check")
+            
+        # Skip if technical checks didn't pass
+        if not technical_ok:
             continue
-        
-        if pd.isna(atr) or atr < MIN_ATR:
-            print(f"⛔ Low volatility: ₹{atr:.2f} < ₹{MIN_ATR:.2f}")
-            continue
-        technical_passed += 1
+        # ====== END SECTION ======
+
         
         # Step 4: Calculate position size
         quantity = int(CAPITAL // ltp)
@@ -268,14 +451,18 @@ for idx, row in nifty100_df.iterrows():
             "capital_used": capital_used,
             "avg_volume": int(avg_volume),
             "avg_range": round(atr, 2),
-            "potential_profit": round(quantity * atr, 2)
+            "potential_profit": round(quantity * atr, 2),
+            "sma_20": sma_20,          # NEW FIELD
+            "rsi": rsi_value            # NEW FIELD (corrected from rsi to rsi_value)
         })
         print(f"✅ SELECTED: ₹{ltp:,.2f} | Vol: {avg_volume:,.0f} | Range: ₹{atr:.2f}")
 
     except Exception as e:
         print(f"⚠️ Processing error: {str(e)[:70]}")
     finally:
-        time.sleep(0.3)  # Rate limit protection
+        # Add jitter to avoid regular request patterns
+        sleep_time = 1.0 + random.uniform(0, 0.5)  # 1-1.5 seconds
+        time.sleep(sleep_time)  # Rate limit protection
 
 # ======== SAVE RESULTS ========
 if results:
@@ -300,7 +487,8 @@ if results:
         "technical_passed": technical_passed,
         "volume_passed": volume_passed,
         "sentiment_passed": sentiment_passed,
-        "rsi_passed": rsi_passed,
+        "sma_passed": sma_passed,   # NEW COUNTER
+        "rsi_passed": rsi_passed,   # UPDATED COUNTER
         "final_selected": final_selected
     }
     

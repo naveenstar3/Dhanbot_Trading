@@ -18,7 +18,11 @@ with open("D:/Downloads/Dhanbot/dhan_autotrader/config.json") as f:
 
 ACCESS_TOKEN = config["access_token"]
 CLIENT_ID = config["client_id"]
-
+HEADERS = {
+    "access-token": ACCESS_TOKEN,
+    "client-id": CLIENT_ID,
+    "Content-Type": "application/json"
+}
 session = requests.Session()
 session.headers.update({
     "access-token": ACCESS_TOKEN,
@@ -309,6 +313,32 @@ def get_historical_price(security_id, interval="5", limit=20, from_date=None, to
                 "volume": 100000 + i * 100
             })
         return list(reversed(test_data))
+        
+def get_historical_price_daily(security_id, from_date, to_date):
+    url = "https://api.dhan.co/charts/historical"
+    payload = {
+        "securityId": str(security_id),
+        "exchangeSegment": "NSE_EQ",
+        "instrument": "EQUITY",
+        "fromDate": from_date,
+        "toDate": to_date
+    }
+    try:
+        response = requests.post(url, headers=HEADERS, json=payload, timeout=15)
+        
+        # Handle rate limiting
+        if response.status_code == 429:
+            print("⏳ Rate limited in daily historical API")
+            return []
+            
+        if response.status_code != 200:
+            print(f"❌ Daily historical fetch failed: {response.status_code} - {response.text[:100]}")
+            return []
+            
+        return response.json().get("data", [])
+    except Exception as e:
+        print(f"⚠️ Error fetching daily historical: {str(e)[:70]}")
+        return []
 
 # ✅ CNC Market Order Placement (BUY or SELL)
 def place_order(security_id, quantity, transaction_type="BUY"):
