@@ -244,19 +244,19 @@ def get_historical_price(security_id, interval="5", limit=20, from_date=None, to
     if not security_id or not str(security_id).strip().isdigit():
         raise ValueError(f"Invalid security_id passed to get_historical_price: {security_id}")
     try:
-        india = pytz.timezone("Asia/Kolkata")
-        now = datetime.now(india)
-
-        # Default to today's 9:15 to now if not provided
-        if from_date is None:
-            from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
-        else:
+        # Use naive datetime without timezone
+        now = datetime.now()
+        
+        # Handle date inputs
+        if from_date:
             from_dt = datetime.strptime(from_date, "%Y-%m-%d %H:%M:%S")
-
-        if to_date is None:
-            to_dt = now
         else:
+            from_dt = (now - timedelta(days=5)).replace(hour=9, minute=15, second=0, microsecond=0)
+            
+        if to_date:
             to_dt = datetime.strptime(to_date, "%Y-%m-%d %H:%M:%S")
+        else:
+            to_dt = now.replace(hour=15, minute=30, second=0, microsecond=0)
 
         url = "https://api.dhan.co/v2/charts/intraday"
         headers = {
@@ -285,13 +285,14 @@ def get_historical_price(security_id, interval="5", limit=20, from_date=None, to
             print("⚠️ No 'open' key in response. Returning empty list.")
             return []
 
+        # Convert to DataFrame using the exact method from the working script
         df = pd.DataFrame({
+            "timestamp": pd.to_datetime(response_json["timestamp"], unit='s', utc=True).tz_convert("Asia/Kolkata"),
             "open": response_json["open"],
             "high": response_json["high"],
             "low": response_json["low"],
             "close": response_json["close"],
-            "volume": response_json["volume"],
-            "timestamp": pd.to_datetime(response_json["timestamp"], unit='s').tz_localize('UTC').tz_convert('Asia/Kolkata')
+            "volume": response_json["volume"]
         })
 
         if limit:

@@ -559,13 +559,33 @@ def check_portfolio():
             else:
                 final_rows.append(row)
     
-        # ✅ Now write back merged data
-        with open(PORTFOLIO_LOG, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=headers)
-            writer.writeheader()
-            writer.writerows(final_rows)
-    
-        print("✅ Portfolio updated with merged changes only.")
+        # ✅ Convert updated_rows to DataFrame
+        updated_df = pd.DataFrame(updated_rows)
+        
+        # ✅ Read original file
+        if os.path.exists(PORTFOLIO_LOG):
+            original_df = pd.read_csv(PORTFOLIO_LOG)
+        else:
+            original_df = pd.DataFrame(columns=headers)
+        
+        # ✅ Merge by symbol — keep SOLD entries untouched
+        original_df.set_index("symbol", inplace=True)
+        updated_df.set_index("symbol", inplace=True)
+        
+        # ✅ Update only HOLD rows
+        for symbol in updated_df.index:
+            if (
+                symbol in original_df.index and 
+                original_df.loc[symbol]["status"] != "SOLD"
+            ):
+                original_df.loc[symbol] = updated_df.loc[symbol]
+            elif symbol not in original_df.index:
+                original_df.loc[symbol] = updated_df.loc[symbol]
+        
+        # ✅ Save back safely
+        original_df.reset_index(inplace=True)
+        original_df.to_csv(PORTFOLIO_LOG, index=False)
+        print("✅ Portfolio safely updated without overwriting new entries.")
 
         # ✅ Also log to PostgreSQL DB for each row
         for row in updated_rows:

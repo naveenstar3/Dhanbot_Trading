@@ -312,57 +312,65 @@ def get_atr(security_id, period=14, interval="15m"):
         return None
 
 def log_trade(symbol, security_id, qty, price, order_id):
+    import pandas as pd
+
     timestamp = datetime.now().strftime("%m/%d/%Y %H:%M")
-    # Get ATR dynamically (past 14 periods)
+
     atr = get_atr(security_id, period=14)
-    if atr:
-        target_pct = round((atr / price) * 100 * 1.2, 2)  # 1.2x ATR for target
-        stop_pct = round((atr / price) * 100 * 0.8, 2)   # 0.8x ATR for stop
-    else:
-        err = f"❌ ATR fetch failed for {symbol}. Trade log aborted."
+    if not atr:
+        err = f"❌ ATR fetch failed for {symbol}. Aborting trade logging to prevent NULL target_pct."
         print(err)
         send_telegram_message(err)
         raise ValueError(err)
 
-    file_exists = os.path.isfile(PORTFOLIO_LOG)
-    print(f"🛠️ Attempting to write to portfolio log: {PORTFOLIO_LOG}")
+    target_pct = round((atr / price) * 100 * 1.2, 2)
+    stop_pct = round((atr / price) * 100 * 0.8, 2)
+    target_price = round(price * (1 + target_pct / 100), 2)
+    stop_price = round(price * (1 - stop_pct / 100), 2)
 
-    # ❗ Pre-check: Is file write-locked?
-    if os.path.exists(PORTFOLIO_LOG) and not os.access(PORTFOLIO_LOG, os.W_OK):
-        error_msg = f"🚫 Cannot write to {PORTFOLIO_LOG}. File is locked or opened by another program (e.g., Excel)."
+    print(f"🛠️ Attempting to append to portfolio log: {PORTFOLIO_LOG}")
+
+    if not os.access(os.path.dirname(PORTFOLIO_LOG) or ".", os.W_OK):
+        error_msg = f"🚫 Cannot write to directory for {PORTFOLIO_LOG}."
         print(error_msg)
         send_telegram_message(error_msg)
         raise PermissionError(error_msg)
 
     try:
-        # Create file with headers if it doesn't exist
-        if not os.path.exists(PORTFOLIO_LOG):
-            with open(PORTFOLIO_LOG, mode='w', newline='') as f_init:
-                writer = csv.writer(f_init)
-                writer.writerow([
-                    "timestamp", "symbol", "security_id", "quantity", "buy_price",
-                    "momentum_5min", "target_pct", "stop_pct", "target_price", "stop_price",
-                    "live_price", "change_pct", "last_checked", "status", "exit_price", "order_id"
-                ])               
-                print(f"📄 Created new portfolio log file with headers: {PORTFOLIO_LOG}")
-    
-        # Append trade row
-        with open(PORTFOLIO_LOG, mode='a', newline='') as f:
-            writer = csv.writer(f)
-            target_price = round(price * (1 + target_pct / 100), 2)
-            stop_price = round(price * (1 - stop_pct / 100), 2)
-            writer.writerow([
-                timestamp, symbol, security_id, qty, price,
-                0, target_pct, stop_pct, target_price, stop_price,
-                '', '', '', 'HOLD', '', order_id
-            ])          
-            print(f"✅ Portfolio log updated for {symbol} — Qty: {qty} @ ₹{price}")
-            return stop_pct, target_pct 
+        new_row = pd.DataFrame([{
+            "timestamp": timestamp,
+            "symbol": symbol,
+            "security_id": security_id,
+            "quantity": qty,
+            "buy_price": price,
+            "momentum_5min": 0,
+            "target_pct": target_pct,
+            "stop_pct": stop_pct,
+            "target_price": target_price,
+            "stop_price": stop_price,
+            "live_price": '',
+            "change_pct": '',
+            "last_checked": '',
+            "status": 'HOLD',
+            "exit_price": '',
+            "order_id": order_id
+        }])
+
+        if os.path.exists(PORTFOLIO_LOG):
+            existing = pd.read_csv(PORTFOLIO_LOG)
+            df = pd.concat([existing, new_row], ignore_index=True)
+        else:
+            df = new_row
+
+        df.to_csv(PORTFOLIO_LOG, index=False)
+        print(f"✅ Portfolio log updated for {symbol} — Qty: {qty} @ ₹{price}")
+        return stop_pct, target_pct
+
     except Exception as e:
-        err_msg = f"❌ Failed to write {symbol} to CSV: {e}"
+        err_msg = f"❌ Failed to update portfolio_log.csv: {e}"
         print(err_msg)
         send_telegram_message(err_msg)
-        raise   
+        raise
     
 # 🧵 Thread-safe monitoring functions
 def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, filter_failures, failures_lock, avg_volume=100000, fallback_mode=None):

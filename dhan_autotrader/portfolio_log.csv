@@ -1,1 +1,2 @@
-timestamp,symbol,security_id,quantity,buy_price,momentum_5min,target_pct,stop_pct,live_price,change_pct,last_checked,status,exit_price,order_id
+symbol,timestamp,security_id,quantity,buy_price,momentum_5min,target_pct,stop_pct,live_price,change_pct,last_checked,status,exit_price,order_id,target_price,stop_price
+ICICIGI,07/01/2025 12:36,21770,1,2064.1,0,0.04,0.03,2060.3,-0.18,2025-07-01 15:29,HOLD,,1125070123704,2064.93,2063.48

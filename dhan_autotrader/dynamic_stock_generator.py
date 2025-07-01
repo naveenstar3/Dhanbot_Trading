@@ -5,7 +5,6 @@ import json
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
-from dhan_api import get_live_price
 import pytz
 import time
 from nsepython import nsefetch  # Using your working library
@@ -82,8 +81,16 @@ def get_nifty100_constituents():
         # Using the same method as your Top_Losers_Strategy
         url = 'https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%20100'
         data = nsefetch(url)
-        symbols = [item["symbol"].strip().upper() for item in data["data"]]
-        print(f"✅ Fetched {len(symbols)} current Nifty 100 constituents")
+        
+        # Skip index representation and extract symbols
+        symbols = []
+        for item in data["data"]:
+            symbol = item["symbol"].strip().upper()
+            # Skip index representation like "NIFTY 100"
+            if "NIFTY" not in symbol:
+                symbols.append(symbol)
+                
+        print(f"✅ Fetched {len(symbols)} valid Nifty 100 constituents")
         return symbols
     except Exception as e:
         print(f"⚠️ NSE fetch failed: {e}. Using cached list")
@@ -180,11 +187,11 @@ MIN_VOLUME = 300000  # 5 lakh shares
 MIN_ATR = 1.2  # ₹2 minimum daily range
 
 print("\n🚀 Starting pre-market scan...")
-for idx, row in nifty100_df.iterrows():
+for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
     total_scanned += 1
     symbol = row["base_symbol"]
-    secid = str(row["SEM_SMST_SECURITY_ID"])  
-    print(f"\n🔍 [{len(results)+1}/{len(nifty100_df)}] Scanning {symbol}")
+    secid = str(row["SEM_SMST_SECURITY_ID"])
+    print(f"\n🔍 [{count}/{len(nifty100_df)}] Scanning {symbol}")
 
     try:
         # Step 1: Get pre-market LTP
@@ -212,22 +219,30 @@ for idx, row in nifty100_df.iterrows():
         except Exception as e:
             print(f"⚠️ Close fetch failed: {str(e)[:60]}")
             continue
-        
         # Step 2: Volume check (last 5 trading days)
         try:
             url = "https://api.dhan.co/v2/charts/intraday"
-            from_date = (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d 09:15:00')
-            to_date = datetime.now().strftime('%Y-%m-%d 15:30:00')
+            # Use naive datetime without timezone (API requirement)
+            now = datetime.now()
+            
+            # Format dates without timezone
+            from_date = (now - timedelta(days=5)).replace(hour=9, minute=30, second=0, microsecond=0)
+            to_date = (now - timedelta(days=1)).replace(hour=15, minute=30, second=0, microsecond=0)
+            
+            # Convert to API-compatible string format
+            from_date_str = from_date.strftime("%Y-%m-%d %H:%M:%S")
+            to_date_str = to_date.strftime("%Y-%m-%d %H:%M:%S")
+            
             payload = {
                 "securityId": secid,
                 "exchangeSegment": "NSE_EQ",
                 "instrument": "EQUITY",
                 "interval": "5",  # 5-minute candles
                 "oi": "false",
-                "fromDate": from_date,
-                "toDate": to_date
+                "fromDate": from_date_str,
+                "toDate": to_date_str
             }
-
+        
             # Implement retry logic with exponential backoff
             max_retries = 3
             for attempt in range(max_retries):
@@ -242,8 +257,10 @@ for idx, row in nifty100_df.iterrows():
                         continue
                     
                     if response.status_code != 200:
-                        print(f"❌ Historical fetch failed: {response.status_code} - {response.text[:100]}")
+                        # Print the full response text for debugging
+                        print(f"❌ Historical fetch failed for {symbol} (ID: {secid}): {response.status_code} - {response.text}")
                         break
+        
                     
                     data = response.json()
                     
@@ -252,7 +269,7 @@ for idx, row in nifty100_df.iterrows():
                     if not required_keys.issubset(data.keys()):
                         print(f"❌ Missing required candle fields for {symbol}")
                         break
-                
+                    
                     # Build DataFrame with proper timezone handling
                     df_vol = pd.DataFrame({
                         "timestamp": pd.to_datetime(data["timestamp"], unit="s", utc=True).tz_convert("Asia/Kolkata"),
@@ -262,7 +279,7 @@ for idx, row in nifty100_df.iterrows():
                         "close": data["close"],
                         "volume": data["volume"]
                     })
-
+        
                     # Extract date for grouping
                     df_vol["date"] = df_vol["timestamp"].dt.date
                     
@@ -308,56 +325,49 @@ for idx, row in nifty100_df.iterrows():
         
         try:
             # Get historical data with proper datetime formatting
-            from_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d 09:15:00')
+            from_date = (datetime.now() - timedelta(days=25)).strftime('%Y-%m-%d 09:15:00')
             to_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d 15:30:00')
             
             # Implement retry logic for historical price API
+            # Implement retry logic for historical price API
             max_retries = 3
+            rejection_printed = False  # Avoid repeated rejection messages
             for attempt in range(max_retries):
                 try:
-                    # Use the exact pattern from test_dhan_fixed_candle_fetch_hdfc_Save_Csv.py
                     url = "https://api.dhan.co/v2/charts/intraday"
                     payload = {
                         "securityId": secid,
                         "exchangeSegment": "NSE_EQ",
                         "instrument": "EQUITY",
-                        "interval": "1d",  # Daily candles
+                        "interval": "1",
                         "oi": "false",
                         "fromDate": from_date,
                         "toDate": to_date
                     }
-                    
-                    # Add jitter to avoid request patterns
+            
                     time.sleep(0.5 + random.uniform(0, 0.5))
-                    
                     response = requests.post(url, headers=HEADERS, json=payload, timeout=15)
-                    
-                    # Handle rate limiting (429 errors)
+            
                     if response.status_code == 429:
-                        wait_time = 5 + random.uniform(0, 2)  # Longer wait for rate limits
+                        wait_time = 5 + random.uniform(0, 2)
                         print(f"⏳ Rate limited. Waiting {wait_time:.1f}s (attempt {attempt+1}/{max_retries})...")
                         time.sleep(wait_time)
                         continue
-                    
-                    # Check for successful response
+            
                     if response.status_code != 200:
-                        print(f"❌ Historical fetch failed: {response.status_code} - {response.text[:100]}")
-                        continue  # Continue to next retry attempt
-                    
+                        if not rejection_printed:
+                            print(f"❌ Historical fetch failed: {response.status_code} - {response.text[:100]}")
+                            rejection_printed = True
+                        continue
+            
                     data = response.json()
-                    
-                    # Validate response structure - more robust check
-                    if not isinstance(data, dict):
-                        print(f"❌ Invalid response format: Expected dict, got {type(data)}")
-                        continue
-                    
                     required_keys = {"open", "high", "low", "close", "volume", "timestamp"}
-                    if not all(key in data for key in required_keys):
-                        print(f"❌ Missing required candle fields in response for {symbol}")
-                        print(f"Response keys: {list(data.keys())}")
+                    if not isinstance(data, dict) or not all(key in data for key in required_keys):
+                        if not rejection_printed:
+                            print(f"❌ Invalid or incomplete response structure for {symbol}")
+                            rejection_printed = True
                         continue
-                    
-                    # Convert to DataFrame - exact method from test script
+            
                     df_hist = pd.DataFrame({
                         "timestamp": pd.to_datetime(data["timestamp"], unit="s", utc=True).tz_convert("Asia/Kolkata"),
                         "open": data["open"],
@@ -366,55 +376,56 @@ for idx, row in nifty100_df.iterrows():
                         "close": data["close"],
                         "volume": data["volume"]
                     })
-                    
-                    # Validate we have data
+            
                     if df_hist.empty:
-                        print(f"⚠️ Empty DataFrame for {symbol}")
+                        if not rejection_printed:
+                            print(f"⚠️ Empty DataFrame for {symbol}")
+                            rejection_printed = True
                         continue
-                    
-                    # Sort by timestamp and extract close prices
+            
                     df_hist = df_hist.sort_values('timestamp')
                     closes = df_hist['close'].astype(float)
-                    
-                    # Calculate 20-day SMA
+            
                     if len(closes) < 20:
-                        print(f"⛔ Insufficient data for SMA20: {len(closes)} days")
+                        if not rejection_printed:
+                            print(f"⛔ Insufficient data for SMA20: {len(closes)} days")
+                            rejection_printed = True
                         continue
                     sma_20 = closes.tail(20).mean()
-                    
-                    # Calculate RSI(14)
+            
                     if len(closes) < 15:
-                        print(f"⛔ Insufficient data for RSI: {len(closes)} days")
+                        if not rejection_printed:
+                            print(f"⛔ Insufficient data for RSI: {len(closes)} days")
+                            rejection_printed = True
                         continue
-                        
+            
                     delta = closes.diff()
                     gain = delta.where(delta > 0, 0)
                     loss = -delta.where(delta < 0, 0)
                     avg_gain = gain.rolling(14).mean().bfill()
                     avg_loss = loss.rolling(14).mean().bfill()
-                    
-                    # Handle division by zero
                     avg_loss = avg_loss.replace(0, 0.01)
                     rs = avg_gain / avg_loss
                     rsi = 100 - (100 / (1 + rs))
                     rsi_value = rsi.iloc[-1]
-                    
-                    # SMA check
+            
                     if ltp < sma_20:
-                        print(f"⛔ Below SMA20: ₹{ltp:.2f} < ₹{sma_20:.2f}")
+                        if not rejection_printed:
+                            print(f"⛔ Below SMA20: ₹{ltp:.2f} < ₹{sma_20:.2f}")
+                            rejection_printed = True
                         continue
                     sma_passed += 1
-                    
-                    # RSI check
+            
                     if rsi_value < 50 or rsi_value > 70:
-                        print(f"⛔ RSI out of range: {rsi_value:.2f}")
+                        if not rejection_printed:
+                            print(f"⛔ RSI out of range: {rsi_value:.2f}")
+                            rejection_printed = True
                         continue
                     rsi_passed += 1
-                    
-                    # If we reach here, all checks passed
+            
                     technical_ok = True
                     break
-                    
+            
                 except Exception as e:
                     print(f"⚠️ Technical indicator attempt {attempt+1} error: {str(e)[:70]}")
                     if attempt < max_retries - 1:
@@ -423,6 +434,7 @@ for idx, row in nifty100_df.iterrows():
                         time.sleep(wait_time)
             else:
                 continue  # Skip to next stock if all retries failed
+            
                 
         except Exception as e:
             print(f"⚠️ Technical indicator error: {str(e)[:70]}")
@@ -461,8 +473,7 @@ for idx, row in nifty100_df.iterrows():
         print(f"⚠️ Processing error: {str(e)[:70]}")
     finally:
         # Add jitter to avoid regular request patterns
-        sleep_time = 1.0 + random.uniform(0, 0.5)  # 1-1.5 seconds
-        time.sleep(sleep_time)  # Rate limit protection
+        time.sleep(0.5)
 
 # ======== SAVE RESULTS ========
 if results:
@@ -508,7 +519,10 @@ else:
 
 # ======== PERFORMANCE METRICS ========
 elapsed = datetime.now() - start_time
-print(f"\n⏱️ Total scan time: {elapsed.total_seconds():.1f} seconds")
+total_sec = elapsed.total_seconds()
+minutes = int(total_sec // 60)
+seconds = int(total_sec % 60)
+print(f"\n⏱️ Total scan time: {minutes} min {seconds} sec")
 print(f"💵 Capital available: ₹{CAPITAL:,.2f}")
 print(f"📈 Potential positions: {len(results)}")
 # 📝 Save all captured print outputs to a .txt log file
