@@ -20,6 +20,21 @@ import math
 import io
 from io import StringIO
 
+# ===== STDOUT LOGGER CONFIG =====
+import io
+log_buffer = io.StringIO()
+class TeeLogger:
+    def __init__(self, *streams):
+        self.streams = streams
+    def write(self, message):
+        for s in self.streams:
+            s.write(message)
+            s.flush()
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
+
 
 # 🧾 Setup TeeLogger to capture print statements
 log_buffer = io.StringIO()
@@ -35,6 +50,8 @@ class TeeLogger:
             s.flush()
 
 sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
+AUTOTRADE_LOG_PATH = "D:/Downloads/Dhanbot/dhan_autotrader/autotrade_log.txt"
+
 
 # ✅ Load Dhan credentials
 with open("D:/Downloads/Dhanbot/dhan_autotrader/config.json", "r") as f:
@@ -318,10 +335,18 @@ def log_trade(symbol, security_id, qty, price, order_id):
 
     atr = get_atr(security_id, period=14)
     if not atr:
-        err = f"❌ ATR fetch failed for {symbol}. Aborting trade logging to prevent NULL target_pct."
-        print(err)
-        send_telegram_message(err)
-        raise ValueError(err)
+        print(f"⚠️ ATR fetch failed for {symbol}. Proceeding with NULL stop/target for logging.")
+        send_telegram_message(f"⚠️ ATR fetch failed for {symbol}. Logging with NULL target_pct.")
+    
+        target_pct = None
+        stop_pct = None
+        target_price = None
+        stop_price = None
+    else:
+        target_pct = round((atr / price) * 100 * 1.2, 2)
+        stop_pct = round((atr / price) * 100 * 0.8, 2)
+        target_price = round(price * (1 + target_pct / 100), 2)
+        stop_price = round(price * (1 - stop_pct / 100), 2)   
 
     target_pct = round((atr / price) * 100 * 1.2, 2)
     stop_pct = round((atr / price) * 100 * 0.8, 2)
@@ -1163,5 +1188,10 @@ if __name__ == "__main__":
         log_bot_action("autotrade.py", "end", "NO TRADE", "No stock bought today.")
     
     # 📝 Save all captured print outputs to a .txt log file
-    with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/autotrade.txt", "w", encoding="utf-8") as f:
-        f.write(log_buffer.getvalue())
+    try:
+        log_path = "D:/Downloads/Dhanbot/dhan_autotrader/Logs/autotrade.txt"
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(log_buffer.getvalue())
+        print(f"📄 Autotrade log saved to {log_path}")
+    except Exception as e:
+        print(f"⚠️ Failed to write autotrade log: {e}")

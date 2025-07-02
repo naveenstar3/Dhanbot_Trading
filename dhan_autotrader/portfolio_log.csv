@@ -1,2 +1,3 @@
 symbol,timestamp,security_id,quantity,buy_price,momentum_5min,target_pct,stop_pct,live_price,change_pct,last_checked,status,exit_price,order_id,target_price,stop_price
-ICICIGI,07/01/2025 12:36,21770,1,2064.1,0,0.04,0.03,2060.3,-0.18,2025-07-01 15:29,HOLD,,1125070123704,2064.93,2063.48
+ICICIGI,7/1/2025 12:36,21770,1,2064.1,0,0.04,0.03,2043.8,-0.98,7/2/2025 9:47,SOLD,,1.12507E+12,2064.93,2063.48
+VBL,7/2/2025 9:41,18921,7,456.25,0,0.1,0.06,455,-0.27,7/2/2025 14:41,SOLD,,5.13E+11,456.71,455.98

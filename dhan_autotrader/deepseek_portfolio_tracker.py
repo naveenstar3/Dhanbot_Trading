@@ -16,6 +16,24 @@ import portalocker
 from db_logger import insert_live_trail_to_db, insert_portfolio_log_to_db
 from utils_safety import safe_read_csv
 
+# ✅ Enable TeeLogger to capture print logs to file
+import io
+log_buffer = io.StringIO()
+
+class TeeLogger:
+    def __init__(self, *streams):
+        self.streams = streams
+    def write(self, message):
+        for s in self.streams:
+            s.write(message)
+            s.flush()
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+
+import sys
+sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
+
 # ✅ Trailing Exit Config
 LIVE_BUFFER_FILE = "live_trail_BUFFER.csv"
 
@@ -456,7 +474,20 @@ def check_portfolio():
                 reason = "SMART EXIT: Price exhausted near target multiple times"
                 should_sell = True
 
-            if should_sell and net_profit >= MINIMUM_NET_PROFIT_REQUIRED:
+            # ✅ Allow loss-side exit even if profit < min threshold
+            is_loss_exit = reason in ["STOP LOSS", "FORCED EXIT: Max ₹ loss", "EOD AUTO-EXIT"]            
+            # ✅ Smart SELL trigger: allow exit if price hit near target multiple times
+            near_target_hits = [r for r in records if target_pct - 0.1 <= r[1] <= target_pct + 0.05]
+            frequent_peaks = len(near_target_hits) >= 2
+            
+            if frequent_peaks:
+                print(f"🔁 Smart SELL allowed for {symbol} due to repeated target hits ({len(near_target_hits)}x)")
+            
+            # ✅ Allow exit if any of the following:
+            # - Profit ≥ minimum threshold
+            # - Loss-side trigger (STOP LOSS, FORCED EXIT, EOD EXIT)
+            # - Repeated peak hits near target
+            if should_sell and (net_profit >= MINIMUM_NET_PROFIT_REQUIRED or is_loss_exit or frequent_peaks):                       
                 exchange_segment = "NSE_EQ"
                 code, response = place_sell_order(security_id, symbol, quantity, exchange_segment)
                 if code == 200 and "order_id" in response:
@@ -509,6 +540,22 @@ def check_portfolio():
                 else:
                     print(f"❌ SELL failed for {symbol}: {response}")
                     send_telegram_message(f"❌ SELL failed for {symbol}: {response}")
+                    
+                    # ✅ Avoid duplicate SELL attempts if order is in TRANSIT
+                    order_id = response.get("data", {}).get("orderId", "")
+                    if order_id:
+                        row.update({
+                            "status": "PENDING_SELL",
+                            "exit_price": "",
+                            "order_id": order_id
+                        })
+                    else:
+                        row.update({
+                            "status": "HOLD",  # keep as HOLD if no order ID
+                            "exit_price": "",
+                            "order_id": ""
+                        }) 
+                    return row  # ✅ Ensure updated row is returned for writing back
             else:
                 hold_reason = ""
                 if not should_sell:
@@ -554,7 +601,7 @@ def check_portfolio():
         final_rows = []
         for row in original:
             symbol = row.get("symbol")
-            if symbol in updated_map and row.get("status") != "SOLD":
+            if symbol in updated_map and row.get("status") not in ["SOLD", "PENDING_SELL"]:
                 final_rows.append(updated_map[symbol])
             else:
                 final_rows.append(row)
@@ -587,21 +634,41 @@ def check_portfolio():
         original_df.to_csv(PORTFOLIO_LOG, index=False)
         print("✅ Portfolio safely updated without overwriting new entries.")
 
-        # ✅ Also log to PostgreSQL DB for each row
+        # ✅ Skip if already exists in DB for same symbol + timestamp
+        seen = set()
         for row in updated_rows:
             if row.get("status") == "HOLD":
-                trade_date = row.get("timestamp") or datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+                key = (row["symbol"], row.get("timestamp"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                
+                raw_ts = row.get("timestamp")
+                try:
+                    trade_date = datetime.datetime.strptime(raw_ts, "%Y-%m-%d %H:%M:%S") if raw_ts else datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+                except Exception:
+                    trade_date = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+        
                 insert_portfolio_log_to_db(
                     trade_date,
                     row["symbol"],
                     row["security_id"],
                     int(row["quantity"]),
                     float(row["buy_price"]),
-                    float(row.get("stop_pct", 1)),
-                    row.get("order_id", "") 
-                )
+                    float(row.get("target_pct", 0.1)),
+                    float(row.get("stop_pct", 0.05)),
+                    row.get("order_id", ""),
+                    status="HOLD",
+                    target_price=float(row.get("target_price", 0)) if row.get("target_price") else None,
+                    stop_price=float(row.get("stop_price", 0)) if row.get("stop_price") else None
+                )      
 
-    
+# ✅ Final log dump to file
+try:
+    with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/portfolio_tracker_log.txt", "w", encoding="utf-8") as f:
+        f.write(log_buffer.getvalue())
+except Exception as e:
+    print(f"⚠️ Log write failed: {e}")    
 
 if __name__ == "__main__":
     if os.path.exists("emergency_exit.txt"):

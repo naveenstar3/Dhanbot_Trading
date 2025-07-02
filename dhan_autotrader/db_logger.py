@@ -81,7 +81,7 @@ def insert_live_trail_to_db(timestamp, symbol, price, change_pct, order_id=None)
         if conn:
             conn.close()
 
-def insert_portfolio_log_to_db(trade_date, symbol, security_id, qty, buy_price, target_pct, stop_pct, order_id=None, status="HOLD", target_price=None, stop_price=None):
+def insert_portfolio_log_to_db(trade_date, symbol, security_id, quantity, buy_price, target_pct, stop_pct, order_id=None, status="HOLD", target_price=None, stop_price=None):
     conn = None
     try:
         conn = psycopg2.connect(
@@ -112,15 +112,24 @@ def insert_portfolio_log_to_db(trade_date, symbol, security_id, qty, buy_price, 
         """)
         cur.execute("""
             INSERT INTO portfolio_log (
-                trade_date, symbol, security_id, qty, buy_price,
-                stop_pct, target_pct, stop_price, target_price,
+                trade_date, symbol, security_id, quantity, buy_price,
+                target_pct, stop_pct, target_price, stop_price,
                 status, order_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
-            trade_date.strftime("%Y-%m-%d %H:%M:%S"), symbol, security_id, qty, buy_price,
-            stop_pct, target_pct, stop_price, target_price, status, order_id
+            trade_date.strftime("%Y-%m-%d %H:%M:%S"),
+            symbol,
+            security_id,
+            quantity,
+            buy_price,
+            target_pct,
+            stop_pct,
+            target_price,
+            stop_price,
+            status,
+            order_id
         ))
-            
+                   
         conn.commit()
         cur.close()
     except Exception as e:
