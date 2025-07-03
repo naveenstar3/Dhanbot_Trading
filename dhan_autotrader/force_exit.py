@@ -179,7 +179,7 @@ def force_exit():
                     "live_price": round(live_price, 2),
                     "change_pct": "",
                     "last_checked": now,
-                    "status": "SOLD",
+                    "status": "FORCE_EXIT",
                     "exit_price": round(live_price, 2)
                 })
                 updated_rows.append(row)
@@ -232,7 +232,7 @@ def force_exit():
                     "live_price": round(live_price, 2),
                     "change_pct": "",
                     "last_checked": now,
-                    "status": "SOLD",
+                    "status": "FORCE_EXIT",
                     "exit_price": round(live_price, 2)
                 })
             
@@ -263,7 +263,7 @@ def force_exit():
             writer.writerows(updated_rows)
         print("✅ Portfolio updated after force exit.")
 
-    hold_stocks = [row for row in updated_rows if row.get("status", "").upper() != "SOLD"]
+    hold_stocks = [row for row in updated_rows if row.get("status", "").upper() == "HOLD"]
     if hold_stocks:
         msg = f"🚨 Final Check: {len(hold_stocks)} stock(s) still in HOLD\n"
         for r in hold_stocks:

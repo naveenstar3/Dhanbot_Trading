@@ -162,7 +162,9 @@ try:
     master_df["base_symbol"] = master_df["SEM_TRADING_SYMBOL"].str.replace("-EQ", "").str.strip().str.upper()
     master_df["sector"] = master_df["base_symbol"].map(symbol_sector_map)
     top_sectors = get_sector_strength()
-    nifty100_df = master_df[(master_df["base_symbol"].isin(nifty100_symbols))]
+    nifty100_df = master_df[
+        (master_df["base_symbol"].isin(nifty100_symbols))
+    ]   
     print(f"📊 Master list filtered to {len(nifty100_df)} Nifty 100 stocks")
     
     if len(nifty100_df) == 0:
@@ -192,7 +194,6 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
     symbol = row["base_symbol"]
     secid = str(row["SEM_SMST_SECURITY_ID"])
     print(f"\n🔍 [{count}/{len(nifty100_df)}] Scanning {symbol}")
-
     try:
         # Step 1: Get pre-market LTP
         ltp = get_live_price(symbol, secid, premarket=True)       
@@ -465,7 +466,7 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
             "avg_range": round(atr, 2),
             "potential_profit": round(quantity * atr, 2),
             "sma_20": sma_20,          # NEW FIELD
-            "rsi": rsi_value            # NEW FIELD (corrected from rsi to rsi_value)
+            "rsi": rsi_value           # NEW FIELD (corrected from rsi to rsi_value)
         })
         print(f"✅ SELECTED: ₹{ltp:,.2f} | Vol: {avg_volume:,.0f} | Range: ₹{atr:.2f}")
 

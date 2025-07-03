@@ -4204,3 +4204,74 @@ timestamp,script_name,action,status,message
 2025-07-02 14:37:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,VBL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
 2025-07-02 14:38:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,VBL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
 2025-07-02 14:39:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,VBL | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-07-02 16:00:05,git_sync.py,Git Push,✅ COMPLETE,41 file(s) pushed
+2025-07-02 16:57:44,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-07-03 09:40:07,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-03 09:40:07,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-03 09:40:18,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-03 09:40:18,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 4 opportunities
+2025-07-03 09:40:18,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-03 09:40:42,autotrade.py,LOG_ERROR,❌ Logging Failed,RELIANCE → insert_portfolio_log_to_db() got an unexpected keyword argument 'qty'
+2025-07-03 10:16:34,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-03 10:16:34,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-03 10:16:50,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-03 10:16:50,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-03 10:17:04,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,POWERGRID — Tick size missing for POWERGRID (14977)
+2025-07-03 10:17:23,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,POWERGRID — Tick size missing for POWERGRID (14977)
+2025-07-03 10:17:31,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:17:39,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:17:46,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:17:54,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:18:02,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:18:12,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:18:21,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:18:30,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:18:39,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:18:48,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:18:57,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:19:06,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:19:15,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:19:25,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:19:34,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:19:44,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:19:53,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:20:02,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:20:10,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:20:19,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,NTPC - Rate limit hit
+2025-07-03 10:20:20,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,JINDALSTEL — Tick size missing for JINDALSTEL (6733)
+2025-07-03 10:20:33,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:20:42,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:20:51,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:20:59,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:21:07,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:21:16,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:21:24,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:21:32,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 10:21:40,autotrade.py,TICK_ERROR,❌ INVALID TICK SIZE,ONGC — Tick size missing for ONGC (2475)
+2025-07-03 11:48:54,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-03 11:48:54,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-03 11:49:05,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-03 11:49:05,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 3 opportunities
+2025-07-03 11:49:05,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-03 11:49:23,autotrade.py,BUY,❌ FAILED,ITC → Order status = UNKNOWN
+2025-07-03 11:57:57,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-03 11:57:57,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-03 11:58:14,GPT Ranking,Success,Selected 3,"HAVELLS, JINDALSTEL, VEDL"
+2025-07-03 11:58:14,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 3 opportunities
+2025-07-03 11:58:14,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-03 11:58:24,autotrade.py,LOG_ERROR,❌ Logging Failed,VEDL → insert_portfolio_log_to_db() got an unexpected keyword argument 'qty'
+2025-07-03 13:28:47,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-03 13:28:47,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-03 13:29:05,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-03 13:29:05,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-03 13:29:30,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ITC - Rate limit hit
+2025-07-03 13:29:33,autotrade.py,LOG_ERROR,❌ Logging Failed,HAVELLS → [Errno 13] Permission denied: 'portfolio_log.csv'
+2025-07-03 13:49:11,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-03 13:49:11,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-03 13:49:30,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-03 13:49:30,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-03 13:49:56,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ITC - Rate limit hit
+2025-07-03 13:49:57,autotrade.py,BUY,✅ EXECUTED,TATACONSUM @ ₹1097.6
+2025-07-03 13:52:33,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ICICIGI | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-07-03 13:53:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ICICIGI | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-07-03 13:54:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ICICIGI | 🚫 Conditions not met: Target/Stop/Peak not triggered.

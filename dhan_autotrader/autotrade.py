@@ -15,7 +15,7 @@ import threading
 import random
 from utils_safety import safe_read_csv
 import time as tm 
-from db_logger import insert_portfolio_log_to_db
+from db_logger import insert_portfolio_log_to_db, log_to_postgres
 import math
 import io
 from io import StringIO
@@ -163,7 +163,7 @@ def has_open_position():
             return False           
         reader = csv.DictReader(raw_lines)
         for row in reader:
-            if row.get("status", "").upper() != "SOLD":
+            if row.get("status", "").upper() in ["HOLD"]:
                 ts_str = row.get("timestamp", "")
                 try:
                     entry_date = datetime.strptime(ts_str, "%m/%d/%Y %H:%M").date()
@@ -201,9 +201,9 @@ def place_buy_order(symbol, security_id, price, qty):
     if not security_id or not symbol or qty <= 0 or price <= 0:
         print(f"❌ Skipping invalid input: symbol={symbol}, security_id={security_id}, price={price}, qty={qty}")
         return False, "Invalid input"
-
     tick_size = 0.05
-    buffer_price = round(round(price * 1.002 / tick_size) * tick_size, 2)
+    buffered_price = price * 1.002
+    buffer_price = round(math.ceil(buffered_price / tick_size) * tick_size, 2)
     
     payload = {
         "transactionType": "BUY",
@@ -244,47 +244,50 @@ def place_buy_order(symbol, security_id, price, qty):
         else:
             order_id = None
                
-        if (response.get("status", "").lower() == "success" or response.get("orderStatus", "").upper() in ["TRADED", "TRANSIT"]) and order_id:
-            send_telegram_message(f"✅ Order Placed: {symbol} | Qty: {qty} @ ₹{buffer_price}")
-            print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
+        if order_id:
+            # 🛰️ Double-check actual order status
+            order_status = get_trade_status(order_id)
+            print(f"🛰️ Order status from trade book: {order_status}")
+            
+            if order_status in ["TRADED", "OPEN", "TRANSIT", "UNKNOWN"]:
+                send_telegram_message(f"✅ Order Placed: {symbol} | Qty: {qty} @ ₹{buffer_price}")
+                print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
         
-            try:
-                # First log to CSV
-                stop_pct, target_pct = log_trade(symbol, security_id, qty, buffer_price, order_id)
-                
-                # Then log to database
-                insert_portfolio_log_to_db(
-                    trade_date=datetime.now(pytz.timezone("Asia/Kolkata")),
-                    symbol=symbol,
-                    security_id=security_id,
-                    qty=qty,
-                    buy_price=buffer_price,
-                    stop_pct=stop_pct,
-                    target_pct=target_pct,
-                    stop_price=round(buffer_price * (1 - stop_pct / 100), 2),
-                    target_price=round(buffer_price * (1 + target_pct / 100), 2),
-                    status="HOLD",
-                    order_id=order_id
-                )
-                
-                print(f"✅ Trade logged to CSV and DB for {symbol}")
-            except Exception as e:
-                print(f"❌ log_trade() failed for {symbol}: {e}")
-                send_telegram_message(f"⚠️ Order placed for {symbol}, but logging failed: {e}")
-                log_bot_action("autotrade.py", "LOG_ERROR", "❌ Logging Failed", f"{symbol} → {e}")
-                # Still return True since order was placed
+                try:
+                    # First log to CSV
+                    stop_pct, target_pct = log_trade(symbol, security_id, qty, buffer_price, order_id)
+        
+                    # Then log to database
+                    insert_portfolio_log_to_db(
+                        trade_date=datetime.now(pytz.timezone("Asia/Kolkata")),
+                        symbol=symbol,
+                        security_id=security_id,
+                        quantity=qty,
+                        buy_price=buffer_price,
+                        stop_pct=stop_pct,
+                        target_pct=target_pct,
+                        stop_price=round(buffer_price * (1 - stop_pct / 100), 2),
+                        target_price=round(buffer_price * (1 + target_pct / 100), 2),
+                        status="HOLD",
+                        order_id=order_id
+                    )
+                    print(f"✅ Trade logged to CSV and DB for {symbol}")
+                except Exception as e:
+                    print(f"❌ log_trade() failed for {symbol}: {e}")
+                    send_telegram_message(f"⚠️ Order placed for {symbol}, but logging failed: {e}")
+                    log_bot_action("autotrade.py", "LOG_ERROR", "❌ Logging Failed", f"{symbol} → {e}")
+                    return True, order_id
+        
+                log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{symbol} @ ₹{buffer_price}")
+                now_ts = datetime.now()
+                log_to_postgres(now_ts, "autotrade.py", "✅ EXECUTED", f"{symbol} @ ₹{buffer_price}")
                 return True, order_id
-        
-            log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{symbol} @ ₹{buffer_price}")
-            return True, order_id       
-        
-        else:
-            reason = response.get("remarks") or response.get("message")
-            if not reason:
-                reason = f"Dhan API gave no reason. Raw:\n{raw_json}"
-            send_telegram_message(f"❌ Order rejected for {symbol}: {reason}")
-            log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{symbol} → {reason}")
-            return False, reason
+            else:
+                reason = response.get("remarks") or f"Order status = {order_status}"
+                send_telegram_message(f"❌ Order rejected for {symbol}: {reason}")
+                log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{symbol} → {reason}")
+                return False, reason        
+                
     except Exception as e:
         print(f"❌ Exception placing order for {symbol}: {e}")
         return False, str(e)
@@ -378,7 +381,7 @@ def log_trade(symbol, security_id, qty, price, order_id):
             "last_checked": '',
             "status": 'HOLD',
             "exit_price": '',
-            "order_id": order_id
+            "order_id": f"'{str(order_id)}"
         }])
 
         if os.path.exists(PORTFOLIO_LOG):
@@ -1000,6 +1003,14 @@ def run_autotrade():
                         
             if valid_candidates:
                 best = max(valid_candidates, key=lambda x: x["score"])
+                # ✅ Smart Market Time Check (skip trade if after 2:45 PM IST)
+                now_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
+                cutoff_time = dtime(14, 45)
+                if now_time >= cutoff_time:
+                    print(f"⛔ Market time is {now_time.strftime('%H:%M')}. Skipping trade (cutoff is 14:45 IST).")
+                    send_telegram_message(f"⚠️ Trade skipped — Not enough market time left after {now_time.strftime('%H:%M')}")
+                    break  # or use return if inside a function
+                
                 print(f"✅ Best candidate: {best['symbol']} with score {best['score']}")
                 success, order_id = place_buy_order(best["symbol"], best["security_id"], round(best["price"] * 1.0045, 2), best["qty"])
                 if success:
