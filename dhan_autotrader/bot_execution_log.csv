@@ -4275,3 +4275,49 @@ timestamp,script_name,action,status,message
 2025-07-03 13:52:33,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ICICIGI | 🚫 Conditions not met: Target/Stop/Peak not triggered.
 2025-07-03 13:53:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ICICIGI | 🚫 Conditions not met: Target/Stop/Peak not triggered.
 2025-07-03 13:54:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ICICIGI | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-07-03 16:00:08,git_sync.py,Git Push,✅ COMPLETE,42 file(s) pushed
+2025-07-04 09:35:05,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ICICIGI | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-07-04 09:40:06,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-04 09:40:06,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-04 09:40:10,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 0 opportunities
+2025-07-04 09:40:10,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-04 09:40:11,autotrade.py,data_error,CRITICAL,Stock list invalid: No columns to parse from file
+2025-07-04 09:40:11,autotrade.py,end,NO TRADE,No stock bought today.
+2025-07-04 09:44:00,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-04 09:44:00,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-04 09:44:10,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-04 09:44:10,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 4 opportunities
+2025-07-04 09:44:10,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-04 09:44:44,autotrade.py,CRASH,❌ ERROR,name 'dtime' is not defined
+2025-07-04 09:44:44,autotrade.py,end,NO TRADE,No stock bought today.
+2025-07-04 09:52:34,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-04 09:52:34,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-04 09:52:42,GPT Ranking,Success,Selected 1,JSWSTEEL
+2025-07-04 09:52:42,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 1 opportunities
+2025-07-04 09:52:42,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-04 09:52:55,autotrade.py,BUY,✅ EXECUTED,JSWSTEEL @ ₹1047.5
+2025-07-04 09:58:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ICICIGI | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-07-04 10:07:49,portfolio_tracker.py,SELL skipped,⚠️ HOLD,ICICIGI | 🚫 Conditions not met: Target/Stop/Peak not triggered.
+2025-07-04 11:22:47,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-04 11:22:47,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-04 11:23:07,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-04 11:23:07,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-04 11:23:35,autotrade.py,CRASH,❌ ERROR,name 'dtime' is not defined
+2025-07-04 11:23:35,autotrade.py,end,NO TRADE,No stock bought today.
+2025-07-04 11:41:30,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-04 11:41:30,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-04 11:41:48,GPT Ranking,Success,Selected 2,"ZYDUSLIFE, HINDUNILVR"
+2025-07-04 11:41:48,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 2 opportunities
+2025-07-04 11:41:48,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-04 11:42:06,autotrade.py,BUY,✅ EXECUTED,HINDUNILVR @ ₹2326.45
+2025-07-04 11:52:02,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-04 11:52:02,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-04 11:52:09,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 0 opportunities
+2025-07-04 11:52:09,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-04 11:52:10,autotrade.py,data_error,CRITICAL,Stock list invalid: No columns to parse from file
+2025-07-04 11:52:10,autotrade.py,end,NO TRADE,No stock bought today.
+2025-07-04 11:57:38,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-04 11:57:38,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-04 11:57:58,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-04 11:57:58,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-04 11:58:14,autotrade.py,BUY,✅ EXECUTED,DLF @ ₹833.3

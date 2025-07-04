@@ -19,6 +19,7 @@ from db_logger import insert_portfolio_log_to_db, log_to_postgres
 import math
 import io
 from io import StringIO
+from decimal import Decimal, ROUND_UP
 
 # ===== STDOUT LOGGER CONFIG =====
 import io
@@ -201,9 +202,10 @@ def place_buy_order(symbol, security_id, price, qty):
     if not security_id or not symbol or qty <= 0 or price <= 0:
         print(f"❌ Skipping invalid input: symbol={symbol}, security_id={security_id}, price={price}, qty={qty}")
         return False, "Invalid input"
-    tick_size = 0.05
-    buffered_price = price * 1.002
-    buffer_price = round(math.ceil(buffered_price / tick_size) * tick_size, 2)
+    tick_size = Decimal("0.05")
+    buffered_price = Decimal(str(price)) * Decimal("1.002")
+    buffer_price = (buffered_price / tick_size).to_integral_value(rounding=ROUND_UP) * tick_size
+    buffer_price = float(buffer_price)
     
     payload = {
         "transactionType": "BUY",
@@ -346,15 +348,11 @@ def log_trade(symbol, security_id, qty, price, order_id):
         target_price = None
         stop_price = None
     else:
-        target_pct = round((atr / price) * 100 * 1.2, 2)
-        stop_pct = round((atr / price) * 100 * 0.8, 2)
-        target_price = round(price * (1 + target_pct / 100), 2)
-        stop_price = round(price * (1 - stop_pct / 100), 2)   
-
-    target_pct = round((atr / price) * 100 * 1.2, 2)
-    stop_pct = round((atr / price) * 100 * 0.8, 2)
-    target_price = round(price * (1 + target_pct / 100), 2)
-    stop_price = round(price * (1 - stop_pct / 100), 2)
+        if atr:
+            target_pct = round((atr / price) * 100 * 1.2, 2)
+            stop_pct = round((atr / price) * 100 * 0.8, 2)
+            target_price = round(price * (1 + target_pct / 100), 2)
+            stop_price = round(price * (1 - stop_pct / 100), 2)   
 
     print(f"🛠️ Attempting to append to portfolio log: {PORTFOLIO_LOG}")
 
@@ -381,7 +379,7 @@ def log_trade(symbol, security_id, qty, price, order_id):
             "last_checked": '',
             "status": 'HOLD',
             "exit_price": '',
-            "order_id": f"'{str(order_id)}"
+            "order_id": str(order_id)
         }])
 
         if os.path.exists(PORTFOLIO_LOG):
@@ -1005,7 +1003,7 @@ def run_autotrade():
                 best = max(valid_candidates, key=lambda x: x["score"])
                 # ✅ Smart Market Time Check (skip trade if after 2:45 PM IST)
                 now_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
-                cutoff_time = dtime(14, 45)
+                cutoff_time = time(14, 45)
                 if now_time >= cutoff_time:
                     print(f"⛔ Market time is {now_time.strftime('%H:%M')}. Skipping trade (cutoff is 14:45 IST).")
                     send_telegram_message(f"⚠️ Trade skipped — Not enough market time left after {now_time.strftime('%H:%M')}")
@@ -1083,7 +1081,12 @@ def run_autotrade():
             fallbacks = top_candidates[1:]
             print(f"✅ Best candidate selected: {best['symbol']} @ ₹{best['price']} (Score: {best['score']})")
         
-            success, order_id_or_msg = place_buy_order(best["symbol"], best["security_id"], best["price"], best["qty"])
+            # Prevent re-buy
+            bought_stocks.add(best['symbol'])
+        
+            success, order_id_or_msg = place_buy_order(
+                best["symbol"], best["security_id"], best["price"], best["qty"]
+            )
             systime.sleep(1.2)
         
             if success:
@@ -1094,7 +1097,6 @@ def run_autotrade():
                     log_bot_action("autotrade.py", "REJECTED", "❌ Broker rejected", f"{best['symbol']} → {order_status}")
                     return
                 trade_executed = True
-                bought_stocks.add(best["symbol"])
                 s = best
                 print("✅ Final trade completed. Terminating auto-trade script.")
                 sys.exit(0)  # 🔥 Hard exit after one successful order
@@ -1108,7 +1110,11 @@ def run_autotrade():
                         continue
         
                     print(f"⚠️ Trying fallback candidate: {alt['symbol']}")
-                    success, order_id_or_msg = place_buy_order(alt["symbol"], alt["security_id"], alt["price"], alt["qty"])
+                    bought_stocks.add(alt['symbol'])  # Prevent re-buy
+        
+                    success, order_id_or_msg = place_buy_order(
+                        alt["symbol"], alt["security_id"], alt["price"], alt["qty"]
+                    )
                     systime.sleep(1.2)
         
                     if success:
@@ -1122,17 +1128,16 @@ def run_autotrade():
                         print("✅ Fallback trade completed. Terminating auto-trade script.")
                         sys.exit(0)  # 🔥 Hard exit on fallback success
         
-
         now_time = datetime.now(pytz.timezone("Asia/Kolkata")).time()
         if not trade_executed and now_time >= time(14, 15):
             send_telegram_message("⚠️ No trade executed by 2:15 PM. Please review.")
             log_bot_action("autotrade.py", "WATCHDOG", "⚠️ NO TRADE", "No trade by 2:15 PM")
-
+        
         if trade_executed:
             print("✅ Trade completed. Exiting monitoring loop.")
             break
-        systime.sleep(60)
         
+        systime.sleep(60)       
     
     # 🕒 3:25 PM End-of-Day Telegram Report
     now_ist = datetime.now(pytz.timezone("Asia/Kolkata")).strftime('%d-%b-%Y')
@@ -1194,9 +1199,11 @@ if __name__ == "__main__":
         print(error_msg)
         send_telegram_message(error_msg)
         log_bot_action("autotrade.py", "CRASH", "❌ ERROR", str(e))
+        log_to_postgres(datetime.now(), "autotrade.py", "CRASH", str(e))
 
     if not has_open_position():
         log_bot_action("autotrade.py", "end", "NO TRADE", "No stock bought today.")
+        log_to_postgres(datetime.now(), "autotrade.py", "end", "No stock bought today.")
     
     # 📝 Save all captured print outputs to a .txt log file
     try:

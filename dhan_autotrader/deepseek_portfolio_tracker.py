@@ -135,21 +135,20 @@ def log_live_trail(symbol, live_price, change_pct, order_id=None):
         print(f"🔒 Attempting to acquire lock on {LIVE_BUFFER_FILE}")
 
         # Purge file if symbol being tracked is different from current
-        if os.path.exists(LIVE_BUFFER_FILE) and os.stat(LIVE_BUFFER_FILE).st_size > 0:
-            with portalocker.Lock(LIVE_BUFFER_FILE, 'r+', timeout=5) as f:
-                reader = list(csv.reader(f))
-                symbols = set(row[1].strip().upper() for row in reader[1:] if len(row) >= 2)
-                if symbols and symbol.upper() not in symbols:
-                    print(f"♻️ New stock detected. Clearing buffer file for {symbol}")
-                    f.seek(0)
-                    f.truncate()
-                    f.write("timestamp,symbol,price,change_pct,order_id\n")
+        now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+        if now.hour == 9 and now.minute <= 30 and os.path.exists(LIVE_BUFFER_FILE):
+            print(f"🧹 Clearing buffer at market open for new day: {LIVE_BUFFER_FILE}")
+            with portalocker.Lock(LIVE_BUFFER_FILE, 'w', timeout=5) as f:
+                f.write("timestamp,symbol,price,change_pct\n")  # Removed order_id
 
         # Append new price trail
         with portalocker.Lock(LIVE_BUFFER_FILE, 'a', timeout=5, newline='') as f:
+            if os.stat(LIVE_BUFFER_FILE).st_size == 0:
+                f.write("timestamp,symbol,price,change_pct\n")  # Removed order_id
             writer = csv.writer(f)
             now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
-            writer.writerow([now, symbol, round(live_price, 2), round(change_pct, 2), str(order_id) if order_id else ""])
+            writer.writerow([now, symbol, round(live_price, 2), round(change_pct, 2)])  # Removed order_id
+            # Keep DB logging with order_id
             insert_live_trail_to_db(now, symbol, round(live_price, 2), round(change_pct, 2), order_id=order_id)
             print(f"✅ Logged {symbol} trail to {LIVE_BUFFER_FILE}")
 
@@ -333,6 +332,9 @@ def is_nse_trading_day():
     except:
         return True
 
+# Initialize traded symbols set
+if 'attempted_symbols' not in globals():
+    attempted_symbols = set()
 def check_portfolio():
     if not is_market_open() or not is_nse_trading_day():
         print("⏹️ Market closed or holiday. Skipping auto-sell.")
@@ -377,13 +379,12 @@ def check_portfolio():
     
     def process_sell_logic(row):
         print(f"🔍 Starting processing for {row.get('symbol')}")
-        if row.get("status") in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+        # Single symbol-based check - prevents duplicate processing
+        if (row.get("status") in ["PROFIT", "STOP LOSS", "FORCE_EXIT"] or 
+            row.get("symbol") in attempted_symbols):
+            print(f"🛑 {row.get('symbol')} already processed or in progress. Skipping.")
             return row
-        
-        # ✅ Extra guard: don't retry same SELL order every minute
-        if row.get("order_id") and row.get("status") == "HOLD":
-            print(f"🛑 {row['symbol']} already has SELL order_id {row['order_id']}. Awaiting TRADE confirmation.")
-            return row       
+            
 
         try:
             symbol = row["symbol"]
@@ -493,21 +494,30 @@ def check_portfolio():
             # - Profit ≥ minimum threshold
             # - Loss-side trigger (STOP LOSS, FORCED EXIT, EOD EXIT)
             # - Repeated peak hits near target
-            if should_sell and (net_profit >= MINIMUM_NET_PROFIT_REQUIRED or is_loss_exit or frequent_peaks):                       
+            if should_sell and (net_profit >= MINIMUM_NET_PROFIT_REQUIRED or is_loss_exit or frequent_peaks):      
+                attempted_symbols.add(symbol)
                 exchange_segment = "NSE_EQ"
                 code, response = place_sell_order(security_id, symbol, quantity, exchange_segment)
-                if code == 200 and "order_id" in response:
-                    order_id = response["order_id"]
+                if code == 200:
+                    order_id = str(response.get("order_id") or response.get("data", {}).get("orderId", ""))
                     trade_status = None
                     for _ in range(5):
                         trade_book = get_trade_book()
-                        matching_trades = [t for t in trade_book if t.get("order_id") == order_id]
+                        today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+                        matching_trades = [
+                            t for t in trade_book
+                            if t.get("symbol", "").upper() == symbol.upper()
+                            and t.get("transactionType", "").upper() == "SELL"
+                            and str(t.get("orderDateTime", "")).startswith(today_str)
+                        ]
+                        
                         if matching_trades:
+                            matching_trades.sort(key=lambda x: x.get("orderDateTime", ""), reverse=True)
                             trade_status = matching_trades[0].get("status", "").upper()
-                            if trade_status == "TRADED":
+                            if trade_status in ["TRADED", "COMPLETE"]:
                                 break
                         systime.sleep(2)
-                
+                                
                     if trade_status in ["TRADED", "COMPLETE"]:
                         status = "PROFIT" if net_profit >= 0 else "STOP LOSS"
                         exit_price = live_price
@@ -515,6 +525,7 @@ def check_portfolio():
                         print(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
                         send_telegram_message(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
                         log_bot_action("portfolio_tracker.py", "SELL executed", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} | Reason: {reason}")
+                    
                         # ✅ DB Update
                         insert_portfolio_log_to_db(
                             datetime.datetime.now(pytz.timezone("Asia/Kolkata")),
@@ -527,25 +538,8 @@ def check_portfolio():
                             exit_price=exit_price,
                             order_id=str(order_id)
                         )
-                
-                    elif trade_status in ["TRANSIT", "UNKNOWN"]:
-                        print(f"⏳ Sell order for {symbol} is in status: {trade_status}. Will verify next run.")
-                        log_bot_action("portfolio_tracker.py", "SELL pending", f"⏳ {trade_status}", f"{symbol} sell placed. Awaiting trade book confirmation.")
-                        send_telegram_message(f"⏳ Sell order placed for {symbol} but status is '{trade_status}'. Rechecking later.")
                     
-                        row.update({
-                            "status": "HOLD",
-                            "order_id": order_id,
-                            "exit_price": "",
-                            "live_price": live_price,
-                            "change_pct": change_pct,
-                            "last_checked": now
-                        })
-                    
-                        # ✅ NEW GUARD: Block reprocessing of same order in next run
-                        print(f"🛡️ {symbol} has unconfirmed SELL order {order_id}. Skipping reprocessing.")
-                        return row                   
-                        
+                        # ✅ Trade summary with % and status
                         profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
                         profit_pct = round(((exit_price - buy_price) / buy_price) * 100, 2)
                         summary_msg = (
@@ -559,20 +553,42 @@ def check_portfolio():
                             f"Status: {profit_status}"
                         )
                         send_telegram_message(summary_msg)
+                    
+                    elif trade_status in ["TRANSIT", "UNKNOWN"]:
+                        print(f"⏳ Sell order for {symbol} is in status: {trade_status}. Will verify next run.")
+                        log_bot_action("portfolio_tracker.py", "SELL pending", f"⏳ {trade_status}", f"{symbol} sell placed. Awaiting trade book confirmation.")
+                        send_telegram_message(f"⏳ Sell order placed for {symbol} but status is '{trade_status}'. Rechecking later.")
+                    
+                        # Track pending symbols instead of order_id
+                        attempted_symbols.add(symbol)
+                        row.update({
+                            "status": "HOLD",
+                            "exit_price": "",
+                            "live_price": live_price,
+                            "change_pct": change_pct,
+                            "last_checked": now
+                        })
+                    
+                        # ✅ NEW GUARD: Block reprocessing of same order in next run
+                        print(f"🛡️ {symbol} has unconfirmed SELL order {order_id}. Skipping reprocessing.")
+                        return row
+                    
                     else:
                         print(f"⚠️ Sell order placed but NOT TRADED yet for {symbol}. Holding.")
-                else:
-                    print(f"❌ SELL failed for {symbol}: {response}")
-                    send_telegram_message(f"❌ SELL failed for {symbol}: {response}")
                     
-                    order_id = response.get("data", {}).get("orderId", "")
-                    row.update({
-                        "status": "HOLD",  # ✅ Only allowed fallback
-                        "exit_price": "",
-                        "order_id": order_id if order_id else ""
-                    }) 
-                    return row
-                
+                    else:
+                        print(f"❌ SELL failed for {symbol}: {response}")
+                        send_telegram_message(f"❌ SELL failed for {symbol}: {response}")
+                    
+                        order_id = response.get("data", {}).get("orderId", "")
+                        if row.get("status") not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+                            row.update({
+                                "status": "HOLD",
+                                "exit_price": "",
+                                "order_id": str(order_id) if order_id else ""
+                            }) 
+                        return row
+                                   
             else:
                 hold_reason = ""
                 if not should_sell:
@@ -588,13 +604,24 @@ def check_portfolio():
                       f"Net Profit: ₹{round(net_profit, 2)}. Reason: {hold_reason}")
                 log_bot_action("portfolio_tracker.py", "SELL skipped", "⚠️ HOLD", f"{symbol} | {hold_reason}")
 
-            row.update({
-                "live_price": round(live_price, 2),
-                "change_pct": round(change_pct, 2),
-                "last_checked": now,
-                "status": status,
-                "exit_price": round(net_profit, 2)
-            })
+            # ✅ Always update exit_price and audit data
+            if status in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+                row.update({
+                    "live_price": round(live_price, 2),
+                    "change_pct": round(change_pct, 2),
+                    "last_checked": now,
+                    "status": status,
+                    "exit_price": round(live_price, 2)
+                })
+            else:
+                row.update({
+                    "live_price": round(live_price, 2),
+                    "change_pct": round(change_pct, 2),
+                    "last_checked": now,
+                    "exit_price": round(net_profit, 2)
+                })
+            
+           
             return row
 
         except Exception as e:
@@ -637,14 +664,28 @@ def check_portfolio():
         updated_df.set_index("symbol", inplace=True)
         
         # ✅ Update only HOLD rows
+        updated_df = updated_df[~updated_df["status"].isin(["PROFIT", "STOP LOSS", "FORCE_EXIT"])]
         for symbol in updated_df.index:
             if (
                 symbol in original_df.index and 
-                original_df.loc[symbol]["status"] != "SOLD"
+                original_df.loc[symbol]["status"] not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]
             ):
-                original_df.loc[symbol] = updated_df.loc[symbol]
+                # Create temporary copy for dtype conversion
+                updated_row = updated_df.loc[symbol].copy()
+                for col in original_df.columns:
+                    if col in updated_row.index:
+                        if original_df[col].dtype != updated_row[col].dtype:
+                            updated_row[col] = updated_row[col].astype(original_df[col].dtype)
+                original_df.loc[symbol] = updated_row
             elif symbol not in original_df.index:
-                original_df.loc[symbol] = updated_df.loc[symbol]
+                if updated_df.loc[symbol]["status"] not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+                    # Create temporary copy for dtype conversion
+                    updated_row = updated_df.loc[symbol].copy()
+                    for col in original_df.columns:
+                        if col in updated_row.index:
+                            if original_df[col].dtype != updated_row[col].dtype:
+                                updated_row[col] = updated_row[col].astype(original_df[col].dtype)
+                    original_df.loc[symbol] = updated_row  
         
         # ✅ Save back safely
         original_df.reset_index(inplace=True)
