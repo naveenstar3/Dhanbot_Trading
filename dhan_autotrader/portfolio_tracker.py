@@ -5,19 +5,39 @@ import json
 import os
 import pytz
 import time as systime
+import pandas as pd
+import portalocker
+import numpy as np
+import sys
+import io
+from sklearn.linear_model import LinearRegression
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dhanhq import DhanContext, dhanhq
-from dhan_api import get_live_price, get_intraday_candles, get_historical_price, get_security_id
+from dhan_api import get_live_price, get_historical_price
 from config import *
 from utils_logger import log_bot_action
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from utils_safety import safe_read_csv
-import pandas as pd
-import portalocker 
 from db_logger import insert_live_trail_to_db, insert_portfolio_log_to_db
-from utils_safety import safe_read_csv
+
+# ✅ Enable TeeLogger to capture print logs to file
+log_buffer = io.StringIO()
+
+class TeeLogger:
+    def __init__(self, *streams):
+        self.streams = streams
+    def write(self, message):
+        for s in self.streams:
+            s.write(message)
+            s.flush()
+    def flush(self):
+        for s in self.streams:
+            s.flush()
+
+sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
 
 # ✅ Trailing Exit Config
 LIVE_BUFFER_FILE = "live_trail_BUFFER.csv"
+MIN_HOLDING_MINUTES = 15  # Minimum time after purchase before selling is allowed
 
 # ✅ Load Dhan credentials
 with open("config.json") as f:
@@ -25,6 +45,7 @@ with open("config.json") as f:
 
 ACCESS_TOKEN = config_data["access_token"]
 CLIENT_ID = config_data["client_id"]
+TRADE_BOOK_URL = config_data.get("trade_book_url", "https://api.dhan.co/trade-book")
 TELEGRAM_TOKEN = config_data.get("telegram_token")
 TELEGRAM_CHAT_ID = config_data.get("telegram_chat_id")
 
@@ -88,10 +109,10 @@ def is_peak_exhausted(symbol, target_pct=0.07, grace_band=0.01, min_retries=5):
             return False
 
         recent_records = []
-        with open(LIVE_BUFFER_FILE, newline='') as f:
+        with portalocker.Lock(LIVE_BUFFER_FILE, 'r', timeout=5) as f:  # Added locking
             reader = csv.reader(f)
             for row in reader:
-                if len(row) != 4:
+                if len(row) < 4:
                     continue
                 ts_str, sym, price, change = row
                 if sym.strip().upper() != symbol.upper():
@@ -111,31 +132,28 @@ def is_peak_exhausted(symbol, target_pct=0.07, grace_band=0.01, min_retries=5):
         print(f"⚠️ Error in peak exhaustion check for {symbol}: {e}")
     return False
     
-def log_live_trail(symbol, live_price, change_pct):
+def log_live_trail(symbol, live_price, change_pct, order_id=None):
     try:
-        print(f"📦 Entering log_live_trail for {symbol} at price {live_price} with change_pct {change_pct}")
-        print(f"🔒 Attempting to acquire lock on {LIVE_BUFFER_FILE}")
+        # Purge file if symbol being tracked is different from current
+        now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+        if now.hour == 9 and now.minute <= 30 and os.path.exists(LIVE_BUFFER_FILE):
+            print(f"🧹 Clearing buffer at market open for new day: {LIVE_BUFFER_FILE}")
+            with portalocker.Lock(LIVE_BUFFER_FILE, 'w', timeout=5) as f:
+                f.write("timestamp,symbol,price,change_pct\n")  # Removed order_id
 
-        file_empty = not os.path.exists(LIVE_BUFFER_FILE) or os.stat(LIVE_BUFFER_FILE).st_size == 0
-
-        with portalocker.Lock(LIVE_BUFFER_FILE, mode='a', timeout=5, newline='') as f:
-            print(f"✍️ Locked and opening {LIVE_BUFFER_FILE} in append mode")
+        # Append new price trail
+        with portalocker.Lock(LIVE_BUFFER_FILE, 'a', timeout=5, newline='') as f:
+            if os.stat(LIVE_BUFFER_FILE).st_size == 0:
+                f.write("timestamp,symbol,price,change_pct\n")  # Removed order_id
             writer = csv.writer(f)
-
-            # Add header if file is new/empty
-            if file_empty:
-                writer.writerow(["timestamp", "symbol", "price", "change_pct"])
-
             now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
-            writer.writerow([now, symbol, round(live_price, 2), round(change_pct, 2)])
-            insert_live_trail_to_db(now, symbol, round(live_price, 2), round(change_pct, 2))
-            print(f"✅ Successfully wrote to {LIVE_BUFFER_FILE}")
+            writer.writerow([now, symbol, round(live_price, 2), round(change_pct, 2)])  # Removed order_id
+            # Keep DB logging with order_id
+            insert_live_trail_to_db(now, symbol, round(live_price, 2), round(change_pct, 2), order_id=order_id)
+            print(f"✅ Logged {symbol} trail to {LIVE_BUFFER_FILE}")
 
-    except PermissionError as e:
-        print(f"⛔ Permission denied when logging {symbol} to {LIVE_BUFFER_FILE}: {e}")
     except Exception as e:
-        print(f"❌ Unexpected error in log_live_trail for {symbol}: {e}")
-
+        print(f"❌ Error in log_live_trail for {symbol}: {e}")
 
 # ✅ Telegram Notification Function
 def send_telegram_message(message):
@@ -220,12 +238,15 @@ def is_market_open():
 def should_exit_early(symbol, current_price):
     try:
         records = []
-        with open(LIVE_BUFFER_FILE, newline='') as f:
+        if not os.path.exists(LIVE_BUFFER_FILE):
+            return False
+            
+        with portalocker.Lock(LIVE_BUFFER_FILE, 'r', timeout=5) as f:
             reader = csv.reader(f)
-            for row_ in reader:
-                if len(row_) != 4:
+            for row in reader:
+                if len(row) < 4:
                     continue
-                ts_str, sym, price, change = row_
+                ts_str, sym, price, change = row
                 if sym.strip().upper() == symbol.upper():
                     try:
                         records.append((ts_str, float(change)))
@@ -247,13 +268,16 @@ def should_exit_early(symbol, current_price):
                 return True
 
         # ✅ RSI check using Dhan historical API
-        from dhan_api import get_historical_price
         security_id = get_security_id(symbol)
-        raw_data = get_historical_price(security_id, interval="15")
-        if not raw_data or "close" not in raw_data:
+        candles = get_historical_price(security_id, interval="15")
+        if not candles:
             return False
-
-        df = pd.DataFrame({"close": raw_data["close"]})
+            
+        closes = [candle['close'] for candle in candles if 'close' in candle]
+        if len(closes) < 14:
+            return False
+            
+        df = pd.DataFrame({"close": closes})
         rsi_series = calculate_rsi(df['close'])
         if not rsi_series.empty and rsi_series.iloc[-1] > 70:
             print(f"⚠️ RSI triggered exit: {symbol} has RSI {round(rsi_series.iloc[-1], 2)}")
@@ -308,6 +332,10 @@ def is_nse_trading_day():
     except:
         return True
 
+# Initialize traded symbols set
+if 'attempted_security_ids' not in globals():
+    attempted_security_ids = set()
+
 def check_portfolio():
     if not is_market_open() or not is_nse_trading_day():
         print("⏹️ Market closed or holiday. Skipping auto-sell.")
@@ -322,7 +350,7 @@ def check_portfolio():
 
     now = ist_now.strftime("%Y-%m-%d %H:%M")
     headers = ["timestamp", "symbol", "security_id", "quantity", "buy_price", "momentum_5min",
-               "target_pct", "stop_pct", "live_price", "change_pct", "last_checked", "status", "exit_price"]
+               "target_pct", "stop_pct", "live_price", "change_pct", "last_checked", "status", "exit_price", "order_id"]
 
     if not os.path.exists(PORTFOLIO_LOG) or os.stat(PORTFOLIO_LOG).st_size == 0:
         with open(PORTFOLIO_LOG, "w", newline="") as f:
@@ -330,30 +358,50 @@ def check_portfolio():
             writer.writerow(headers)
         print("📁 Created new portfolio_log.csv with headers only.")
         return
-
     
-    raw_lines = safe_read_csv(PORTFOLIO_LOG)
-    if not raw_lines:
-        print("⚠️ Skipping: portfolio_log.csv is empty or corrupted.")
+    try:
+        with portalocker.Lock(PORTFOLIO_LOG, 'r', timeout=5) as f:
+            # Verify file is not empty
+            if os.stat(PORTFOLIO_LOG).st_size == 0:
+                print("⚠️ Skipping: portfolio_log.csv is empty.")
+                return
+                
+            # Read and parse CSV content
+            reader = csv.DictReader(f)
+            existing_rows = list(reader)
+            
+            if not existing_rows:
+                print("⚠️ Skipping: No valid rows found in portfolio_log.csv")
+                return
+                
+    except Exception as e:
+        print(f"⚠️ Error reading portfolio_log.csv: {e}")
         return
-    reader = csv.DictReader(raw_lines)
-    existing_rows = list(reader)
     
     def process_sell_logic(row):
         print(f"🔍 Starting processing for {row.get('symbol')}")
-        if row.get("status") == "SOLD":
+        # Single symbol-based check - prevents duplicate processing
+        if row.get("status") in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+            print(f"🛑 {row.get('symbol')} already closed. Skipping.")
+            return row
+        
+        security_id = str(row.get("security_id", "")).strip()
+        if not security_id:
+            print(f"⚠️ Skipping {row.get('symbol')} - missing security ID")
+            return row
+            
+        if security_id in attempted_security_ids:
+            print(f"🛑 {row.get('symbol')} already attempted this session. Skipping.")
             return row
 
         try:
             symbol = row["symbol"]
-            security_id = str(row["security_id"]).strip()
             buy_price = float(row["buy_price"])
             quantity = int(row["quantity"])
             target_pct = float(row.get("target_pct", 1.5))
             stop_pct = float(row.get("stop_pct", 1))
 
-            security_id = get_security_id(symbol)
-            print(f"📌 Calling get_live_price with: {security_id}")
+            print(f"📌 Calling get_live_price for {symbol}")
             live_price = get_live_price(symbol, security_id)
             print(f"✅ Live price for {symbol} = {live_price}")
             
@@ -361,7 +409,7 @@ def check_portfolio():
                 print(f"⚠️ Failed to get live price for {symbol}")
                 return row
             change_pct = ((live_price - buy_price) / buy_price) * 100
-            log_live_trail(symbol, live_price, change_pct)
+            log_live_trail(symbol, live_price, change_pct, order_id=row.get("order_id", ""))
 
             status = row.get("status", "HOLD")
             exit_price = row.get("exit_price", "")
@@ -378,7 +426,7 @@ def check_portfolio():
             
             records = []
             if os.path.exists(LIVE_BUFFER_FILE):
-                with open(LIVE_BUFFER_FILE, newline='') as f:
+                with portalocker.Lock(LIVE_BUFFER_FILE, 'r', timeout=5) as f:
                     reader = csv.reader(f)
                     for row_ in reader:
                         if len(row_) != 4:
@@ -393,14 +441,16 @@ def check_portfolio():
             max_trail = max([r[1] for r in records if r[1] is not None], default=0)
             trailing_drop = max_trail - change_pct
             
-            if change_pct >= target_pct:
+            # EOD Auto-Exit at 3:25 PM
+            current_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+            if current_time.hour == 15 and current_time.minute >= 25:
+                reason = "EOD AUTO-EXIT"
+                should_sell = True
+            elif change_pct >= target_pct:
                 reason = "TARGET HIT"
                 should_sell = True
             # 🧠 Predictive peak logic using linear regression
-            if len(records) >= 15:
-                import numpy as np
-                from sklearn.linear_model import LinearRegression
-            
+            elif len(records) >= 15:
                 X = np.array(list(range(len(records)))).reshape(-1, 1)
                 y = np.array([r[1] for r in records]).reshape(-1, 1)
             
@@ -428,48 +478,72 @@ def check_portfolio():
             elif should_exit_early(symbol, live_price):
                 reason = "SMART EXIT: Dropped from peak after 2:45 PM"
                 should_sell = True
-            elif actual_loss >= max_rupee_loss:
-                reason = f"FORCED EXIT: Max ₹ loss {round(actual_loss, 2)} > {round(max_rupee_loss, 2)}"
-                should_sell = True
             elif is_peak_exhausted(symbol, target_pct=target_pct):
                 reason = "SMART EXIT: Price exhausted near target multiple times"
                 should_sell = True
 
-            if should_sell and net_profit >= MINIMUM_NET_PROFIT_REQUIRED:
+            # ✅ Allow loss-side exit even if profit < min threshold
+            is_loss_exit = reason in ["STOP LOSS", "FORCED EXIT: Max ₹ loss", "EOD AUTO-EXIT"]            
+            # ✅ Smart SELL trigger: allow exit if price hit near target multiple times
+            near_target_hits = [r for r in records if target_pct - 0.1 <= r[1] <= target_pct + 0.05]
+            frequent_peaks = len(near_target_hits) >= 2
+            
+            if frequent_peaks:
+                print(f"🔁 Smart SELL allowed for {symbol} due to repeated target hits ({len(near_target_hits)}x)")
+            
+
+            # ✅ Final guard: Never SELL unless a valid strategy has triggered
+            if not should_sell or not reason:
+                print(f"🚫 {symbol}: SELL skipped – No strategy condition met.")
+                return row
+
+            # ✅ SELL Allowed
+            if net_profit >= MINIMUM_NET_PROFIT_REQUIRED or is_loss_exit or frequent_peaks:      
+                attempted_security_ids.add(security_id)
                 exchange_segment = "NSE_EQ"
                 code, response = place_sell_order(security_id, symbol, quantity, exchange_segment)
-                if code == 200 and "order_id" in response:
-                    order_id = response["order_id"]
+                if code == 200:
+                    order_id = str(response.get("order_id") or response.get("data", {}).get("orderId", ""))
                     trade_status = None
                     for _ in range(5):
                         trade_book = get_trade_book()
-                        matching_trades = [t for t in trade_book if t.get("order_id") == order_id]
+                        today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+                        matching_trades = [
+                            t for t in trade_book
+                            if t.get("symbol", "").upper() == symbol.upper()
+                            and t.get("transactionType", "").upper() == "SELL"
+                            and str(t.get("orderDateTime", "")).startswith(today_str)
+                        ]
+                        
                         if matching_trades:
+                            matching_trades.sort(key=lambda x: x.get("orderDateTime", ""), reverse=True)
                             trade_status = matching_trades[0].get("status", "").upper()
-                            if trade_status == "TRADED":
+                            if trade_status in ["TRADED", "COMPLETE"]:
                                 break
                         systime.sleep(2)
-
-                    if trade_status == "TRADED":
-                        status = "SOLD"
+                                
+                    if trade_status in ["TRADED", "COMPLETE"]:
+                        status = "PROFIT" if net_profit >= 0 else "STOP LOSS"
                         exit_price = live_price
                         log_sell(symbol, security_id, quantity, live_price, reason)
                         print(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
                         send_telegram_message(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
                         log_bot_action("portfolio_tracker.py", "SELL executed", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} | Reason: {reason}")
-                        # ✅ DB Update — convert timestamp to IST
-                        update_portfolio_log_to_db(
-                            trade_date=datetime.datetime.now(pytz.timezone("Asia/Kolkata")),
-                            symbol=symbol,
-                            security_id=security_id,
-                            quantity=quantity,
-                            buy_price=buy_price,
-                            stop_pct=stop_pct,
+                    
+                        # ✅ DB Update
+                        insert_portfolio_log_to_db(
+                            datetime.datetime.now(pytz.timezone("Asia/Kolkata")),
+                            symbol,
+                            security_id,
+                            quantity,
+                            buy_price,
+                            stop_pct,
+                            status=status,
                             exit_price=exit_price,
-                            live_price=live_price,
-                            status="SOLD"
+                            order_id=str(order_id)
                         )
-                        
+                                          
+                        # ✅ Trade summary with % and status
                         profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
                         profit_pct = round(((exit_price - buy_price) / buy_price) * 100, 2)
                         summary_msg = (
@@ -483,11 +557,56 @@ def check_portfolio():
                             f"Status: {profit_status}"
                         )
                         send_telegram_message(summary_msg)
+                    
+                    elif trade_status in ["TRANSIT", "UNKNOWN"]:
+                        print(f"⏳ Sell order for {symbol} is in status: {trade_status}. Will verify next run.")
+                        log_bot_action("portfolio_tracker.py", "SELL pending", f"⏳ {trade_status}", f"{symbol} sell placed. Awaiting trade book confirmation.")
+                        send_telegram_message(f"⏳ Sell order placed for {symbol} but status is '{trade_status}'. Rechecking later.")
+                    
+                        # Track pending security IDs instead of symbols
+                        attempted_security_ids.add(security_id)
+                        row.update({
+                            "status": "HOLD",
+                            "exit_price": "",
+                            "live_price": live_price,
+                            "change_pct": change_pct,
+                            "last_checked": now
+                        })
+                    
+                        # ✅ NEW GUARD: Block reprocessing of same order in next run
+                        print(f"🛡️ {symbol} has unconfirmed SELL order {order_id}. Skipping reprocessing.")
+                        return row
+                    
                     else:
                         print(f"⚠️ Sell order placed but NOT TRADED yet for {symbol}. Holding.")
+                    
+                        # ✅ NEW: Don't block future retries — avoid adding to attempted_security_ids
+                        pending_security_id = str(security_id)
+                        if pending_security_id:
+                            print(f"🕓 Delaying confirmation for {symbol} | security_id = {pending_security_id}")
+                            row.update({
+                                "status": "HOLD",
+                                "exit_price": "",
+                                "live_price": live_price,
+                                "change_pct": change_pct,
+                                "last_checked": now,
+                                "security_id": pending_security_id
+                            })
+                        return row
+                    
                 else:
                     print(f"❌ SELL failed for {symbol}: {response}")
                     send_telegram_message(f"❌ SELL failed for {symbol}: {response}")
+                    
+                    order_id = response.get("data", {}).get("orderId", "")
+                    if row.get("status") not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+                        row.update({
+                            "status": "HOLD",
+                            "exit_price": "",
+                            "order_id": str(order_id) if order_id else ""
+                        }) 
+                    return row
+                                   
             else:
                 hold_reason = ""
                 if not should_sell:
@@ -503,13 +622,23 @@ def check_portfolio():
                       f"Net Profit: ₹{round(net_profit, 2)}. Reason: {hold_reason}")
                 log_bot_action("portfolio_tracker.py", "SELL skipped", "⚠️ HOLD", f"{symbol} | {hold_reason}")
 
-            row.update({
-                "live_price": round(live_price, 2),
-                "change_pct": round(change_pct, 2),
-                "last_checked": now,
-                "status": status,
-                "exit_price": exit_price
-            })
+            # ✅ Always update exit_price and audit data
+            if status in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+                row.update({
+                    "live_price": round(live_price, 2),
+                    "change_pct": round(change_pct, 2),
+                    "last_checked": now,
+                    "status": status,
+                    "exit_price": round(live_price, 2)
+                })
+            else:
+                row.update({
+                    "live_price": round(live_price, 2),
+                    "change_pct": round(change_pct, 2),
+                    "last_checked": now,
+                    "exit_price": round(net_profit, 2)
+                })
+            
             return row
 
         except Exception as e:
@@ -518,7 +647,9 @@ def check_portfolio():
 
     # ✅ Execute all in parallel
     with ThreadPoolExecutor(max_workers=3) as executor:
-        results = list(executor.map(process_sell_logic, existing_rows))
+        # ✅ Only process active HOLD rows
+        hold_rows = [r for r in existing_rows if r.get("status", "").upper() == "HOLD"]
+        results = list(executor.map(process_sell_logic, hold_rows))
         updated_rows = [r for r in results if r]
 
     if updated_rows:
@@ -533,34 +664,69 @@ def check_portfolio():
         final_rows = []
         for row in original:
             symbol = row.get("symbol")
-            if symbol in updated_map and row.get("status") != "SOLD":
+            if symbol in updated_map and row.get("status") not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
                 final_rows.append(updated_map[symbol])
             else:
-                final_rows.append(row)
+                final_rows.append(row)           
     
-        # ✅ Now write back merged data
-        with open(PORTFOLIO_LOG, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=headers)
-            writer.writeheader()
-            writer.writerows(final_rows)
-    
-        print("✅ Portfolio updated with merged changes only.")
+        # ✅ Convert updated_rows to DataFrame
+        updated_df = pd.DataFrame(updated_rows)
+        
+        # ✅ Read original file
+        if os.path.exists(PORTFOLIO_LOG):
+            original_df = pd.read_csv(PORTFOLIO_LOG)
+        else:
+            original_df = pd.DataFrame(columns=headers)
+        
+        # ✅ Merge by symbol — keep SOLD entries untouched
+        original_df.set_index("symbol", inplace=True)
+        updated_df.set_index("symbol", inplace=True)
+        
+        # ✅ Update only HOLD rows
+        updated_df = updated_df[~updated_df["status"].isin(["PROFIT", "STOP LOSS", "FORCE_EXIT"])]
+        for symbol in updated_df.index:
+            if (
+                symbol in original_df.index and 
+                original_df.loc[symbol]["status"] not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]
+            ):
+                # Create temporary copy for dtype conversion
+                updated_row = updated_df.loc[symbol].copy()
+                for col in original_df.columns:
+                    if col in updated_row.index:
+                        try:
+                            # ✅ Permanent fix: forcibly cast with fallback
+                            updated_row[col] = pd.Series([updated_row[col]]).astype(original_df[col].dtype).iloc[0]
+                        except Exception as dtype_err:
+                            print(f"⚠️ Column '{col}' dtype cast failed. Skipping dtype alignment: {dtype_err}")
+        
+                original_df.loc[symbol] = updated_row
+            elif symbol not in original_df.index:
+                if updated_df.loc[symbol]["status"] not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+                    # Create temporary copy for dtype conversion
+                    updated_row = updated_df.loc[symbol].copy()
+                    for col in original_df.columns:
+                        if col in updated_row.index:
+                            try:
+                                # ✅ Permanent fix: forcibly cast with fallback
+                                updated_row[col] = pd.Series([updated_row[col]]).astype(original_df[col].dtype).iloc[0]
+                            except Exception as dtype_err:
+                                print(f"⚠️ Column '{col}' dtype cast failed. Skipping dtype alignment: {dtype_err}")
+        
+                    original_df.loc[symbol] = updated_row
+        
+        
+        # ✅ Save back safely
+        original_df.reset_index(inplace=True)
+        original_df["order_id"] = original_df["order_id"].astype(str)
+        original_df.to_csv(PORTFOLIO_LOG, index=False)
+        print("✅ Portfolio safely updated without overwriting new entries.")
 
-        # ✅ Also log to PostgreSQL DB for each row
-        for row in updated_rows:
-            if row.get("status") == "HOLD":
-                trade_date = row.get("timestamp") or datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
-                insert_portfolio_log_to_db(
-                    trade_date,
-                    row["symbol"],
-                    row["security_id"],
-                    int(row["quantity"]),
-                    float(row["buy_price"]),
-                    float(row.get("stop_pct", 1)),
-                    row.get("order_id", "") 
-                )
-
-    
+# ✅ Final log dump to file
+try:
+    with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/portfolio_tracker_log.txt", "w", encoding="utf-8") as f:
+        f.write(log_buffer.getvalue())
+except Exception as e:
+    print(f"⚠️ Log write failed: {e}")    
 
 if __name__ == "__main__":
     if os.path.exists("emergency_exit.txt"):

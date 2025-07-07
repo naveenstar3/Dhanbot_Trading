@@ -4323,3 +4323,48 @@ timestamp,script_name,action,status,message
 2025-07-04 11:58:14,autotrade.py,BUY,✅ EXECUTED,DLF @ ₹833.3
 2025-07-04 16:00:08,git_sync.py,Git Push,✅ COMPLETE,42 file(s) pushed
 2025-07-05 19:13:53,git_sync.py,Git Push,✅ COMPLETE,42 file(s) pushed
+2025-07-07 09:36:39,git_sync.py,Git Push,✅ COMPLETE,42 file(s) pushed
+2025-07-07 09:45:41,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-07 09:45:41,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-07 09:45:50,GPT Ranking,Success,Selected 1,POWERGRID
+2025-07-07 09:45:50,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 1 opportunities
+2025-07-07 09:45:50,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-07 09:46:03,autotrade.py,BUY,✅ EXECUTED,POWERGRID @ ₹296.8
+2025-07-07 10:24:26,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-07 10:24:26,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-07 10:24:38,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-07 10:24:38,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-07 10:25:03,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ICICIBANK - Rate limit hit
+2025-07-07 10:25:04,autotrade.py,BUY,✅ EXECUTED,SUNPHARMA @ ₹1672.35
+2025-07-07 10:31:53,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-07 10:32:08,autotrade.py,BUY,✅ EXECUTED,NTPC @ ₹339.25
+2025-07-07 10:54:47,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-07 10:54:47,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-07 10:55:01,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-07 10:55:01,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-07 10:55:25,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,COALINDIA - Rate limit hit
+2025-07-07 10:55:26,autotrade.py,BUY,✅ EXECUTED,NESTLEIND @ ₹2401.5
+2025-07-07 11:27:19,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-07 11:27:19,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-07 11:27:32,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-07 11:27:32,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 6 opportunities
+2025-07-07 11:28:01,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,TATACONSUM - Rate limit hit
+2025-07-07 11:28:01,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ICICIBANK - Rate limit hit
+2025-07-07 11:28:02,autotrade.py,BUY,✅ EXECUTED,BHARTIARTL @ ₹2024.55
+2025-07-07 11:44:59,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-07 11:44:59,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-07 11:45:13,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-07 11:45:13,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 6 opportunities
+2025-07-07 11:45:30,autotrade.py,BUY,✅ EXECUTED,NTPC @ ₹339.1
+2025-07-07 12:28:29,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-07 12:28:29,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-07 12:28:40,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-07 12:28:40,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 4 opportunities
+2025-07-07 12:28:40,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-07 12:29:05,autotrade.py,LOG_ERROR,❌ Logging Failed,COALINDIA → [Errno 13] Permission denied: 'portfolio_log.csv'
+2025-07-07 13:16:33,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-07 13:16:33,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-07 13:16:45,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-07 13:16:45,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 3 opportunities
+2025-07-07 13:16:45,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-07 13:16:54,autotrade.py,BUY,✅ EXECUTED,ITC @ ₹417.65

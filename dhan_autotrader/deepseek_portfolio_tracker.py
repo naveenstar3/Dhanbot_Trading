@@ -380,9 +380,12 @@ def check_portfolio():
     def process_sell_logic(row):
         print(f"🔍 Starting processing for {row.get('symbol')}")
         # Single symbol-based check - prevents duplicate processing
-        if (row.get("status") in ["PROFIT", "STOP LOSS", "FORCE_EXIT"] or 
-            row.get("symbol") in attempted_symbols):
-            print(f"🛑 {row.get('symbol')} already processed or in progress. Skipping.")
+        if row.get("status") in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+            print(f"🛑 {row.get('symbol')} already closed. Skipping.")
+            return row
+        
+        if str(row.get("security_id")).strip() in attempted_symbols:
+            print(f"🛑 {row.get('symbol')} already attempted this session. Skipping.")
             return row
             
 
@@ -473,9 +476,6 @@ def check_portfolio():
                 should_sell = True
             elif should_exit_early(symbol, live_price):
                 reason = "SMART EXIT: Dropped from peak after 2:45 PM"
-                should_sell = True
-            elif actual_loss >= max_rupee_loss:
-                reason = f"FORCED EXIT: Max ₹ loss {round(actual_loss, 2)} > {round(max_rupee_loss, 2)}"
                 should_sell = True
             elif is_peak_exhausted(symbol, target_pct=target_pct):
                 reason = "SMART EXIT: Price exhausted near target multiple times"
@@ -576,18 +576,34 @@ def check_portfolio():
                     else:
                         print(f"⚠️ Sell order placed but NOT TRADED yet for {symbol}. Holding.")
                     
-                    else:
-                        print(f"❌ SELL failed for {symbol}: {response}")
-                        send_telegram_message(f"❌ SELL failed for {symbol}: {response}")
-                    
-                        order_id = response.get("data", {}).get("orderId", "")
-                        if row.get("status") not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+                        # ✅ NEW: Don't block future retries — avoid adding to attempted_symbols
+                        pending_security_id = str(security_id)
+                        if pending_security_id:
+                            print(f"🕓 Delaying confirmation for {symbol} | security_id = {pending_security_id}")
                             row.update({
                                 "status": "HOLD",
                                 "exit_price": "",
-                                "order_id": str(order_id) if order_id else ""
-                            }) 
+                                "live_price": live_price,
+                                "change_pct": change_pct,
+                                "last_checked": now,
+                                "security_id": pending_security_id
+                            })
                         return row
+                    
+
+                    
+                else:
+                    print(f"❌ SELL failed for {symbol}: {response}")
+                    send_telegram_message(f"❌ SELL failed for {symbol}: {response}")
+                    
+                    order_id = response.get("data", {}).get("orderId", "")
+                    if row.get("status") not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+                        row.update({
+                            "status": "HOLD",
+                            "exit_price": "",
+                            "order_id": str(order_id) if order_id else ""
+                        }) 
+                    return row
                                    
             else:
                 hold_reason = ""
@@ -674,8 +690,12 @@ def check_portfolio():
                 updated_row = updated_df.loc[symbol].copy()
                 for col in original_df.columns:
                     if col in updated_row.index:
-                        if original_df[col].dtype != updated_row[col].dtype:
-                            updated_row[col] = updated_row[col].astype(original_df[col].dtype)
+                        try:
+                            if original_df[col].dtype != updated_row[col].dtype:
+                                updated_row[col] = pd.Series(updated_row[col]).astype(original_df[col].dtype).iloc[0]
+                        except Exception as dtype_err:
+                            print(f"⚠️ Column '{col}' dtype cast failed. Skipping dtype alignment: {dtype_err}")
+                                               
                 original_df.loc[symbol] = updated_row
             elif symbol not in original_df.index:
                 if updated_df.loc[symbol]["status"] not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
@@ -683,8 +703,12 @@ def check_portfolio():
                     updated_row = updated_df.loc[symbol].copy()
                     for col in original_df.columns:
                         if col in updated_row.index:
-                            if original_df[col].dtype != updated_row[col].dtype:
-                                updated_row[col] = updated_row[col].astype(original_df[col].dtype)
+                            try:
+                                if original_df[col].dtype != updated_row[col].dtype:
+                                    updated_row[col] = pd.Series(updated_row[col]).astype(original_df[col].dtype).iloc[0]
+                            except Exception as dtype_err:
+                                print(f"⚠️ Column '{col}' dtype cast failed. Skipping dtype alignment: {dtype_err}")
+                            
                     original_df.loc[symbol] = updated_row  
         
         # ✅ Save back safely

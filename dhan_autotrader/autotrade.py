@@ -204,8 +204,17 @@ def place_buy_order(symbol, security_id, price, qty):
         return False, "Invalid input"
     tick_size = Decimal("0.05")
     buffered_price = Decimal(str(price)) * Decimal("1.002")
-    buffer_price = (buffered_price / tick_size).to_integral_value(rounding=ROUND_UP) * tick_size
-    buffer_price = float(buffer_price)
+    buffer_price_decimal = (buffered_price / tick_size).to_integral_value(rounding=ROUND_UP) * tick_size
+    buffer_price = float(buffer_price_decimal)
+    buffer_price = round(buffer_price, 2)  # Ensure two decimals
+    
+    # Adjust to multiple of 0.05 (5 paise) to avoid exchange error
+    price_in_paise = round(buffer_price * 100)
+    remainder = price_in_paise % 5
+    if remainder != 0:
+        adjusted_paise = price_in_paise + (5 - remainder)
+        buffer_price = adjusted_paise / 100.0
+        print(f"🔄 Price adjusted from {buffer_price_decimal} to {buffer_price} for tick size compliance")
     
     payload = {
         "transactionType": "BUY",
@@ -1010,7 +1019,7 @@ def run_autotrade():
                     break  # or use return if inside a function
                 
                 print(f"✅ Best candidate: {best['symbol']} with score {best['score']}")
-                success, order_id = place_buy_order(best["symbol"], best["security_id"], round(best["price"] * 1.0045, 2), best["qty"])
+                success, order_id = place_buy_order(best["symbol"], best["security_id"], best["price"], best["qty"])
                 if success:
                     trade_executed = True
                     s = best
