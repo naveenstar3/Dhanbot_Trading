@@ -406,7 +406,21 @@ def log_trade(symbol, security_id, qty, price, order_id):
         print(err_msg)
         send_telegram_message(err_msg)
         raise
-    
+ 
+def breakout_confirmed(symbol, high_15min):
+    try:
+        security_id = dhan_symbol_map[symbol]
+        candles = get_historical_price(security_id, interval="1m")
+        if not candles or len(candles) < 3:
+            return False
+        return (
+            candles[-1]['close'] > high_15min and
+            candles[-2]['close'] > high_15min
+        )
+    except Exception as e:
+        print(f"⚠️ Breakout confirm failed for {symbol}: {e}")
+        return False
+ 
 # 🧵 Thread-safe monitoring functions
 def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, filter_failures, failures_lock, avg_volume=100000, fallback_mode=None):
     try:
@@ -446,7 +460,7 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
             return
             
         # Add volume check to breakout logic
-        if price > high_15min:
+        if price > high_15min and breakout_confirmed(symbol, high_15min):
             # Add delay before volume check API call
             systime.sleep(0.8)
             
@@ -602,6 +616,23 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
                 filter_failures["momentum"] += 1
             return
 
+               # ✅ Volatility Filter — Reject stocks with large noisy candle swings
+        try:
+            recent_candles = get_historical_price(security_id, interval="5m")
+            if recent_candles and len(recent_candles) >= 3:
+                last_candle = recent_candles[-1]
+                body_size = abs(last_candle["close"] - last_candle["open"])
+                range_size = last_candle["high"] - last_candle["low"]
+                if range_size > 0:
+                    wick_ratio = body_size / range_size
+                    if wick_ratio < 0.3:  # Candle with huge wicks and small body
+                        print(f"⛔ Volatility reject: {symbol} | Wick Ratio={wick_ratio:.2f} (Noisy candle)")
+                        with failures_lock:
+                            filter_failures["volatility"] += 1
+                        return None
+        except Exception as e:
+            print(f"⚠️ Volatility check error for {symbol}: {e}")
+        
         return {
             "symbol": symbol,
             "security_id": security_id,
@@ -609,6 +640,7 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
             "qty": qty,
             "score": weighted_score
         }
+
     except Exception as e:
         print(f"❌ Exception during monitoring {symbol}: {e}")
         return
@@ -837,9 +869,9 @@ def run_autotrade():
         df['rsi'] = df.apply(lambda row: compute_rsi(row['security_id']) or 50, axis=1)
     
     # Then calculate momentum_score if missing
-    if 'momentum_score' not in df.columns:
-        print("⚠️ momentum_score column missing. Calculating from RSI...")
-        df['momentum_score'] = df['rsi'].apply(lambda x: max(0.4, min(0.7, (70 - x)/50)))
+    if 'momentum_score' not in df.columns or df['momentum_score'].isnull().all():
+        print("🚫 No valid ML momentum score available. Aborting trade run.")
+        return   
     
     if df.empty:
         print(f"⚠️ No valid rows in {selected_path}. Skipping trading for today.")
@@ -1051,7 +1083,17 @@ def run_autotrade():
                         price = get_live_price(stock, security_id)
                         high = first_15min_high.get(stock)
                         
-                        if price and high and price > (high * 0.995):  # Within 0.5% of high
+                        if (
+                            price and high and price > (high * 0.998) and
+                            compute_rsi(security_id) < 65 and
+                            get_estimated_delivery_percentage(security_id) >= 35
+                        ):
+                            volume = get_stock_volume(security_id)
+                            if volume < 100000:
+                                print(f"❌ Skipping fallback {stock} — low volume: {volume}")
+                                continue
+                            
+                        
                             print(f"⚠️ Near-breakout candidate: {stock} (Price: {price}, High: {high})")
                             qty = calculate_qty(price, capital)
                             if qty > 0:

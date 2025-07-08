@@ -45,7 +45,7 @@ with open("config.json") as f:
 
 ACCESS_TOKEN = config_data["access_token"]
 CLIENT_ID = config_data["client_id"]
-TRADE_BOOK_URL = config_data.get("trade_book_url", "https://api.dhan.co/trade-book")
+TRADE_BOOK_URL = config_data.get("trade_book_url", "https://api.dhan.co/orders/tradebook")
 TELEGRAM_TOKEN = config_data.get("telegram_token")
 TELEGRAM_CHAT_ID = config_data.get("telegram_chat_id")
 
@@ -205,22 +205,18 @@ def place_sell_order(security_id, symbol, quantity, exchange_segment="NSE_EQ"):
     except Exception as e:
         return 500, {"error": str(e)}
 
-# ✅ Fetch Trade Book
+# ✅ Fetch Trade Book using Dhan SDK
 def get_trade_book():
     if TEST_MODE:
         print("🛠️ [TEST MODE] Simulating Trade Book fetch...")
         return [{"order_id": "TEST_ORDER_ID_SELL", "status": "TRADED"}]
-    else:
-        try:
-            response = requests.get(TRADE_BOOK_URL, headers=HEADERS)
-            if response.status_code == 200:
-                return response.json()["data"]
-            else:
-                print(f"⚠️ Failed to fetch trade book: {response.status_code}")
-                return []
-        except Exception as e:
-            print(f"⚠️ Exception during trade_book fetch: {e}")
-            return []
+    try:
+        raw_data = dhan.get_trade_book()
+        equity_trades = raw_data.get("data", [])
+        return equity_trades
+    except Exception as e:
+        print(f"⚠️ Failed to fetch trade book: {e}")
+        return []
 
 # ✅ Log Sell action
 def log_sell(symbol, security_id, quantity, exit_price, reason):
@@ -396,6 +392,7 @@ def check_portfolio():
 
         try:
             symbol = row["symbol"]
+            print(f"📋 Raw Portfolio Entry: {row}")
             buy_price = float(row["buy_price"])
             quantity = int(row["quantity"])
             target_pct = float(row.get("target_pct", 1.5))
@@ -443,44 +440,66 @@ def check_portfolio():
             
             # EOD Auto-Exit at 3:25 PM
             current_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+            print(f"📊 Debug: {symbol} change_pct={round(change_pct, 2)}%, target_pct={target_pct}, stop_pct={stop_pct}, max_trail={round(max_trail, 2)}, trailing_drop={round(trailing_drop, 2)}")
             if current_time.hour == 15 and current_time.minute >= 25:
                 reason = "EOD AUTO-EXIT"
                 should_sell = True
+                print(f"🚨 Trigger: {reason}")
+            
             elif change_pct >= target_pct:
                 reason = "TARGET HIT"
                 should_sell = True
-            # 🧠 Predictive peak logic using linear regression
+                print(f"🚨 Trigger: {reason}")
+            
             elif len(records) >= 15:
                 X = np.array(list(range(len(records)))).reshape(-1, 1)
                 y = np.array([r[1] for r in records]).reshape(-1, 1)
-            
                 model = LinearRegression()
                 model.fit(X, y)
-            
-                future_index = len(records) + 5  # Predict 5 mins ahead
+                future_index = len(records) + 5
                 predicted_peak = float(model.predict([[future_index]])[0])
                 potential_upside = predicted_peak - change_pct
-            
-                print(f"🔮 AI Prediction: Current={round(change_pct,2)}%, Predicted Peak={round(predicted_peak,2)}%")
-            
+                print(f"🔮 AI Prediction: {symbol}, Current={round(change_pct,2)}%, Predicted Peak={round(predicted_peak,2)}%, Upside={round(potential_upside,2)}%")
                 if potential_upside < 0.2 and trailing_drop > 0.1:
                     reason = f"AI EXIT: Predicted peak only {round(predicted_peak,2)}%, current={round(change_pct,2)}%"
                     should_sell = True
+                    print(f"🚨 Trigger: {reason}")
             
-            # Fallback to original peak drop
             elif max_trail >= 0.5 and trailing_drop >= 0.25:
                 reason = f"PEAK DROP: Peaked at {round(max_trail,2)}%, now at {round(change_pct,2)}%"
-                should_sell = True            
+                should_sell = True
+                print(f"🚨 Trigger: {reason}")
             
             elif change_pct <= -stop_pct:
-                reason = "STOP LOSS"
-                should_sell = True
+                # Dual Guard: Time & Data Trail
+                try:
+                    buy_time_str = row.get("timestamp", "")
+                    buy_time = datetime.datetime.strptime(buy_time_str, "%d/%m/%Y %H:%M")
+                    now_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
+                    mins_since_buy = (now_time - buy_time).total_seconds() / 60
+                except:
+                    mins_since_buy = 999  # fail-safe
+                
+                trail_points = len(records)
+            
+                if mins_since_buy >= 5 and trail_points >= 3:
+                    reason = "STOP LOSS"
+                    should_sell = True
+                    print(f"🚨 Trigger: {reason} (Held {round(mins_since_buy, 2)} min, Trail: {trail_points} pts)")
+                else:
+                    print(f"🕓 SKIP STOP LOSS — Only {round(mins_since_buy, 2)} min or {trail_points} trail points")
+            
+            
             elif should_exit_early(symbol, live_price):
                 reason = "SMART EXIT: Dropped from peak after 2:45 PM"
                 should_sell = True
+                print(f"🚨 Trigger: {reason}")
+            
             elif is_peak_exhausted(symbol, target_pct=target_pct):
                 reason = "SMART EXIT: Price exhausted near target multiple times"
                 should_sell = True
+                print(f"🚨 Trigger: {reason}")
+            
 
             # ✅ Allow loss-side exit even if profit < min threshold
             is_loss_exit = reason in ["STOP LOSS", "FORCED EXIT: Max ₹ loss", "EOD AUTO-EXIT"]            
@@ -570,7 +589,8 @@ def check_portfolio():
                             "exit_price": "",
                             "live_price": live_price,
                             "change_pct": change_pct,
-                            "last_checked": now
+                            "last_checked": now,
+                            "order_id": str(order_id)
                         })
                     
                         # ✅ NEW GUARD: Block reprocessing of same order in next run
@@ -625,18 +645,18 @@ def check_portfolio():
             # ✅ Always update exit_price and audit data
             if status in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
                 row.update({
-                    "live_price": round(live_price, 2),
-                    "change_pct": round(change_pct, 2),
+                    "live_price": float(live_price),
+                    "change_pct": float(change_pct),
                     "last_checked": now,
                     "status": status,
                     "exit_price": round(live_price, 2)
                 })
             else:
                 row.update({
-                    "live_price": round(live_price, 2),
-                    "change_pct": round(change_pct, 2),
+                    "live_price": float(live_price),
+                    "change_pct": float(change_pct),
                     "last_checked": now,
-                    "exit_price": round(net_profit, 2)
+                    "exit_price": float(live_price) if should_sell else np.nan
                 })
             
             return row
@@ -664,7 +684,8 @@ def check_portfolio():
         final_rows = []
         for row in original:
             symbol = row.get("symbol")
-            if symbol in updated_map and row.get("status") not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
+            if symbol in updated_map:
+                print(f"📝 Updating {symbol} status: {original_df.loc[symbol]['status']} ➝ {updated_df.loc[symbol]['status']}")
                 final_rows.append(updated_map[symbol])
             else:
                 final_rows.append(row)           
@@ -683,23 +704,36 @@ def check_portfolio():
         updated_df.set_index("symbol", inplace=True)
         
         # ✅ Update only HOLD rows
-        updated_df = updated_df[~updated_df["status"].isin(["PROFIT", "STOP LOSS", "FORCE_EXIT"])]
+        updated_df.index = updated_df.index.astype(str)
+        original_df.index = original_df.index.astype(str)
         for symbol in updated_df.index:
-            if (
-                symbol in original_df.index and 
-                original_df.loc[symbol]["status"] not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]
-            ):
+            if symbol in original_df.index:
+                if original_df.loc[symbol]["status"] in ["STOP LOSS", "PROFIT", "FORCE_EXIT"]:
+                    print(f"⛔ Skipping overwrite for finalized {symbol} — status already: {original_df.loc[symbol]['status']}")
+                    continue       
                 # Create temporary copy for dtype conversion
                 updated_row = updated_df.loc[symbol].copy()
                 for col in original_df.columns:
                     if col in updated_row.index:
                         try:
                             # ✅ Permanent fix: forcibly cast with fallback
-                            updated_row[col] = pd.Series([updated_row[col]]).astype(original_df[col].dtype).iloc[0]
+                            val = updated_row[col]
+                            if val == "":
+                                val = np.nan  # ensure blank strings are float-castable
+                            updated_row[col] = pd.Series([val]).astype(original_df[col].dtype).iloc[0]
                         except Exception as dtype_err:
                             print(f"⚠️ Column '{col}' dtype cast failed. Skipping dtype alignment: {dtype_err}")
         
-                original_df.loc[symbol] = updated_row
+                for col in original_df.columns:
+                    if col in updated_row.index:
+                        try:
+                            val = updated_row[col]
+                            if val == "":
+                                val = np.nan
+                            original_df.at[symbol, col] = pd.Series([val]).astype(original_df[col].dtype).iloc[0]
+                        except Exception as dtype_err:
+                            print(f"⚠️ Column '{col}' dtype cast failed for {symbol}. Skipping update. Reason: {dtype_err}")
+                
             elif symbol not in original_df.index:
                 if updated_df.loc[symbol]["status"] not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
                     # Create temporary copy for dtype conversion
@@ -708,11 +742,23 @@ def check_portfolio():
                         if col in updated_row.index:
                             try:
                                 # ✅ Permanent fix: forcibly cast with fallback
-                                updated_row[col] = pd.Series([updated_row[col]]).astype(original_df[col].dtype).iloc[0]
+                                val = updated_row[col]
+                                if val == "":
+                                    val = np.nan  # ensure blank strings are float-castable
+                                updated_row[col] = pd.Series([val]).astype(original_df[col].dtype).iloc[0]
                             except Exception as dtype_err:
                                 print(f"⚠️ Column '{col}' dtype cast failed. Skipping dtype alignment: {dtype_err}")
         
-                    original_df.loc[symbol] = updated_row
+                    for col in original_df.columns:
+                        if col in updated_row.index:
+                            try:
+                                val = updated_row[col]
+                                if val == "":
+                                    val = np.nan
+                                original_df.at[symbol, col] = pd.Series([val]).astype(original_df[col].dtype).iloc[0]
+                            except Exception as dtype_err:
+                                print(f"⚠️ Column '{col}' dtype cast failed for {symbol}. Skipping update. Reason: {dtype_err}")
+                    
         
         
         # ✅ Save back safely

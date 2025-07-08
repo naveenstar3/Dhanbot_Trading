@@ -1,6 +1,7 @@
-import requests
 import pandas as pd
 import json
+import datetime
+from dhanhq import dhanhq, DhanContext
 
 # Load credentials from config.json
 with open("config.json") as f:
@@ -8,26 +9,34 @@ with open("config.json") as f:
 
 ACCESS_TOKEN = config_data["access_token"]
 CLIENT_ID = config_data["client_id"]
-TRADE_BOOK_URL = config_data.get("trade_book_url", "https://api.dhan.co/trade-book")
 
-# Build headers
-headers = {
-    "accept": "application/json",
-    "access-token": ACCESS_TOKEN,
-    "client-id": CLIENT_ID
-}
+# Initialize SDK context
+context = DhanContext(CLIENT_ID, ACCESS_TOKEN)
+dhan = dhanhq(context)
 
-# Fetch trade book
-response = requests.get(TRADE_BOOK_URL, headers=headers)
-if response.status_code == 200:
-    data = response.json()
-    trades = data.get("data", [])
+try:
+    # Fetch trade book from SDK
+    raw_data = dhan.get_trade_book()
 
-    if not trades:
-        print("⚠️ Trade book is empty.")
+    # Save raw API response for debug audit
+    with open("trade_book_debug.json", "w") as dbg:
+        json.dump(raw_data, dbg, indent=4)
+    print("🛠️ trade_book_debug.json saved for API diagnostics")
+
+    # ✅ Extract actual trades
+    equity_trades = raw_data.get("data", [])
+
+    if not equity_trades:
+        print("⚠️ Trade book is empty or has no trades yet.")
     else:
-        df = pd.DataFrame(trades)
+        df = pd.DataFrame(equity_trades)
+
+        # Add local timestamp
+        df["fetched_at"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Save to CSV
         df.to_csv("full_trade_book.csv", index=False)
-        print("✅ Trade book downloaded to full_trade_book.csv")
-else:
-    print(f"❌ Failed to fetch trade book: {response.status_code}")
+        print(f"✅ {len(df)} trades saved to full_trade_book.csv")
+
+except Exception as e:
+    print(f"❌ Error fetching trade book: {e}")
