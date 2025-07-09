@@ -9,6 +9,7 @@ import pandas as pd
 import portalocker
 import numpy as np
 import sys
+import traceback
 import io
 from sklearn.linear_model import LinearRegression
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -33,6 +34,7 @@ class TeeLogger:
         for s in self.streams:
             s.flush()
 
+log_buffer = io.StringIO()
 sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
 
 # ✅ Trailing Exit Config
@@ -240,15 +242,21 @@ def should_exit_early(symbol, current_price):
         with portalocker.Lock(LIVE_BUFFER_FILE, 'r', timeout=5) as f:
             reader = csv.reader(f)
             for row in reader:
-                if len(row) < 4:
+                if len(row) < 5:
                     continue
-                ts_str, sym, price, change = row
-                if sym.strip().upper() == symbol.upper():
-                    try:
-                        records.append((ts_str, float(change)))
-                    except:
-                        continue
-
+                ts_str = row[0]
+                sym = row[1].strip().upper()
+                change = row[3]
+        
+                if sym != symbol.upper():
+                    continue
+        
+                try:
+                    records.append((ts_str, float(change)))
+                except Exception as e:
+                    print(f"⚠️ Skip malformed row in buffer: {row} | {e}")
+                    continue
+        
         if not records or len(records) < 4:
             return False
 
@@ -284,6 +292,7 @@ def should_exit_early(symbol, current_price):
     except Exception as e:
         print(f"⚠️ Error in early exit check for {symbol}: {e}")
         return False
+    
 
 def calculate_rsi(close_prices, period=14):
     delta = close_prices.diff()
@@ -426,14 +435,19 @@ def check_portfolio():
                 with portalocker.Lock(LIVE_BUFFER_FILE, 'r', timeout=5) as f:
                     reader = csv.reader(f)
                     for row_ in reader:
-                        if len(row_) != 4:
+                        if len(row_) < 4:
                             continue
-                        ts_str, sym, price, change = row_
-                        if sym.strip().upper() == symbol.upper():
-                            try:
-                                records.append((ts_str, float(change)))
-                            except:
-                                continue
+                        sym = row_[1].strip().upper()
+                        if sym != symbol.upper():
+                            continue
+                        try:
+                            ts_str = row_[0]
+                            change = float(row_[3])
+                            records.append((ts_str, change))
+                        except Exception as e:
+                            print(f"⚠️ Skip malformed row in buffer: {row_} | {e}")
+                            continue
+            
             
             max_trail = max([r[1] for r in records if r[1] is not None], default=0)
             trailing_drop = max_trail - change_pct
@@ -447,9 +461,17 @@ def check_portfolio():
                 print(f"🚨 Trigger: {reason}")
             
             elif change_pct >= target_pct:
-                reason = "TARGET HIT"
-                should_sell = True
-                print(f"🚨 Trigger: {reason}")
+                if remaining_minutes <= 15:
+                    reason = "TARGET HIT: Final 15 min window"
+                    should_sell = True
+                    print(f"🚨 Trigger: {reason}")
+                elif max_trail >= target_pct and trailing_drop >= 0.25:
+                    reason = f"TRAILING EXIT: Hit {round(max_trail,2)}%, now dropped to {round(change_pct,2)}%"
+                    should_sell = True
+                    print(f"🚨 Trigger: {reason}")
+                else:
+                    print(f"🔁 HOLDING after target hit — awaiting trailing drop or late window")
+            
             
             elif len(records) >= 15:
                 X = np.array(list(range(len(records)))).reshape(-1, 1)
@@ -478,7 +500,7 @@ def check_portfolio():
                     now_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
                     mins_since_buy = (now_time - buy_time).total_seconds() / 60
                 except:
-                    mins_since_buy = 999  # fail-safe
+                    mins_since_buy = 0  # fail-safe
                 
                 trail_points = len(records)
             
@@ -543,6 +565,7 @@ def check_portfolio():
                                 
                     if trade_status in ["TRADED", "COMPLETE"]:
                         status = "PROFIT" if net_profit >= 0 else "STOP LOSS"
+                        row["status"] = status
                         exit_price = live_price
                         log_sell(symbol, security_id, quantity, live_price, reason)
                         print(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
@@ -673,7 +696,9 @@ def check_portfolio():
         updated_rows = [r for r in results if r]
 
     if updated_rows:
-        # 🔁 Load original rows
+        for row in updated_rows:
+            print(f"🧾 Debug: Final status of {row['symbol']} ➝ {row.get('status', 'N/A')}")
+        
         with open(PORTFOLIO_LOG, newline="", encoding="utf-8") as f:
             original = list(csv.DictReader(f))
     
@@ -685,45 +710,54 @@ def check_portfolio():
         for row in original:
             symbol = row.get("symbol")
             if symbol in updated_map:
-                print(f"📝 Updating {symbol} status: {original_df.loc[symbol]['status']} ➝ {updated_df.loc[symbol]['status']}")
                 final_rows.append(updated_map[symbol])
             else:
-                final_rows.append(row)           
+                final_rows.append(row)
     
         # ✅ Convert updated_rows to DataFrame
         updated_df = pd.DataFrame(updated_rows)
-        
-        # ✅ Read original file
+    
+        # ✅ Read original file FIRST before comparing status
         if os.path.exists(PORTFOLIO_LOG):
             original_df = pd.read_csv(PORTFOLIO_LOG)
         else:
             original_df = pd.DataFrame(columns=headers)
-        
+    
+        # ✅ Optional debug to print symbol-level status changes
+        for symbol in updated_df["symbol"]:
+            try:
+                old_status = original_df.loc[original_df["symbol"] == symbol, "status"].values[0]
+                new_status = updated_df.loc[updated_df["symbol"] == symbol, "status"].values[0]
+                print(f"📝 Updating {symbol} status: {old_status} ➝ {new_status}")
+            except Exception as e:
+                print(f"⚠️ Status compare failed for {symbol}: {e}")
+    
         # ✅ Merge by symbol — keep SOLD entries untouched
         original_df.set_index("symbol", inplace=True)
         updated_df.set_index("symbol", inplace=True)
-        
+    
         # ✅ Update only HOLD rows
         updated_df.index = updated_df.index.astype(str)
         original_df.index = original_df.index.astype(str)
+    
         for symbol in updated_df.index:
             if symbol in original_df.index:
-                if original_df.loc[symbol]["status"] in ["STOP LOSS", "PROFIT", "FORCE_EXIT"]:
-                    print(f"⛔ Skipping overwrite for finalized {symbol} — status already: {original_df.loc[symbol]['status']}")
-                    continue       
+                if original_df.at[symbol, "status"] in ["STOP LOSS", "PROFIT", "FORCE_EXIT"]:
+                    print(f"⛔ Skipping overwrite for finalized {symbol} — status already: {original_df.at[symbol, 'status']}")
+                    continue
+    
                 # Create temporary copy for dtype conversion
                 updated_row = updated_df.loc[symbol].copy()
                 for col in original_df.columns:
                     if col in updated_row.index:
                         try:
-                            # ✅ Permanent fix: forcibly cast with fallback
                             val = updated_row[col]
                             if val == "":
-                                val = np.nan  # ensure blank strings are float-castable
+                                val = np.nan
                             updated_row[col] = pd.Series([val]).astype(original_df[col].dtype).iloc[0]
                         except Exception as dtype_err:
                             print(f"⚠️ Column '{col}' dtype cast failed. Skipping dtype alignment: {dtype_err}")
-        
+    
                 for col in original_df.columns:
                     if col in updated_row.index:
                         try:
@@ -733,22 +767,20 @@ def check_portfolio():
                             original_df.at[symbol, col] = pd.Series([val]).astype(original_df[col].dtype).iloc[0]
                         except Exception as dtype_err:
                             print(f"⚠️ Column '{col}' dtype cast failed for {symbol}. Skipping update. Reason: {dtype_err}")
-                
+    
             elif symbol not in original_df.index:
                 if updated_df.loc[symbol]["status"] not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
-                    # Create temporary copy for dtype conversion
                     updated_row = updated_df.loc[symbol].copy()
                     for col in original_df.columns:
                         if col in updated_row.index:
                             try:
-                                # ✅ Permanent fix: forcibly cast with fallback
                                 val = updated_row[col]
                                 if val == "":
-                                    val = np.nan  # ensure blank strings are float-castable
+                                    val = np.nan
                                 updated_row[col] = pd.Series([val]).astype(original_df[col].dtype).iloc[0]
                             except Exception as dtype_err:
                                 print(f"⚠️ Column '{col}' dtype cast failed. Skipping dtype alignment: {dtype_err}")
-        
+    
                     for col in original_df.columns:
                         if col in updated_row.index:
                             try:
@@ -758,25 +790,20 @@ def check_portfolio():
                                 original_df.at[symbol, col] = pd.Series([val]).astype(original_df[col].dtype).iloc[0]
                             except Exception as dtype_err:
                                 print(f"⚠️ Column '{col}' dtype cast failed for {symbol}. Skipping update. Reason: {dtype_err}")
-                    
-        
-        
+    
         # ✅ Save back safely
         original_df.reset_index(inplace=True)
         original_df["order_id"] = original_df["order_id"].astype(str)
         original_df.to_csv(PORTFOLIO_LOG, index=False)
         print("✅ Portfolio safely updated without overwriting new entries.")
-
-# ✅ Final log dump to file
-try:
-    with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/portfolio_tracker_log.txt", "w", encoding="utf-8") as f:
-        f.write(log_buffer.getvalue())
-except Exception as e:
-    print(f"⚠️ Log write failed: {e}")    
-
+        
 if __name__ == "__main__":
     if os.path.exists("emergency_exit.txt"):
         send_telegram_message("⛔ Emergency Exit active. Skipping HOLD monitoring.")
         log_bot_action("portfolio_tracker.py", "SKIPPED", "EMERGENCY EXIT", "Monitoring skipped due to emergency exit.")
     else:
         check_portfolio()
+        with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/portfolio_tracker_log.txt", "w", encoding="utf-8") as f:
+            f.write(log_buffer.getvalue())
+  
+        

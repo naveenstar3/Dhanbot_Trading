@@ -355,7 +355,7 @@ def ask_gpt_to_rank_stocks(df):
 
 ⚡ Selection Criteria:
 1. Prioritize HIGH momentum_score (≥65) + HIGH breakout_potential (≥75)
-2. Prefer stocks with volume ≥ ₹10L for liquidity
+2. Give higher weight to stocks with volume ≥ ₹10L, but don’t reject good opportunities slightly below
 3. Favor stocks in strong sectors: {', '.join(strong_sectors)}
 4. Avoid stocks with RSI ≥ 70
 5. Consider market volatility: {volatility*100:.2f}%
@@ -492,6 +492,13 @@ def find_intraday_opportunities():
             else:
                 total_volume = data_5['Volume'].iloc[-1] * data_5['Close'].iloc[-1]
             
+            # ❗ Reject long wick candles (low conviction moves)
+            candle_body = abs(data_5['Close'].iloc[-1] - data_5['Open'].iloc[-1])
+            candle_range = data_5['High'].iloc[-1] - data_5['Low'].iloc[-1]
+            if candle_range > 0 and candle_body < 0.3 * candle_range:
+                print(f"⚠️ Wick rejection: {symbol} | Body={candle_body:.2f}, Range={candle_range:.2f}")
+                continue           
+            
             # Calculate RSI
             rsi_series = calculate_rsi(data_15['Close'])
             rsi = round(rsi_series.iloc[-1], 2) if not rsi_series.empty else 0
@@ -501,8 +508,17 @@ def find_intraday_opportunities():
                 continue
             if momentum_score < momentum_threshold and breakout_potential < 60:
                 continue
-            if rsi >= 75:  # Relaxed RSI threshold
-                continue
+            # ✅ Smart RSI rejection: allow high RSI if other signals are strong
+            if rsi >= 75:
+                # ❗ Avoid fake breakouts with high breakout but weak momentum
+                if breakout_potential >= 85 and momentum_score < 35:
+                    print(f"⚠️ Ignoring {symbol} - breakout without momentum, likely fake move")
+                    continue               
+                if momentum_score >= 60 and breakout_potential >= 75:
+                    print(f"⚠️ High RSI ({rsi}) but strong breakout+momentum: {symbol} → Allowed")
+                else:
+                    print(f"⛔ RSI rejection: {symbol} | RSI={rsi}")
+                    continue         
             
             # Add to opportunities
             opportunities.append({

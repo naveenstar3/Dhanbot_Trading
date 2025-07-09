@@ -19,10 +19,9 @@ from db_logger import insert_portfolio_log_to_db, log_to_postgres
 import math
 import io
 from io import StringIO
-from decimal import Decimal, ROUND_UP
+from decimal import Decimal, ROUND_UP, ROUND_DOWN
 
 # ===== STDOUT LOGGER CONFIG =====
-import io
 log_buffer = io.StringIO()
 class TeeLogger:
     def __init__(self, *streams):
@@ -202,19 +201,14 @@ def place_buy_order(symbol, security_id, price, qty):
     if not security_id or not symbol or qty <= 0 or price <= 0:
         print(f"❌ Skipping invalid input: symbol={symbol}, security_id={security_id}, price={price}, qty={qty}")
         return False, "Invalid input"
+
+    # ✅ Permanent fix: Exact tick size rounding using Decimal only
     tick_size = Decimal("0.05")
-    buffered_price = Decimal(str(price)) * Decimal("1.002")
-    buffer_price_decimal = (buffered_price / tick_size).to_integral_value(rounding=ROUND_UP) * tick_size
-    buffer_price = float(buffer_price_decimal)
-    buffer_price = round(buffer_price, 2)  # Ensure two decimals
-    
-    # Adjust to multiple of 0.05 (5 paise) to avoid exchange error
-    price_in_paise = round(buffer_price * 100)
-    remainder = price_in_paise % 5
-    if remainder != 0:
-        adjusted_paise = price_in_paise + (5 - remainder)
-        buffer_price = adjusted_paise / 100.0
-        print(f"🔄 Price adjusted from {buffer_price_decimal} to {buffer_price} for tick size compliance")
+    raw_price = Decimal(str(price)) * Decimal("1.002")  # Add buffer for execution
+    rounded_ticks = (raw_price / tick_size).to_integral_value(rounding=ROUND_UP)
+    buffer_price_decimal = rounded_ticks * tick_size
+    buffer_price = float(buffer_price_decimal)  # Final price as float
+    print(f"🔧 Tick-adjusted price for {symbol}: ₹{buffer_price} (raw input: ₹{price})")
     
     payload = {
         "transactionType": "BUY",
@@ -360,8 +354,12 @@ def log_trade(symbol, security_id, qty, price, order_id):
         if atr:
             target_pct = round((atr / price) * 100 * 1.2, 2)
             stop_pct = round((atr / price) * 100 * 0.8, 2)
-            target_price = round(price * (1 + target_pct / 100), 2)
-            stop_price = round(price * (1 - stop_pct / 100), 2)   
+            # Align target/stop price with SELL script logic using raw buffer price
+            base_price = Decimal(str(price))
+            target_decimal = (base_price * (Decimal(target_pct) / 100)).quantize(Decimal("0.0001"), rounding=ROUND_UP)
+            target_price = float((base_price + target_decimal).quantize(Decimal("0.05"), rounding=ROUND_UP))            
+            stop_decimal = (base_price * (Decimal(stop_pct) / 100)).quantize(Decimal("0.0001"), rounding=ROUND_DOWN)
+            stop_price = float((base_price - stop_decimal).quantize(Decimal("0.05"), rounding=ROUND_DOWN))
 
     print(f"🛠️ Attempting to append to portfolio log: {PORTFOLIO_LOG}")
 
@@ -407,9 +405,8 @@ def log_trade(symbol, security_id, qty, price, order_id):
         send_telegram_message(err_msg)
         raise
  
-def breakout_confirmed(symbol, high_15min):
+def breakout_confirmed(security_id, high_15min):
     try:
-        security_id = dhan_symbol_map[symbol]
         candles = get_historical_price(security_id, interval="1m")
         if not candles or len(candles) < 3:
             return False
@@ -418,7 +415,7 @@ def breakout_confirmed(symbol, high_15min):
             candles[-2]['close'] > high_15min
         )
     except Exception as e:
-        print(f"⚠️ Breakout confirm failed for {symbol}: {e}")
+        print(f"⚠️ Breakout confirm failed for security_id {security_id}: {e}")
         return False
  
 # 🧵 Thread-safe monitoring functions
@@ -460,7 +457,7 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
             return
             
         # Add volume check to breakout logic
-        if price > high_15min and breakout_confirmed(symbol, high_15min):
+        if price > high_15min and breakout_confirmed(security_id, high_15min):
             # Add delay before volume check API call
             systime.sleep(0.8)
             
@@ -763,8 +760,12 @@ def run_autotrade():
         print("⚠️ Both stock lists missing/invalid. Regenerating via GPT...")
         opportunities = find_intraday_opportunities()
         
+        if not isinstance(opportunities, list):
+            print(f"⚠️ GPT returned non-list type: {type(opportunities)}. Forcing fallback.")
+            opportunities = []
+    
         if not opportunities:
-            # 🚨 CRITICAL FIX: Use fallback if GPT returns empty
+            # 🚨 CRITICAL FIX: Use fallback if GPT returns empty or invalid
             if os.path.exists(fallback_csv):
                 print(f"⚠️ GPT returned 0 stocks. Using fallback: {fallback_csv}")
                 selected_path = fallback_csv
@@ -774,11 +775,22 @@ def run_autotrade():
                 return
         else:
             # Create new valid CSV only if opportunities exist
-            opp_df = pd.DataFrame(opportunities)
-            opp_df.to_csv(csv_path, index=False)
-            selected_path = csv_path
-            print(f"✅ Regenerated stock list with {len(opportunities)} entries")
-            valid_csv = True
+            try:
+                opp_df = pd.DataFrame(opportunities)
+                opp_df.to_csv(csv_path, index=False)
+                selected_path = csv_path
+                print(f"✅ Regenerated stock list with {len(opportunities)} entries")
+                valid_csv = True
+            except Exception as e:
+                print(f"❌ Error saving regenerated stock list: {e}")
+                if os.path.exists(fallback_csv):
+                    print(f"⚠️ Fallback to: {fallback_csv}")
+                    selected_path = fallback_csv
+                    valid_csv = True
+                else:
+                    send_telegram_message(f"❌ GPT stock list save failed and no fallback. Skipping trade. Error: {e}")
+                    return
+    
 
     # Proceed with momentum flag logic using validated CSV
     momentum_flag = "D:/Downloads/Dhanbot/dhan_autotrader/momentum_ready.txt"

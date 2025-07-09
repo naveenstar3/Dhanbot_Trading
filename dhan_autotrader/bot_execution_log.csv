@@ -4402,3 +4402,63 @@ timestamp,script_name,action,status,message
 2025-07-08 10:53:37,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
 2025-07-08 10:54:01,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
 2025-07-08 10:54:17,autotrade.py,BUY,✅ EXECUTED,BEL @ ₹423.0
+2025-07-08 16:02:13,git_sync.py,Git Push,✅ COMPLETE,43 file(s) pushed
+2025-07-09 09:40:02,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-09 09:40:03,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-09 09:40:13,GPT Ranking,Success,Selected 1,BANKBARODA
+2025-07-09 09:40:13,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 1 opportunities
+2025-07-09 09:40:13,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-09 09:46:30,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-09 09:46:30,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-09 09:46:41,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-09 09:46:41,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 2 opportunities
+2025-07-09 09:46:41,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-09 09:46:57,autotrade.py,BUY,✅ EXECUTED,HINDUNILVR @ ₹2424.55
+2025-07-09 09:58:05,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-09 09:58:05,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-09 09:58:19,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-09 09:58:19,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 4 opportunities
+2025-07-09 09:58:19,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-09 09:58:40,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BHARTIARTL - Rate limit hit
+2025-07-09 09:58:41,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,JSWENERGY - Rate limit hit
+2025-07-09 09:58:41,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,CHOLAFIN - Rate limit hit
+2025-07-09 09:58:53,autotrade.py,BUY,✅ EXECUTED,CHOLAFIN @ ₹1538.0
+2025-07-09 10:17:29,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-3.46 < ₹5
+2025-07-09 10:18:37,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-0.46 < ₹5
+2025-07-09 10:20:12,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-4.96 < ₹5
+2025-07-09 10:21:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-2.86 < ₹5
+2025-07-09 10:22:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-1.96 < ₹5
+2025-07-09 10:23:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-2.56 < ₹5
+2025-07-09 10:24:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-6.46 < ₹5
+2025-07-09 10:25:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-3.76 < ₹5
+2025-07-09 10:26:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-1.66 < ₹5
+2025-07-09 10:27:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-3.46 < ₹5
+2025-07-09 10:28:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹0.44 < ₹5
+2025-07-09 10:29:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-0.16 < ₹5
+2025-07-09 10:30:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-1.96 < ₹5
+2025-07-09 10:31:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-4.96 < ₹5
+2025-07-09 10:32:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-4.96 < ₹5
+2025-07-09 10:33:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-7.95 < ₹5
+2025-07-09 10:34:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-9.15 < ₹5
+2025-07-09 10:35:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-7.05 < ₹5
+2025-07-09 10:36:04,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-7.65 < ₹5
+2025-07-09 10:37:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-5.26 < ₹5
+2025-07-09 10:38:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-8.25 < ₹5
+2025-07-09 10:39:02,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-8.25 < ₹5
+2025-07-09 10:40:03,portfolio_tracker.py,SELL skipped,⚠️ HOLD,CHOLAFIN | 💸 Blocked by Net Profit Rule: ₹-10.65 < ₹5
+2025-07-09 11:32:48,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-09 11:32:48,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-09 11:33:08,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-09 11:33:08,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-09 11:33:44,autotrade.py,BUY,✅ EXECUTED,ICICIGI @ ₹2029.3
+2025-07-09 11:41:56,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-09 11:42:22,autotrade.py,BUY,✅ EXECUTED,BHARTIARTL @ ₹2037.2
+2025-07-09 11:54:04,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-09 11:54:04,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-09 11:54:15,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-09 11:54:15,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 4 opportunities
+2025-07-09 11:54:15,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-09 11:54:37,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,PFC - Rate limit hit
+2025-07-09 11:54:37,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,HINDUNILVR - Rate limit hit
+2025-07-09 11:54:37,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BANKBARODA - Rate limit hit
+2025-07-09 11:56:00,autotrade.py,BUY,✅ EXECUTED,HINDUNILVR @ ₹2431.7
