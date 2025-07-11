@@ -20,6 +20,7 @@ import math
 import io
 from io import StringIO
 from decimal import Decimal, ROUND_UP, ROUND_DOWN
+from pathlib import Path
 
 # ===== STDOUT LOGGER CONFIG =====
 log_buffer = io.StringIO()
@@ -110,6 +111,33 @@ def get_estimated_delivery_percentage(security_id):
     except Exception as e:
         print(f"⚠️ Delivery % error: {e}")
         return 35.0
+        
+# ✅ Trade Verification via Trade_book API
+def verify_order_status_with_tradebook(security_id):
+    try:
+        from dhanhq import dhanhq, DhanContext
+        with open("D:/Downloads/Dhanbot/dhan_autotrader/config.json") as f:
+            config_data = json.load(f)
+
+        context = DhanContext(config_data["client_id"], config_data["access_token"])
+        dhan = dhanhq(context)
+
+        # Check trade book
+        trade_data = dhan.get_trade_book()
+        for t in trade_data.get("data", []):
+            if str(t.get("security_id")).strip() == str(security_id).strip():
+                return t.get("status", "").upper()
+
+        # Fallback to full order list
+        order_data = dhan.get_order_list()
+        for o in order_data.get("data", []):
+            if str(o.get("security_id")).strip() == str(security_id).strip():
+                return o.get("orderStatus", "").upper()
+
+    except Exception as e:
+        print(f"⚠️ Tradebook API verification failed: {e}")
+    return "UNKNOWN"
+
 
 # ✅ Utility Functions
 def send_telegram_message(message):
@@ -205,9 +233,9 @@ def place_buy_order(symbol, security_id, price, qty):
     # ✅ Permanent fix: Exact tick size rounding using Decimal only
     tick_size = Decimal("0.05")
     raw_price = Decimal(str(price)) * Decimal("1.002")  # Add buffer for execution
-    rounded_ticks = (raw_price / tick_size).to_integral_value(rounding=ROUND_UP)
-    buffer_price_decimal = rounded_ticks * tick_size
-    buffer_price = float(buffer_price_decimal)  # Final price as float
+    rounded_ticks = (raw_price / tick_size).quantize(Decimal("1"), rounding=ROUND_DOWN)
+    buffer_price_decimal = (rounded_ticks * tick_size).quantize(tick_size, rounding=ROUND_DOWN)
+    buffer_price = float(buffer_price_decimal)
     print(f"🔧 Tick-adjusted price for {symbol}: ₹{buffer_price} (raw input: ₹{price})")
     
     payload = {
@@ -251,10 +279,11 @@ def place_buy_order(symbol, security_id, price, qty):
                
         if order_id:
             # 🛰️ Double-check actual order status
-            order_status = get_trade_status(order_id)
-            print(f"🛰️ Order status from trade book: {order_status}")
+            order_status = verify_order_status_with_tradebook(security_id)
+            print(f"🛰️ Verified order status (by security_id): {order_status}")
             
-            if order_status in ["TRADED", "OPEN", "TRANSIT", "UNKNOWN"]:
+            if order_status in ["TRADED", "OPEN", "TRANSIT", "SELECTED"]:
+                print(f"✅ Order accepted by broker — Status: {order_status}")
                 send_telegram_message(f"✅ Order Placed: {symbol} | Qty: {qty} @ ₹{buffer_price}")
                 print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
         
@@ -289,6 +318,7 @@ def place_buy_order(symbol, security_id, price, qty):
                 return True, order_id
             else:
                 reason = response.get("remarks") or f"Order status = {order_status}"
+                print(f"❌ Order verification failed for {symbol}. Status = {order_status}")
                 send_telegram_message(f"❌ Order rejected for {symbol}: {reason}")
                 log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{symbol} → {reason}")
                 return False, reason        
@@ -798,15 +828,32 @@ def run_autotrade():
     now = datetime.now()
 
     should_run_momentum = True
-    if os.path.exists(momentum_flag):
-        last_run_time = datetime.fromtimestamp(os.path.getmtime(momentum_flag))
-        if now - last_run_time < timedelta(minutes=15):
-            print("🕒 GPT momentum was run recently. Skipping regeneration.")
-            should_run_momentum = False
+    momentum_csv = "D:/Downloads/Dhanbot/dhan_autotrader/Today_Trade_Stocks.csv"
+    should_run_momentum = True
+    
+    try:
+        if os.path.exists(momentum_csv):
+            file_mtime = datetime.fromtimestamp(os.path.getmtime(momentum_csv))
+            now = datetime.now()
+            file_age_minutes = (now - file_mtime).total_seconds() / 60
+    
+            with open(momentum_csv, 'r') as f:
+                header_check = f.readline().strip()
+                if not header_check or ',' not in header_check:
+                    raise ValueError("CSV has no columns")
+            
+            df_check = pd.read_csv(momentum_csv)
+            
+            if not df_check.empty and file_age_minutes <= 15:
+                print("🕒 GPT momentum CSV is fresh. Skipping regeneration.")
+                should_run_momentum = False
+            else:
+                print("⚠️ GPT momentum CSV is outdated or empty. Will regenerate.")
         else:
-            print("⚠️ GPT momentum last run >15 mins ago. Will regenerate list.")
-    else:
-        print("⚙️ No previous GPT run found. Running now.")
+            print("⚙️ No previous GPT momentum CSV found. Running now.")
+    except Exception as e:
+        print(f"⚠️ Error checking GPT momentum CSV age: {e}")
+        should_run_momentum = True
 
     # ✅ Preserve original momentum generation logic
     if should_run_momentum and now.time() >= time(9, 30):
@@ -1040,7 +1087,7 @@ def run_autotrade():
                 futures = {}
                 for stock in ranked_stocks[:10]:  # Only scan top 10 stocks
                     # Add random delay between submissions
-                    delay = random.uniform(0.8, 1.5)
+                    delay = random.uniform(1, 1.5)
                     systime.sleep(delay)
                     
                     future = executor.submit(monitor_wrapper, stock, filter_failures, failures_lock)

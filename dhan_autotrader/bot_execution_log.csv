@@ -4462,3 +4462,68 @@ timestamp,script_name,action,status,message
 2025-07-09 11:54:37,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,HINDUNILVR - Rate limit hit
 2025-07-09 11:54:37,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BANKBARODA - Rate limit hit
 2025-07-09 11:56:00,autotrade.py,BUY,✅ EXECUTED,HINDUNILVR @ ₹2431.7
+2025-07-09 16:00:08,git_sync.py,Git Push,✅ COMPLETE,43 file(s) pushed
+2025-07-09 22:42:57,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-07-09 23:09:42,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-07-09 23:09:42,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-07-09 23:26:15,portfolio_tracker.py,market_status,INFO,Skipped: Market closed or holiday.
+2025-07-10 09:42:07,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-10 09:42:07,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-10 09:42:11,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 0 opportunities
+2025-07-10 09:42:11,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-10 09:42:12,autotrade.py,data_error,CRITICAL,Stock list invalid: No columns to parse from file
+2025-07-10 09:42:12,autotrade.py,end,NO TRADE,No stock bought today.
+2025-07-10 09:43:36,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-10 09:43:36,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-10 09:43:55,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-10 09:43:55,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-10 09:44:22,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ADANIGREEN - Rate limit hit
+2025-07-10 09:44:22,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ADANIENSOL - Rate limit hit
+2025-07-10 09:44:22,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,TCS - Rate limit hit
+2025-07-10 09:45:43,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-10 09:46:08,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,DRREDDY - Rate limit hit
+2025-07-10 09:46:08,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ADANIGREEN - Rate limit hit
+2025-07-10 09:46:08,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ADANIENSOL - Rate limit hit
+2025-07-10 09:46:08,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,TCS - Rate limit hit
+2025-07-10 09:47:43,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,DRREDDY - Rate limit hit
+2025-07-10 09:47:43,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ADANIGREEN - Rate limit hit
+2025-07-10 09:47:43,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ADANIENSOL - Rate limit hit
+2025-07-10 09:47:43,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,TCS - Rate limit hit
+2025-07-10 10:12:01,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-10 10:12:11,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-10 10:12:11,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 4 opportunities
+2025-07-10 10:53:48,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-10 10:53:57,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-10 10:54:40,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-10 10:54:50,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-10 10:54:50,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-10 10:55:10,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-10 10:55:10,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-10 10:55:14,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 0 opportunities
+2025-07-10 10:55:14,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-10 10:55:15,autotrade.py,data_error,CRITICAL,Stock list invalid: No columns to parse from file
+2025-07-10 10:55:15,autotrade.py,end,NO TRADE,No stock bought today.
+2025-07-10 11:04:50,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-10 11:04:50,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-10 11:05:10,GPT Ranking,Success,Selected 1,NESTLEIND
+2025-07-10 11:05:10,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 1 opportunities
+2025-07-10 11:05:10,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-10 11:05:10,autotrade.py,end,NO TRADE,No stock bought today.
+2025-07-10 11:07:17,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-10 11:07:23,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 0 opportunities
+2025-07-10 11:09:18,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-10 11:09:34,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-10 11:09:34,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 4 opportunities
+2025-07-10 11:13:27,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-10 11:13:48,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,NESTLEIND - Rate limit hit
+2025-07-10 11:13:48,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,HINDUNILVR - Rate limit hit
+2025-07-10 11:13:48,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,LT - Rate limit hit
+2025-07-10 11:15:10,autotrade.py,BUY,✅ EXECUTED,NESTLEIND @ ₹2425.35
+2025-07-10 12:41:17,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-10 12:41:17,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-10 12:41:30,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-10 12:41:30,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 2 opportunities
+2025-07-10 12:41:30,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-10 12:41:47,autotrade.py,BUY,❌ FAILED,SWIGGY → Order status = UNKNOWN
+2025-07-10 12:41:53,autotrade.py,BUY,❌ FAILED,SWIGGY → Order status = UNKNOWN
+2025-07-10 12:41:59,autotrade.py,BUY,❌ FAILED,SWIGGY → Order status = UNKNOWN

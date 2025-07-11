@@ -372,19 +372,35 @@ def ask_gpt_to_rank_stocks(df):
             temperature=0.2,
             max_tokens=150
         )
-        gpt_response = response.choices[0].message.content.strip().upper()
+
+        gpt_response_raw = response.choices[0].message.content
+        if not gpt_response_raw:
+            print("⚠️ GPT returned empty response.")
+            log_bot_action("GPT Ranking", "Error", "EMPTY_RESPONSE", "No content from GPT")
+            return df.sort_values("momentum_score", ascending=False).head(5)["symbol"].tolist()
+
+        gpt_response = gpt_response_raw.strip().upper()
 
         if "SKIP" in gpt_response:
             log_bot_action("GPT Ranking", "Decision", "SKIP", "No suitable stocks")
             return []
 
-        # Extract symbols from response
-        candidates = [s.strip() for s in gpt_response.split(",") if s.strip() in df["symbol"].values]
-        
+        try:
+            if not isinstance(gpt_response, str):
+                print("⚠️ GPT returned non-string response. Forcing fallback.")
+                return df.sort_values("momentum_score", ascending=False).head(5)["symbol"].tolist()
+            
+            candidates = [s.strip() for s in gpt_response.split(",") if s.strip() in df["symbol"].values]
+            
+        except Exception as e:
+            print(f"⚠️ GPT response parse error: {e}")
+            log_bot_action("GPT Ranking", "Error", "PARSE_FAIL", str(e))
+            return df.sort_values("momentum_score", ascending=False).head(5)["symbol"].tolist()
+
         if not candidates:
             log_bot_action("GPT Ranking", "Error", "FALLBACK", "No valid symbols parsed")
             return df.sort_values("momentum_score", ascending=False).head(5)["symbol"].tolist()
-        
+
         log_bot_action("GPT Ranking", "Success", f"Selected {len(candidates)}", gpt_response)
         return candidates[:10]  # Return max 10 stocks
 
@@ -393,6 +409,18 @@ def ask_gpt_to_rank_stocks(df):
         log_bot_action("GPT Ranking", "Error", "FALLBACK", str(e))
         return df.sort_values("momentum_score", ascending=False).head(5)["symbol"].tolist()
 
+def get_sector_of_symbol(symbol):
+    """Extract sector from cached Nifty100 CSV or dynamic source"""
+    try:
+        sector_map_path = "D:/Downloads/Dhanbot/dhan_autotrader/nifty100_constituents.csv"
+        df = pd.read_csv(sector_map_path)
+        sector_df = df[df["symbol"].str.upper() == symbol.upper()]
+        if not sector_df.empty and "sector" in sector_df.columns:
+            return sector_df["sector"].values[0]
+    except:
+        pass
+    return None
+        
 # ======== MAIN SCANNER FUNCTION ========
 def find_intraday_opportunities():
     """Main function to scan for intraday opportunities"""
@@ -430,24 +458,15 @@ def find_intraday_opportunities():
                 if secid:
                     stock_dict[symbol] = secid
             
-            # Add sector leaders from strongest sectors
+            # Dynamically select fallback stocks from strongest sectors only
             strong_sectors = get_sector_strength()
-            sector_leaders = {
-                "BANK": ["HDFCBANK", "ICICIBANK", "KOTAKBANK"],
-                "IT": ["TCS", "INFY", "HCLTECH"],
-                "FMCG": ["HINDUNILVR", "ITC", "NESTLEIND"],
-                "AUTO": ["MARUTI", "M&M", "TATAMOTORS"],
-                "PHARMA": ["SUNPHARMA", "DRREDDY", "CIPLA"],
-                "METAL": ["TATASTEEL", "HINDALCO", "VEDL"],
-                "ENERGY": ["RELIANCE", "ONGC", "IOC"]
-            }
-            
-            for sector in strong_sectors:
-                if sector in sector_leaders:
-                    for symbol in sector_leaders[sector]:
-                        secid = get_security_id(symbol)
-                        if secid:
-                            stock_dict[symbol] = secid
+
+            for symbol in nifty_symbols:
+                secid = get_security_id(symbol)
+                if secid:
+                    stock_sector = get_sector_of_symbol(symbol)  # new helper
+                    if stock_sector in strong_sectors:
+                        stock_dict[symbol] = secid
             
             # Convert to list of tuples
             stocks = [(symbol, secid) for symbol, secid in stock_dict.items()]
@@ -562,6 +581,10 @@ def find_intraday_opportunities():
     
     # Final selection
     selected = sorted(final_opportunities, key=lambda x: (x["momentum_score"], x["breakout_potential"]), reverse=True)[:10]
+    if len(selected) == 0 and not df_opportunities.empty:
+        print("⚠️ All filters rejected. Forcing highest-quality fallback BUY.")
+        selected = sorted(opportunities, key=lambda x: (x["momentum_score"], x["breakout_potential"], -x["rsi"]))[:1]
+
     print(f"✅ Selected {len(selected)} opportunities")
     
     # Save results
