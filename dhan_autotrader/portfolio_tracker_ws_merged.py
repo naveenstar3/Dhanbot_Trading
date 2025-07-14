@@ -19,6 +19,9 @@ from config import *
 from utils_logger import log_bot_action
 from utils_safety import safe_read_csv
 from db_logger import insert_live_trail_to_db, insert_portfolio_log_to_db
+from dhanhq import MarketFeed
+import threading
+
 
 # ✅ Enable TeeLogger to capture print logs to file
 log_buffer = io.StringIO()
@@ -336,6 +339,49 @@ def is_nse_trading_day():
         return today not in holiday_dates
     except:
         return True
+        
+def run_live_websocket_logger():
+    try:
+        if not os.path.exists(PORTFOLIO_LOG):
+            print("⚠️ Portfolio log not found for WebSocket tracking.")
+            return
+
+        with portalocker.Lock(PORTFOLIO_LOG, 'r', timeout=5) as f:
+            reader = csv.DictReader(f)
+            hold_rows = [r for r in reader if r.get("status", "").upper() == "HOLD"]
+
+        instruments = [(MarketFeed.NSE, row["security_id"], MarketFeed.Ticker) for row in hold_rows]
+
+        if not instruments:
+            print("📭 No HOLD stocks to subscribe for WebSocket.")
+            return
+
+        print(f"📡 Starting WebSocket for {len(instruments)} HOLD stock(s)...")
+        feed = MarketFeed(context, instruments, version="v2")
+
+        while True:
+            feed.run_forever()
+            ticks = feed.get_data()
+            for tick in ticks:
+                try:
+                    symbol = tick.get("symbol")
+                    security_id = str(tick.get("security_id"))
+                    ltp = float(tick.get("last_traded_price", 0)) / 100
+                    # You must fetch the buy_price from the portfolio_log for accurate change_pct
+                    with portalocker.Lock(PORTFOLIO_LOG, 'r', timeout=5) as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            if row["security_id"] == security_id:
+                                buy_price = float(row["buy_price"])
+                                change_pct = ((ltp - buy_price) / buy_price) * 100
+                                log_live_trail(symbol, ltp, change_pct, order_id=row.get("order_id"))
+                                break
+                except Exception as e:
+                    print(f"⚠️ WS Tick parse error: {e}")
+            time.sleep(1)
+
+    except Exception as e:
+        print(f"❌ WebSocket thread failed: {e}")
 
 # Initialize traded symbols set
 if 'attempted_security_ids' not in globals():
@@ -802,6 +848,8 @@ if __name__ == "__main__":
         send_telegram_message("⛔ Emergency Exit active. Skipping HOLD monitoring.")
         log_bot_action("portfolio_tracker.py", "SKIPPED", "EMERGENCY EXIT", "Monitoring skipped due to emergency exit.")
     else:
+        ws_thread = threading.Thread(target=run_live_websocket_logger, daemon=True)
+        ws_thread.start()
         check_portfolio()
         with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/portfolio_tracker_log.txt", "w", encoding="utf-8") as f:
             f.write(log_buffer.getvalue())

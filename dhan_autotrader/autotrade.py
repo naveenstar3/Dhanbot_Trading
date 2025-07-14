@@ -207,6 +207,19 @@ def load_dynamic_stocks(filepath="D:/Downloads/Dhanbot/dhan_autotrader/dynamic_s
     raw_lines = safe_read_csv(filepath)
     df = pd.read_csv(StringIO("".join(raw_lines)))
     return list(zip(df["symbol"], df["security_id"]))
+
+def verify_buy_order_in_trade_book(security_id):
+    try:
+        response = requests.get(TRADE_BOOK_URL, headers=HEADERS)
+        if response.status_code == 200:
+            trades = response.json().get("data", [])
+            for trade in trades:
+                if str(trade.get("securityId")) == str(security_id) and trade.get("transactionType", "").upper() == "BUY":
+                    return True
+        return False
+    except Exception as e:
+        print(f"⚠️ Error verifying trade book for security_id={security_id}: {e}")
+        return False
     
 # ✅ Buy Logic + Order Execution
 def should_trigger_buy(symbol, high_15min, capital):
@@ -229,7 +242,7 @@ def place_buy_order(symbol, security_id, price, qty):
     if not security_id or not symbol or qty <= 0 or price <= 0:
         print(f"❌ Skipping invalid input: symbol={symbol}, security_id={security_id}, price={price}, qty={qty}")
         return False, "Invalid input"
-
+    price = round(price, 2)
     # ✅ Permanent fix: Exact tick size rounding using Decimal only
     tick_size = Decimal("0.05")
     raw_price = Decimal(str(price)) * Decimal("1.002")  # Add buffer for execution
@@ -264,11 +277,11 @@ def place_buy_order(symbol, security_id, price, qty):
             send_telegram_message(f"🧪 DRY RUN ORDER: {symbol} | Qty: {qty} @ ₹{buffer_price}")
             dry_run_id = f"DRY_RUN_{int(tm.time())}" 
             return True, dry_run_id           
-
+    
         # ✅ Real money execution
         response = requests.post(BASE_URL, headers=HEADERS, json=payload).json()
         raw_json = json.dumps(response, indent=2)
-        
+    
         # 🛡️ Patch: Support for both direct and nested orderId formats
         if "orderId" in response:
             order_id = response.get("orderId")
@@ -276,52 +289,60 @@ def place_buy_order(symbol, security_id, price, qty):
             order_id = response["data"].get("orderId")
         else:
             order_id = None
-               
+    
         if order_id:
-            # 🛰️ Double-check actual order status
-            order_status = verify_order_status_with_tradebook(security_id)
-            print(f"🛰️ Verified order status (by security_id): {order_status}")
-            
-            if order_status in ["TRADED", "OPEN", "TRANSIT", "SELECTED"]:
-                print(f"✅ Order accepted by broker — Status: {order_status}")
-                send_telegram_message(f"✅ Order Placed: {symbol} | Qty: {qty} @ ₹{buffer_price}")
-                print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
-        
-                try:
-                    # First log to CSV
-                    stop_pct, target_pct = log_trade(symbol, security_id, qty, buffer_price, order_id)
-        
-                    # Then log to database
-                    insert_portfolio_log_to_db(
-                        trade_date=datetime.now(pytz.timezone("Asia/Kolkata")),
-                        symbol=symbol,
-                        security_id=security_id,
-                        quantity=qty,
-                        buy_price=buffer_price,
-                        stop_pct=stop_pct,
-                        target_pct=target_pct,
-                        stop_price=round(buffer_price * (1 - stop_pct / 100), 2),
-                        target_price=round(buffer_price * (1 + target_pct / 100), 2),
-                        status="HOLD",
-                        order_id=order_id
-                    )
-                    print(f"✅ Trade logged to CSV and DB for {symbol}")
-                except Exception as e:
-                    print(f"❌ log_trade() failed for {symbol}: {e}")
-                    send_telegram_message(f"⚠️ Order placed for {symbol}, but logging failed: {e}")
-                    log_bot_action("autotrade.py", "LOG_ERROR", "❌ Logging Failed", f"{symbol} → {e}")
-                    return True, order_id
-        
-                log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{symbol} @ ₹{buffer_price}")
-                now_ts = datetime.now()
-                log_to_postgres(now_ts, "autotrade.py", "✅ EXECUTED", f"{symbol} @ ₹{buffer_price}")
-                return True, order_id
-            else:
-                reason = response.get("remarks") or f"Order status = {order_status}"
-                print(f"❌ Order verification failed for {symbol}. Status = {order_status}")
+            # ✅ Trade verification using security_id + transaction_type from trade_book
+            verified = verify_buy_order_in_trade_book(security_id)
+            print(f"🛰️ Order verification via trade_book for {symbol}: {verified}")
+    
+            if not verified:
+                reason = "❌ Trade book verification failed: BUY entry not found"
+                print(f"❌ Order verification failed for {symbol}. Reason: {reason}")
                 send_telegram_message(f"❌ Order rejected for {symbol}: {reason}")
                 log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{symbol} → {reason}")
-                return False, reason        
+                return False, reason
+    
+            print(f"✅ Order accepted by broker — Security ID: {security_id}")
+            send_telegram_message(f"✅ Order Placed: {symbol} | Qty: {qty} @ ₹{buffer_price}")
+            print(f"🧾 Logging attempt: {symbol}, ID: {security_id}, Qty: {qty}, Price: {buffer_price}")
+    
+            try:
+                # First log to CSV
+                stop_pct, target_pct = log_trade(symbol, security_id, qty, buffer_price, order_id)
+    
+                # Then log to database
+                insert_portfolio_log_to_db(
+                    trade_date=datetime.now(pytz.timezone("Asia/Kolkata")),
+                    symbol=symbol,
+                    security_id=security_id,
+                    quantity=qty,
+                    buy_price=buffer_price,
+                    stop_pct=stop_pct,
+                    target_pct=target_pct,
+                    stop_price=round(buffer_price * (1 - stop_pct / 100), 2),
+                    target_price=round(buffer_price * (1 + target_pct / 100), 2),
+                    status="HOLD",
+                    order_id=order_id
+                )
+                print(f"✅ Trade logged to CSV and DB for {symbol}")
+            except Exception as e:
+                print(f"❌ log_trade() failed for {symbol}: {e}")
+                send_telegram_message(f"⚠️ Order placed for {symbol}, but logging failed: {e}")
+                log_bot_action("autotrade.py", "LOG_ERROR", "❌ Logging Failed", f"{symbol} → {e}")
+                return True, order_id
+    
+            log_bot_action("autotrade.py", "BUY", "✅ EXECUTED", f"{symbol} @ ₹{buffer_price}")
+            now_ts = datetime.now()
+            log_to_postgres(now_ts, "autotrade.py", "✅ EXECUTED", f"{symbol} @ ₹{buffer_price}")
+            return True, order_id
+    
+        else:
+            reason = response.get("remarks") or "❌ Order ID not returned by broker"
+            print(f"❌ Order failed for {symbol}. Reason: {reason}")
+            send_telegram_message(f"❌ Order rejected for {symbol}: {reason}")
+            log_bot_action("autotrade.py", "BUY", "❌ FAILED", f"{symbol} → {reason}")
+            return False, reason
+        
                 
     except Exception as e:
         print(f"❌ Exception placing order for {symbol}: {e}")
@@ -553,6 +574,7 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
 
         # RSI Check
         rsi = compute_rsi(security_id)
+        systime.sleep(1.0)  # ✅ Rate-limit protection after RSI fetch
         if rsi is None:
             print(f"⚠️ Skipping {symbol} — Unable to compute RSI.")
             return
@@ -1060,14 +1082,15 @@ def run_autotrade():
         candidate_scores = []
         top_candidates = []
 
-        def monitor_wrapper(symbol, filter_failures, failures_lock):
+        def monitor_wrapper(symbol, filter_failures, failures_lock, fallback_mode=None):
             try:
                 security_id = dhan_symbol_map.get(symbol)
                 high_trigger = first_15min_high.get(symbol)
                 return monitor_stock_for_breakout(
                     symbol, high_trigger, capital, dhan_symbol_map, 
-                    filter_failures, failures_lock
+                    filter_failures, failures_lock, fallback_mode
                 )
+        
             except Exception as e:
                 print(f"⚠️ Monitor wrapper error for {symbol}: {e}")
                 return None
@@ -1075,7 +1098,7 @@ def run_autotrade():
         scan_round = 1
         fallback_mode = None
         fallback_pass = 0
-        max_fallback_passes = 2  # You can increase to 3 if needed
+        max_fallback_passes = 3  # You can increase to 3 if needed
     
         while not trade_executed and fallback_pass <= max_fallback_passes:
             print(f"🌀 Fallback Pass #{fallback_pass + 1} — Mode: {fallback_mode or 'Strict'}")
@@ -1090,7 +1113,7 @@ def run_autotrade():
                     delay = random.uniform(1, 1.5)
                     systime.sleep(delay)
                     
-                    future = executor.submit(monitor_wrapper, stock, filter_failures, failures_lock)
+                    future = executor.submit(monitor_wrapper, stock, filter_failures, failures_lock, fallback_mode)
                     futures[future] = stock
                 
                 # Process results as they complete
@@ -1132,6 +1155,20 @@ def run_autotrade():
                 # ➕ ADDED NEAR-BREAKOUT FALLBACK
                 if fallback_pass == max_fallback_passes:  # Only on last pass
                     print("⚠️ Last fallback pass. Trying near-breakout stocks...")
+            
+                    try:
+                        print("🔄 Reloading stock candidates from CSV due to inactivity...")
+                        df = pd.read_csv(selected_path)
+                        ranked_stocks = df["symbol"].tolist()
+                        dhan_symbol_map = dict(zip(df["symbol"], df["security_id"]))
+                        fallback_pass = 0  # reset fallback cycle
+                        continue  # restart fallback cycle with reloaded list
+                    except Exception as e:
+                        print(f"❌ Failed to reload stocks from CSV: {e}")
+                        send_telegram_message(f"❌ Stock reload failed: {e}")
+                        log_bot_action("autotrade.py", "CRASH", "Stock reload failure", str(e))
+                        break
+
                     near_breakout_stocks = []
                     
                     for stock in ranked_stocks[:10]:  # Only check top 10
@@ -1140,6 +1177,7 @@ def run_autotrade():
                             continue
                             
                         price = get_live_price(stock, security_id)
+                        systime.sleep(1.0)  # ✅ Rate-limit protection after live price fetch
                         high = first_15min_high.get(stock)
                         
                         if (
@@ -1181,7 +1219,7 @@ def run_autotrade():
                 
                 print("🔁 Retrying with relaxed filter...\n")
                 pd.DataFrame([filter_failures]).to_csv("D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_today.csv", index=False)
-                systime.sleep(5) 
+                systime.sleep(3) 
 
         pd.DataFrame(candidate_scores).to_csv("D:/Downloads/Dhanbot/dhan_autotrader/scanned_candidates_today.csv", index=False)
 
