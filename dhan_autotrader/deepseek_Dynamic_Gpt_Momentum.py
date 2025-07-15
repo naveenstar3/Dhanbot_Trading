@@ -539,16 +539,65 @@ def find_intraday_opportunities():
                     print(f"⛔ RSI rejection: {symbol} | RSI={rsi}")
                     continue         
             
-            # Add to opportunities
+            # ✅ Smart Relaxed Mode — allow PSU/Penny only if ALL conditions pass
+            try:
+                master_path = "D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv"
+                master_df = pd.read_csv(master_path)
+                row = master_df[master_df["SEM_SMST_SECURITY_ID"].astype(str) == str(secid)]
+            
+                is_psu = False
+                is_penny = False
+                tick_size_valid = True
+                circuit_freeze = False
+                price = data_5['Close'].iloc[-1]
+            
+                if not row.empty:
+                    company_name = str(row.iloc[0].get("SM_COMPANY_NAME", "")).upper()
+                    tick_size = float(row.iloc[0].get("SM_TICK_SIZE", 0))
+                    instrument = str(row.iloc[0].get("SM_INSTRUMENT", "")).upper()
+            
+                    is_psu = "PSU" in company_name
+                    is_penny = price < 10
+                    tick_size_valid = tick_size > 0
+                    circuit_freeze = instrument in ["BE", "BZ", "T2T"]
+            
+                smart_relaxed_ok = True
+            
+                if is_psu or is_penny:
+                    smart_relaxed_ok = (
+                        momentum_score > 45 and
+                        total_volume >= 10000000 and
+                        tick_size_valid and
+                        not circuit_freeze and
+                        price >= 10
+                    )
+            
+                    if not smart_relaxed_ok:
+                        reason = []
+                        if momentum_score <= 45: reason.append(f"Low Momentum {momentum_score:.2f}")
+                        if total_volume < 10000000: reason.append(f"Low Volume {total_volume/1e6:.2f}M")
+                        if not tick_size_valid: reason.append("Tick=0")
+                        if circuit_freeze: reason.append("Frozen")
+                        if price < 10: reason.append(f"Low Price ₹{price:.2f}")
+                        print(f"⛔ Skipped {symbol} - PSU/Penny block [{', '.join(reason)}]")
+                        continue
+                    else:
+                        print(f"✅ Smart Relaxed Passed: {symbol} [Momentum={momentum_score:.1f}, Vol=₹{total_volume/1e6:.2f}M]")
+            except Exception as e:
+                print(f"⚠️ Smart Relaxed check failed: {e}")
+                continue
+            
+            # ✅ Passed all filters — add to final opportunities
             opportunities.append({
                 "symbol": symbol,
                 "momentum_score": momentum_score,
                 "breakout_potential": breakout_potential,
                 "rsi": rsi,
                 "volume": total_volume,
-                "last_price": data_5['Close'].iloc[-1],
+                "last_price": price,
                 "security_id": secid
             })
+            
             
             time.sleep(0.3)  # Rate limit protection
         except Exception as e:

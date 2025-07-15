@@ -198,7 +198,7 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
         # Step 1: Get pre-market LTP
         ltp = get_live_price(symbol, secid, premarket=True)       
         
-        # NEW: Fetch yesterday's close for bullish confirmation
+        # Fetch yesterday's close and open price from live quote API
         try:
             quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}&exchange=NSE"
             quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
@@ -213,14 +213,25 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
             
             quote_data = quote_resp.json()
             prev_close = float(quote_data.get("previousClose", 0))
-        
+            open_price = float(quote_data.get("openPrice", 0))
+    
+            # ✅ Smart Gap-Up Rejection Logic
+            if prev_close > 0 and open_price > prev_close * 1.03:
+                if ltp < open_price:  # No follow-through after gap-up
+                    print(f"⛔ Gap-up trap: Open ₹{open_price:.2f} > Prev Close ₹{prev_close:.2f} but LTP ₹{ltp:.2f} dropped")
+                    continue
+    
+            # ✅ Reject weak gap-downs
             if ltp <= prev_close * 0.995:
                 print(f"⛔ Not bullish: LTP ₹{ltp:.2f} ≤ Prev Close ₹{prev_close:.2f}")
                 continue
+    
         except Exception as e:
             print(f"⚠️ Close fetch failed: {str(e)[:60]}")
             continue
+    
         # Step 2: Volume check (last 5 trading days)
+    
         try:
             url = "https://api.dhan.co/v2/charts/intraday"
             # Use naive datetime without timezone (API requirement)

@@ -208,15 +208,36 @@ def load_dynamic_stocks(filepath="D:/Downloads/Dhanbot/dhan_autotrader/dynamic_s
     df = pd.read_csv(StringIO("".join(raw_lines)))
     return list(zip(df["symbol"], df["security_id"]))
 
-def verify_buy_order_in_trade_book(security_id):
+def verify_buy_order_in_trade_book(security_id, symbol=None):
     try:
         response = requests.get(TRADE_BOOK_URL, headers=HEADERS)
         if response.status_code == 200:
             trades = response.json().get("data", [])
+            print(f"📘 Trade book fetched: {len(trades)} entries")
+
             for trade in trades:
-                if str(trade.get("securityId")) == str(security_id) and trade.get("transactionType", "").upper() == "BUY":
+                t_sec_id = str(trade.get("securityId", "")).strip()
+                t_type = trade.get("transactionType", "").upper()
+                if t_sec_id == str(security_id).strip() and t_type == "BUY":
+                    print(f"✅ Verified via security_id: {t_sec_id}")
                     return True
-        return False
+
+            # 🌀 Fallback: Check by tradingSymbol match
+            if symbol:
+                print(f"⚠️ No match by security_id. Trying fallback by symbol={symbol}...")
+                for trade in trades:
+                    t_symbol = trade.get("tradingSymbol", "").strip().upper()
+                    t_type = trade.get("transactionType", "").upper()
+                    if t_symbol == symbol.strip().upper() and t_type == "BUY":
+                        print(f"✅ Verified via fallback tradingSymbol: {t_symbol}")
+                        return True
+
+            print(f"❌ No BUY match found in trade book for security_id={security_id}, symbol={symbol}")
+            return False
+        else:
+            print(f"❌ Trade book fetch failed. Status code: {response.status_code}")
+            return False
+
     except Exception as e:
         print(f"⚠️ Error verifying trade book for security_id={security_id}: {e}")
         return False
@@ -248,7 +269,7 @@ def place_buy_order(symbol, security_id, price, qty):
     raw_price = Decimal(str(price)) * Decimal("1.002")  # Add buffer for execution
     rounded_ticks = (raw_price / tick_size).quantize(Decimal("1"), rounding=ROUND_DOWN)
     buffer_price_decimal = (rounded_ticks * tick_size).quantize(tick_size, rounding=ROUND_DOWN)
-    buffer_price = float(buffer_price_decimal)
+    buffer_price = float(round(buffer_price_decimal, 2))
     print(f"🔧 Tick-adjusted price for {symbol}: ₹{buffer_price} (raw input: ₹{price})")
     
     payload = {
@@ -291,9 +312,17 @@ def place_buy_order(symbol, security_id, price, qty):
             order_id = None
     
         if order_id:
+            # ✅ Wait 3 seconds to allow broker to register the trade
+            print(f"⏳ Waiting 3 seconds for order to reflect in trade book...")
+            systime.sleep(3)
             # ✅ Trade verification using security_id + transaction_type from trade_book
-            verified = verify_buy_order_in_trade_book(security_id)
-            print(f"🛰️ Order verification via trade_book for {symbol}: {verified}")
+            verified = False
+            for attempt in range(3):
+                verified = verify_buy_order_in_trade_book(security_id, symbol)
+                print(f"🛰️ TradeBook Check Attempt {attempt+1} for {symbol}: {verified}")
+                if verified:
+                    break
+                systime.sleep(1.0)           
     
             if not verified:
                 reason = "❌ Trade book verification failed: BUY entry not found"
@@ -511,7 +540,7 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
         if price > high_15min and breakout_confirmed(security_id, high_15min):
             # Add delay before volume check API call
             systime.sleep(0.8)
-            
+        
             try:
                 candles = get_historical_price(security_id, interval="15m")
                 if not candles or not isinstance(candles, list):
@@ -538,6 +567,25 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
             if current_volume is None or current_volume <= 0:
                 print(f"⚠️ Invalid volume for {symbol}")
                 return
+        
+            # ✅ Dynamic Anti-Top Rejection (Protect against late entry at top)
+            candle_df = get_intraday_df(security_id, interval="5minute", lookback=5)
+            if candle_df is not None and len(candle_df) >= 3:
+                last_3 = candle_df.tail(3)
+                gains = (last_3["close"] - last_3["open"]) / last_3["open"]
+                recent_spike = gains.max() > 0.013  # >1.3% spike in last 3 candles
+        
+                wick_ratio = ((last_3["high"] - last_3["close"]) / (last_3["high"] - last_3["low"] + 0.01)).max()
+                wicky = wick_ratio > 0.6  # Long upper wick
+        
+                v1, v2, v3 = last_3["volume"].iloc[-3:]
+                volume_drop = v3 < 0.7 * ((v1 + v2) / 2)
+        
+                if recent_spike or wicky or volume_drop:
+                    print(f"⛔ {symbol} breakout rejected dynamically — spike={recent_spike}, wick={wicky}, volume_drop={volume_drop}")
+                    with failures_lock:
+                        filter_failures["dynamic_top"] = filter_failures.get("dynamic_top", 0) + 1
+                    return None       
                     
             capital = get_available_capital()
 
