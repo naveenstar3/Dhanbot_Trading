@@ -4580,3 +4580,130 @@ timestamp,script_name,action,status,message
 2025-07-15 11:07:06,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 4 opportunities
 2025-07-15 11:07:06,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
 2025-07-15 11:10:27,autotrade.py,BUY,❌ FAILED,SHRIRAMFIN → ❌ Trade book verification failed: BUY entry not found
+2025-07-15 16:00:06,git_sync.py,Git Push,✅ COMPLETE,46 file(s) pushed
+2025-07-15 18:33:56,autotrade.py,market_status,INFO,Skipped: Market closed.
+2025-07-15 18:33:56,autotrade.py,end,NO TRADE,No stock bought today.
+2025-07-16 09:44:01,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-16 09:44:01,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-16 09:44:21,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-16 09:44:21,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 4 opportunities
+2025-07-16 09:44:21,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-16 10:29:15,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,CSL FINANCE LIMITED - Rate limit hit
+2025-07-16 10:29:32,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,MARUTI SUZUKI INDIA LTD. - Rate limit hit
+2025-07-16 10:29:46,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,KRITI NUTRIENTS LIMITED - Rate limit hit
+2025-07-16 10:30:09,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,FCS SOFTWARE SOLN. LTD. - Rate limit hit
+2025-07-16 10:30:14,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,GRASIM INDUSTRIES LTD - Rate limit hit
+2025-07-16 10:30:18,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,G1NSETEST - Rate limit hit
+2025-07-16 10:30:19,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,V1NSETEST - Rate limit hit
+2025-07-16 10:30:20,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SAFARI IND (INDIA) LTD - Rate limit hit
+2025-07-16 10:30:23,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,REPRO INDIA LIMITED - Rate limit hit
+2025-07-16 10:30:27,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,M&M FIN. SERVICES LTD - Rate limit hit
+2025-07-16 10:30:41,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ALLCARGO GATI LIMITED - Rate limit hit
+2025-07-16 10:30:41,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,INFOMEDIA PRESS LIMITED - Rate limit hit
+2025-07-16 10:30:41,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,FIEM INDUSTRIES LIMITED - Rate limit hit
+2025-07-16 10:30:43,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,GTL INFRA.LTD - Rate limit hit
+2025-07-16 10:30:43,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,GUJARAT FLUOROCHEM LTD - Rate limit hit
+2025-07-16 10:30:53,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BARTRONICS INDIA LIMITED - Rate limit hit
+2025-07-16 10:30:55,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,UNO MINDA LIMITED - Rate limit hit
+2025-07-16 10:31:01,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,APOLLO PIPES LIMITED - Rate limit hit
+2025-07-16 10:31:10,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,INSECTICIDES (I) LTD - Rate limit hit
+2025-07-16 10:31:13,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,031NSETEST - Rate limit hit
+2025-07-16 10:31:13,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,051NSETEST - Rate limit hit
+2025-07-16 10:31:14,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,081NSETEST - Rate limit hit
+2025-07-16 10:31:14,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,TARMAT LIMITED - Rate limit hit
+2025-07-16 10:31:14,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,111NSETEST - Rate limit hit
+2025-07-16 10:31:15,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,131NSETEST - Rate limit hit
+2025-07-16 10:31:15,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,161NSETEST - Rate limit hit
+2025-07-16 10:31:52,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,D P WIRES LIMITED - Rate limit hit
+2025-07-16 10:32:09,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,NIP IND ETF LONGTERM GILT - Rate limit hit
+2025-07-16 10:32:12,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ALLCARGO TERMINALS LTD - Rate limit hit
+2025-07-16 10:32:46,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,PLAZA WIRES LIMITED - Rate limit hit
+2025-07-16 10:32:47,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BAJAJ CONSUMER CARE LTD - Rate limit hit
+2025-07-16 10:32:47,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,THE UGAR SUGAR WORKS LTD - Rate limit hit
+2025-07-16 10:32:52,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ESAF SMALL FINANCE BANK L - Rate limit hit
+2025-07-16 10:32:54,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,DEEPAK NITRITE LTD - Rate limit hit
+2025-07-16 10:33:04,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,AXIS MF - AXIS GOLD ETF - Rate limit hit
+2025-07-16 10:33:18,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,AVADH SUG & ENERGY LTD - Rate limit hit
+2025-07-16 10:33:22,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,MEDI ASSIST HEALTH SER L - Rate limit hit
+2025-07-16 10:33:22,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,MATRIMONY.COM LIMITED - Rate limit hit
+2025-07-16 10:33:23,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,CHOLAMANDALAM FIN HOL LTD - Rate limit hit
+2025-07-16 10:33:32,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,MOREPEN LAB. LTD - Rate limit hit
+2025-07-16 10:33:43,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SINCLAIRS HOTELS LIMITED - Rate limit hit
+2025-07-16 10:33:44,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,KBC GLOBAL LIMITED - Rate limit hit
+2025-07-16 10:33:59,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,AVANTEL LIMITED - Rate limit hit
+2025-07-16 10:34:03,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,INTERARCH BLDNG SOLTN LTD - Rate limit hit
+2025-07-16 10:34:16,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,GROWWAMC - GROWWDEFNC - Rate limit hit
+2025-07-16 10:34:39,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,UNIMECH AEROSPACE N MFG L - Rate limit hit
+2025-07-16 10:34:50,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SANDESH LTD - Rate limit hit
+2025-07-16 10:34:56,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ZERODHAAMC - SILVERCASE - Rate limit hit
+2025-07-16 10:34:57,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ICICI PRUD NIFTY 100 ETF - Rate limit hit
+2025-07-16 10:35:02,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SHREYANS INDUSTRIES LTD - Rate limit hit
+2025-07-16 10:35:03,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BOROSIL RENEWABLES LTD - Rate limit hit
+2025-07-16 10:35:34,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,REGENCY CERAMICS LTD. - Rate limit hit
+2025-07-16 10:35:34,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SUNDARAM BRAK LININGS LTD - Rate limit hit
+2025-07-16 10:35:36,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,WENDT (INDIA) LIMITED - Rate limit hit
+2025-07-16 10:35:41,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,RAMCO INDUSTRIES LIMITED - Rate limit hit
+2025-07-16 10:35:45,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,DCM FINANCIAL SERVICES LT - Rate limit hit
+2025-07-16 10:36:02,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,AMI ORGANICS LIMITED - Rate limit hit
+2025-07-16 10:36:04,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,CITY UNION BANK LTD - Rate limit hit
+2025-07-16 10:36:11,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SIKKO INDUSTRIES LIMITED - Rate limit hit
+2025-07-16 10:36:15,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,MANGALAM ORGANICS LIMITED - Rate limit hit
+2025-07-16 10:36:19,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,MOLD-TEK PACKAGING LTD - Rate limit hit
+2025-07-16 10:36:24,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BIRLASOFT LIMITED - Rate limit hit
+2025-07-16 10:36:27,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SHALBY LIMITED - Rate limit hit
+2025-07-16 10:36:36,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,WOCKHARDT LIMITED - Rate limit hit
+2025-07-16 10:37:01,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,HARIOM PIPE INDUSTRIES L - Rate limit hit
+2025-07-16 10:37:02,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,UFO MOVIEZ INDIA LTD. - Rate limit hit
+2025-07-16 10:37:14,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,KPIT TECHNOLOGIES LIMITED - Rate limit hit
+2025-07-16 10:37:17,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ONE POINT ONE SOL LTD - Rate limit hit
+2025-07-16 11:26:48,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-16 11:26:48,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-16 11:26:49,autotrade.py,GPT_ERROR,cannot access local variable 'symbol' where it is not associated with a value,Using fallback list
+2025-07-16 11:27:53,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-16 11:29:36,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-16 11:29:58,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-16 11:29:58,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-16 11:30:17,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-16 11:30:17,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 3 opportunities
+2025-07-16 11:30:17,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-16 12:16:11,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-16 12:16:11,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-16 12:16:29,GPT Ranking,Decision,SKIP,No suitable stocks
+2025-07-16 12:16:29,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 2 opportunities
+2025-07-16 12:16:29,autotrade.py,GPT_ERROR,can only join an iterable,Using fallback list
+2025-07-16 13:51:12,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,NESTLEIND - Rate limit hit
+2025-07-16 13:51:12,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,M&M - Rate limit hit
+2025-07-16 13:51:13,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,INFY - Rate limit hit
+2025-07-16 13:51:13,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ASIANPAINT - Rate limit hit
+2025-07-16 13:51:14,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,TITAN - Rate limit hit
+2025-07-16 13:51:14,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,IRFC - Rate limit hit
+2025-07-16 13:51:15,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,LT - Rate limit hit
+2025-07-16 13:51:16,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SWIGGY - Rate limit hit
+2025-07-16 13:51:16,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,EICHERMOT - Rate limit hit
+2025-07-16 13:51:16,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SBILIFE - Rate limit hit
+2025-07-16 13:51:17,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,HDFCLIFE - Rate limit hit
+2025-07-16 13:51:17,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,HDFCBANK - Rate limit hit
+2025-07-16 13:51:18,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,HCLTECH - Rate limit hit
+2025-07-16 13:51:18,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BOSCHLTD - Rate limit hit
+2025-07-16 13:51:19,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,TITAN - Rate limit hit
+2025-07-16 13:51:20,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,MARUTI - Rate limit hit
+2025-07-16 13:51:21,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,TITAN - Rate limit hit
+2025-07-16 13:51:21,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ICICIBANK - Rate limit hit
+2025-07-16 13:51:21,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,CGPOWER - Rate limit hit
+2025-07-16 13:51:22,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,HAL - Rate limit hit
+2025-07-16 13:51:22,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,RELIANCE - Rate limit hit
+2025-07-16 13:51:22,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,BAJAJHLDNG - Rate limit hit
+2025-07-16 13:51:23,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,ONGC - Rate limit hit
+2025-07-16 13:51:23,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,PIDILITIND - Rate limit hit
+2025-07-16 13:51:24,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,GAIL - Rate limit hit
+2025-07-16 13:51:24,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,TATAMOTORS - Rate limit hit
+2025-07-16 13:51:25,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,GODREJCP - Rate limit hit
+2025-07-16 13:51:26,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SUNPHARMA - Rate limit hit
+2025-07-16 13:51:26,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,DLF - Rate limit hit
+2025-07-16 13:51:26,dynamic_stock_generator.py,PriceFetch,❌ 429 Rate Limit,SIEMENS - Rate limit hit
+2025-07-16 14:21:08,autotrade.py,startup,STARTED,Smart dynamic AutoTrade started.
+2025-07-16 14:21:08,Dynamic_Gpt_Momentum.py,start,MARKET_SCAN,Starting intraday scan
+2025-07-16 14:21:37,GPT Ranking,Error,FALLBACK,No valid symbols parsed
+2025-07-16 14:21:37,Dynamic_Gpt_Momentum.py,complete,SUCCESS,Found 5 opportunities
+2025-07-16 14:52:03,autotrade.py,WATCHDOG,⚠️ NO TRADE,No trade by 2:15 PM
+2025-07-16 14:53:04,autotrade.py,end,NO TRADE,No stock bought today.

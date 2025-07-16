@@ -477,7 +477,8 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
             "avg_range": round(atr, 2),
             "potential_profit": round(quantity * atr, 2),
             "sma_20": sma_20,          # NEW FIELD
-            "rsi": rsi_value           # NEW FIELD (corrected from rsi to rsi_value)
+            "rsi": rsi_value,           # NEW FIELD (corrected from rsi to rsi_value)
+            "stock_origin": "Dynamic"
         })
         print(f"✅ SELECTED: ₹{ltp:,.2f} | Vol: {avg_volume:,.0f} | Range: ₹{atr:.2f}")
 
@@ -499,6 +500,100 @@ if results:
     results_df.to_csv(OUTPUT_CSV, index=False)   
     log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "SUCCESS", f"{len(results_df)} stocks saved to dynamic_stock_list and DB.")
     log_dynamic_stock_list(results_df)
+    # ====== 📈 Trending Nifty 100 Boost (Top Gainers from Nifty100) ======
+    print("\n🚀 Adding trending Nifty 100 gainers to boost trade pool...")
+    
+    trending_additions = []
+    
+    for _, row in nifty100_df.iterrows():
+        symbol = row["base_symbol"]
+        secid = str(row["SEM_SMST_SECURITY_ID"])
+    
+        try:
+            quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}&exchange=NSE"
+            quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
+            if quote_resp.status_code != 200:
+                continue
+            data = quote_resp.json()
+            open_price = float(data.get("openPrice", 0))
+            ltp = float(data.get("lastTradedPrice", 0))
+            if open_price <= 0 or ltp <= 0:
+                continue
+    
+            pct_gain = ((ltp - open_price) / open_price) * 100
+    
+            if pct_gain < 2:  # Not enough momentum
+                continue
+    
+            if symbol in results_df["symbol"].values:
+                continue
+    
+            # Get RSI
+            from_date = (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d 09:15:00')
+            to_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d 15:30:00')
+            payload = {
+                "securityId": secid,
+                "exchangeSegment": "NSE_EQ",
+                "instrument": "EQUITY",
+                "interval": "1",
+                "oi": "false",
+                "fromDate": from_date,
+                "toDate": to_date
+            }
+            response = requests.post("https://api.dhan.co/v2/charts/intraday", headers=HEADERS, json=payload, timeout=10)
+            if response.status_code != 200:
+                continue
+            hist = response.json()
+            closes = pd.Series(hist["close"])
+            if closes.empty or len(closes) < 14:
+                continue
+            delta = closes.diff()
+            gain = delta.where(delta > 0, 0)
+            loss = -delta.where(delta < 0, 0)
+            avg_gain = gain.rolling(14).mean().bfill()
+            avg_loss = loss.rolling(14).mean().bfill().replace(0, 0.01)
+            rs = avg_gain / avg_loss
+            rsi = 100 - (100 / (1 + rs))
+            rsi_val = rsi.iloc[-1]
+    
+            if rsi_val >= 70:
+                continue
+    
+            quantity = int(CAPITAL // ltp)
+            if quantity <= 0:
+                continue
+    
+            capital_used = quantity * ltp
+            trending_additions.append({
+                "symbol": symbol,
+                "security_id": secid,
+                "ltp": ltp,
+                "quantity": quantity,
+                "capital_used": capital_used,
+                "avg_volume": 0,
+                "avg_range": 0,
+                "potential_profit": round(quantity * 2, 2),  # Est. ₹2 profit
+                "sma_20": None,
+                "rsi": rsi_val,
+                "sector": row.get("sector", None),
+                "priority_score": pct_gain * 1000,  # Just for sorting
+                "stock_origin": "Trending"
+            })
+    
+        except Exception as e:
+            print(f"⚠️ Trending check failed for {symbol}: {str(e)[:60]}")
+            continue
+    
+    # Merge into existing result set
+    if trending_additions:
+        trending_df = pd.DataFrame(trending_additions)
+        results_df = pd.concat([results_df, trending_df], ignore_index=True)
+        results_df = results_df.sort_values("priority_score", ascending=False)
+        results_df.to_csv(OUTPUT_CSV, index=False)
+        print(f"✅ Added {len(trending_additions)} trending stocks to dynamic_stock_list.csv")
+    else:
+        print("❌ No trending stocks passed filters.")
+    
     print(f"\n✅ Saved {len(results_df)} stocks to {OUTPUT_CSV}")
     # 📄 Save summary to filter_summary_log.csv
     summary_path = "D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_log.csv"

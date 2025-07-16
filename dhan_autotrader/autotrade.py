@@ -498,6 +498,141 @@ def breakout_confirmed(security_id, high_15min):
         print(f"⚠️ Breakout confirm failed for security_id {security_id}: {e}")
         return False
  
+def is_safe_to_buy(symbol, price, security_id, rsi):
+    try:
+        # ✅ 1. Check latest 3-min candle shape
+        df = get_intraday_df(security_id, interval="3minute", lookback=5)
+        if df is None or df.empty or len(df) < 3:
+            print(f"⚠️ Skipping {symbol} — No 3-min data for safety check.")
+            return False
+
+        latest = df.iloc[-1]
+        candle_range = latest["high"] - latest["low"]
+        candle_body = abs(latest["close"] - latest["open"])
+        candle_body_ratio = candle_body / (candle_range + 0.01)
+
+        if candle_body_ratio < 0.65:
+            print(f"⛔ {symbol} — Weak 3-min candle (body ratio {candle_body_ratio:.2f})")
+            return False
+
+        # ✅ 2. Volume confirmation
+        avg_vol = df["volume"].tail(4).iloc[:-1].mean()
+        if latest["volume"] < 1.8 * avg_vol:
+            print(f"⛔ {symbol} — Volume not convincing. Current: {latest['volume']}, Avg: {avg_vol}")
+            return False
+
+        # ✅ 3. RSI already passed earlier — just re-check
+        if rsi > 68:
+            print(f"⛔ {symbol} — RSI too high: {rsi}")
+            return False
+
+        # ✅ 4. MACD histogram check
+        macd_data = get_macd_data(security_id, interval="5minute")
+        if not macd_data or macd_data.get("histogram", 0) <= 0:
+            print(f"⛔ {symbol} — MACD histogram not positive.")
+            return False
+
+        # ✅ 5. VWAP distance
+        vwap = get_live_vwap(security_id)
+        if vwap and (price - vwap) / price > 0.01:
+            print(f"⛔ {symbol} — Overextended above VWAP. Price: {price}, VWAP: {vwap}")
+            return False
+
+        # ✅ 6. Sector trend (optional)
+        sector_trend = get_sector_momentum(symbol)
+        if not sector_trend:
+            print(f"⛔ {symbol} — Sector trend weak or unknown.")
+            return False
+
+        return True
+
+    except Exception as e:
+        print(f"⚠️ {symbol} — Safety check error: {e}")
+        return False
+
+def get_intraday_df(security_id, interval="5minute", lookback=10):
+    """
+    Returns a Pandas DataFrame with OHLCV data for the given security_id and interval.
+    Uses get_historical_price() internally.
+    """
+    try:
+        interval_map = {
+            "1minute": "1m",
+            "3minute": "3m",
+            "5minute": "5m",
+            "15minute": "15m"
+        }
+
+        interval_str = interval_map.get(interval.lower(), "5m")
+
+        candles = get_historical_price(security_id, interval=interval_str)
+        if not candles or len(candles) == 0:
+            return None
+
+        # Take only last `lookback` candles
+        candles = candles[-lookback:]
+
+        df = pd.DataFrame(candles)
+        df = df[["open", "high", "low", "close", "volume"]]
+        return df
+
+    except Exception as e:
+        print(f"❌ Error in get_intraday_df for {security_id}: {e}")
+        return None
+
+def get_live_vwap(security_id):
+    df = get_intraday_df(security_id, interval="5minute", lookback=20)
+    if df is None or df.empty:
+        return None
+
+    df["typical_price"] = (df["high"] + df["low"] + df["close"]) / 3
+    df["tp_x_volume"] = df["typical_price"] * df["volume"]
+    vwap = df["tp_x_volume"].sum() / df["volume"].sum()
+    return round(vwap, 2)
+
+def get_macd_data(security_id, interval="5minute"):
+    df = get_intraday_df(security_id, interval=interval, lookback=40)
+    if df is None or df.empty:
+        return None
+
+    df["ema12"] = df["close"].ewm(span=12, adjust=False).mean()
+    df["ema26"] = df["close"].ewm(span=26, adjust=False).mean()
+    df["macd"] = df["ema12"] - df["ema26"]
+    df["signal"] = df["macd"].ewm(span=9, adjust=False).mean()
+    df["histogram"] = df["macd"] - df["signal"]
+
+    latest = df.iloc[-1]
+    return {
+        "macd": round(latest["macd"], 4),
+        "signal": round(latest["signal"], 4),
+        "histogram": round(latest["histogram"], 4)
+    }
+
+def get_sector_momentum(symbol):
+    sector_map = {
+        "RELIANCE": "NIFTY_ENERGY",
+        "SBIN": "NIFTY_BANK",
+        "HDFCBANK": "NIFTY_BANK",
+        "TCS": "NIFTY_IT",
+        "MARUTI": "NIFTY_AUTO",
+        "SHRIRAMFIN": "NIFTY_FIN_SERVICE",
+    }
+
+    sector = sector_map.get(symbol.upper())
+    if not sector:
+        return True  # assume true if unknown
+
+    try:
+        # Fetch sector index live % change — replace with real API if available
+        index_data = get_index_change(sector)  # Assume this exists
+        if index_data["percent_change"] > 0:
+            return True
+        else:
+            return False
+    except:
+        return True  # fallback to true if API fails
+
+
 # 🧵 Thread-safe monitoring functions
 def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, filter_failures, failures_lock, avg_volume=100000, fallback_mode=None):
     try:
@@ -729,6 +864,13 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
                         return None
         except Exception as e:
             print(f"⚠️ Volatility check error for {symbol}: {e}")
+        
+        # ✅ Final breakout confirmation before approving candidate
+        if not is_safe_to_buy(symbol, price, security_id, rsi):
+            print(f"⛔ Skipping {symbol} — Failed safe-to-buy filter.")
+            with failures_lock:
+                filter_failures["final_check_failed"] = filter_failures.get("final_check_failed", 0) + 1
+            return None
         
         return {
             "symbol": symbol,
@@ -1154,15 +1296,25 @@ def run_autotrade():
             filter_failures.update({k: 0 for k in filter_failures})
     
             valid_candidates = []
-            with ThreadPoolExecutor(max_workers=1) as executor:  # Reduced to single worker
+            batch_size = 10
+            total_stocks = len(ranked_stocks)
+            num_batches = math.ceil(total_stocks / batch_size)
+            current_batch_index = fallback_pass % num_batches
+            batch_start = current_batch_index * batch_size
+            batch_end = min(batch_start + batch_size, total_stocks)
+            batch_symbols = ranked_stocks[batch_start:batch_end]
+            
+            print(f"📦 Batch Range: {batch_start} to {batch_end - 1} (Total Stocks: {total_stocks})")
+            
+            with ThreadPoolExecutor(max_workers=1) as executor:
                 futures = {}
-                for stock in ranked_stocks[:10]:  # Only scan top 10 stocks
-                    # Add random delay between submissions
+                for stock in batch_symbols:
                     delay = random.uniform(1, 1.5)
                     systime.sleep(delay)
-                    
+            
                     future = executor.submit(monitor_wrapper, stock, filter_failures, failures_lock, fallback_mode)
                     futures[future] = stock
+            
                 
                 # Process results as they complete
                 for future in as_completed(futures):

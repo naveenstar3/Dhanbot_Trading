@@ -78,7 +78,21 @@ def load_dynamic_stocks():
         print(f"⚠️ Error loading stock list: {e}")
         return []
         
-STOCKS_TO_WATCH = load_dynamic_stocks()
+STOCKS_TO_WATCH = []
+symbol_origin_map = {}
+
+try:
+    with open("D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv", newline='') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            sym = row["symbol"].strip().upper()
+            sec = row["security_id"].strip()
+            origin = row.get("stock_origin", "Dynamic").strip()
+            STOCKS_TO_WATCH.append((sym, sec))
+            symbol_origin_map[sym] = origin
+except Exception as e:
+    print(f"⚠️ Failed to load stock origin: {e}")
+
 
 # ======== MARKET ANALYSIS FUNCTIONS ========
 def get_market_health():
@@ -487,6 +501,7 @@ def find_intraday_opportunities():
     opportunities = []
     for i, stock_tuple in enumerate(stocks):
         symbol, secid = stock_tuple
+        origin = symbol_origin_map.get(symbol, "Dynamic")
             
         print(f"⏳ Processing {i+1}/{len(stocks)}: {symbol}")
         
@@ -514,7 +529,7 @@ def find_intraday_opportunities():
             # ❗ Reject long wick candles (low conviction moves)
             candle_body = abs(data_5['Close'].iloc[-1] - data_5['Open'].iloc[-1])
             candle_range = data_5['High'].iloc[-1] - data_5['Low'].iloc[-1]
-            if candle_range > 0 and candle_body < 0.3 * candle_range:
+            if origin != "Trending" and candle_range > 0 and candle_body < 0.3 * candle_range:
                 print(f"⚠️ Wick rejection: {symbol} | Body={candle_body:.2f}, Range={candle_range:.2f}")
                 continue           
             
@@ -523,12 +538,12 @@ def find_intraday_opportunities():
             rsi = round(rsi_series.iloc[-1], 2) if not rsi_series.empty else 0
             
             # Skip low-quality candidates with more flexible thresholds
-            if total_volume < volume_threshold:
+            if origin != "Trending" and total_volume < volume_threshold:
                 continue
             if momentum_score < momentum_threshold and breakout_potential < 60:
                 continue
             # ✅ Smart RSI rejection: allow high RSI if other signals are strong
-            if rsi >= 75:
+            if origin != "Trending" and rsi >= 75:
                 # ❗ Avoid fake breakouts with high breakout but weak momentum
                 if breakout_potential >= 85 and momentum_score < 35:
                     print(f"⚠️ Ignoring {symbol} - breakout without momentum, likely fake move")
@@ -563,7 +578,7 @@ def find_intraday_opportunities():
             
                 smart_relaxed_ok = True
             
-                if is_psu or is_penny:
+                if origin != "Trending" and (is_psu or is_penny):
                     smart_relaxed_ok = (
                         momentum_score > 45 and
                         total_volume >= 10000000 and
