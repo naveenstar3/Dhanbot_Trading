@@ -608,6 +608,33 @@ def get_macd_data(security_id, interval="5minute"):
         "histogram": round(latest["histogram"], 4)
     }
 
+def detect_bullish_pattern(df):
+    """Detect bullish candle patterns in 5-minute data"""
+    if df is None or len(df) < 3:
+        return False
+    last = df.iloc[-1]
+    prev = df.iloc[-2]
+    prev2 = df.iloc[-3]
+
+    # Bullish Engulfing
+    if prev['close'] < prev['open'] and last['close'] > last['open']:
+        if last['close'] > prev['open'] and last['open'] < prev['close']:
+            return True
+
+    # Hammer
+    body = abs(last['close'] - last['open'])
+    lower_wick = last['open'] - last['low'] if last['close'] > last['open'] else last['close'] - last['low']
+    upper_wick = last['high'] - max(last['close'], last['open'])
+    if body > 0 and lower_wick > 2 * body and upper_wick < body:
+        return True
+
+    # Morning Star
+    if prev2['close'] < prev2['open'] and last['close'] > last['open']:
+        if prev['close'] < prev2['close'] and last['close'] > (prev2['open'] + prev2['close']) / 2:
+            return True
+
+    return False
+
 def get_sector_momentum(symbol):
     sector_map = {
         "RELIANCE": "NIFTY_ENERGY",
@@ -866,6 +893,13 @@ def monitor_stock_for_breakout(symbol, high_15min, capital, dhan_symbol_map, fil
             print(f"⚠️ Volatility check error for {symbol}: {e}")
         
         # ✅ Final breakout confirmation before approving candidate
+        candle_df = get_intraday_df(security_id, interval="5minute", lookback=5)
+        if not detect_bullish_pattern(candle_df):
+            print(f"⛔ Pattern Rejected: No bullish confirmation for {symbol}")
+            with failures_lock:
+                filter_failures["pattern"] = filter_failures.get("pattern", 0) + 1
+            return None
+       
         if not is_safe_to_buy(symbol, price, security_id, rsi):
             print(f"⛔ Skipping {symbol} — Failed safe-to-buy filter.")
             with failures_lock:
