@@ -1,4 +1,4 @@
-# dynamic_stock_generator.py
+# premarket_nifty100_scanner.py
 import os
 import sys
 import json
@@ -12,22 +12,30 @@ from db_logger import log_dynamic_stock_list, log_to_postgres
 import io
 import sys
 from dhan_api import get_live_price, get_historical_price
-import random 
+import random
 import numpy as np
+
+# ======== CONSTANTS ========
+RSI_MIN = 45
+RSI_MAX = 70
+GAP_UP_THRESHOLD = 0.01  # 1% gap-up threshold
+MIN_VOLUME = 300000
+MIN_ATR = 1.2
 
 log_buffer = io.StringIO()
 class TeeLogger:
     def __init__(self, *streams):
         self.streams = streams
+        
     def write(self, message):
         for s in self.streams:
             s.write(message)
             s.flush()
+            
     def flush(self):
         for s in self.streams:
             s.flush()
 
-log_buffer = io.StringIO()
 sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
 
 # ======== CONFIGURATION ========
@@ -76,7 +84,6 @@ except Exception as e:
 
 # ======== RELIABLE NIFTY 100 FETCH ========
 def get_nifty100_constituents():
-    """Fetch Nifty 100 using nsepython with robust error handling"""
     try:
         url = 'https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%20100'
         data = nsefetch(url)
@@ -104,7 +111,6 @@ if not nifty100_symbols:
 pd.DataFrame(nifty100_symbols, columns=["symbol"]).to_csv(NIFTY100_CACHE, index=False)
 
 def build_sector_map(nifty100_symbols):
-    """Fetch sector-wise members from NSE and map symbols to sectors (dynamic)"""
     sector_index_map = {
         "NIFTY BANK": "NIFTY%20BANK",
         "NIFTY IT": "NIFTY%20IT",
@@ -136,90 +142,71 @@ def build_sector_map(nifty100_symbols):
 def get_sector_strength():
     sector_indices = [
         "NIFTY BANK", "NIFTY IT", "NIFTY FMCG", "NIFTY FIN SERVICE", "NIFTY AUTO",
-        "NIFTY PHARMA", "NIFTY REALTY", "NIFTY METAL", "NIFTY ENERGY"
+        "NIFTY PHARMA", "NIFTY REALTY", "NIFTY METAL", "NIFTY ENERGY", "NIFTY CONSUMER DURABLES",
+        "NIFTY OIL & GAS", "NIFTY MEDIA", "NIFTY HEALTHCARE INDEX"
     ]
     sector_gains = {}
+    market_condition = "bullish"
+    
+    # Get Nifty 50 performance for market condition
+    try:
+        nifty_url = "https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%2050"
+        nifty_data = nsefetch(nifty_url)
+        nifty_change = float(nifty_data["data"][0]["pChange"])
+        market_condition = "bearish" if nifty_change < -0.3 else "bullish"
+        print(f"📊 Market Condition: {market_condition.upper()} (Nifty Change: {nifty_change:.2f}%)")
+    except Exception as e:
+        print(f"⚠️ Nifty 50 fetch failed: {str(e)[:50]}")
+
     for sector in sector_indices:
         try:
             url = f"https://www.nseindia.com/api/equity-stockIndices?index={sector.replace(' ', '%20')}"
             data = nsefetch(url)
-            change = float(data["data"][0]["change"])
-            sector_gains[sector] = change
+            pChange = float(data["data"][0]["pChange"])
+            sector_gains[sector] = pChange
         except Exception as e:
             print(f"⚠️ Sector fetch failed: {sector} → {str(e)[:50]}")
 
-    positive_gainers = [(s, g) for s, g in sector_gains.items() if g > 0]
-    top_sectors = [s for s, _ in positive_gainers]
+    # Dynamic sector selection
+    if market_condition == "bearish":
+        top_sectors = [s for s, g in sector_gains.items() if g > 0]
+        if not top_sectors:
+            top_sectors = sorted(sector_gains.items(), key=lambda x: x[1], reverse=True)[:3]
+            top_sectors = [s[0] for s in top_sectors]
+        print("🐻 Bearish market - Dynamic positive sectors:", top_sectors)
+    else:
+        top_sectors = [s for s, g in sector_gains.items() if g > 0]
+        if not top_sectors:
+            top_sectors = list(sector_gains.keys())
+        print("🐂 Bullish market - Dynamic positive sectors:", top_sectors)   
     
-    print("📈 Top sectors today:", top_sectors)
-    return [s[0] for s in top_sectors]
+    return top_sectors, market_condition, sector_gains
 
-# ======== MARKET TREND ANALYSIS ========
-def is_index_bullish(index_id, segment):
-    """Check if index is bullish using RSI and MACD"""
-    try:
-        # Get intraday data for index
-        url = "https://api.dhan.co/v2/charts/intraday"
-        now = datetime.now()
-        
-        # Handle market hours - indices only available during trading hours
-        market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
-        market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
-        
-        if now < market_open or now > market_close:
-            print("⚠️ Outside market hours for index data")
-            return False
-        
-        # Use date-only format for indices
-        today_str = now.strftime("%Y-%m-%d")
-        payload = {
-            "securityId": str(index_id),
-            "exchangeSegment": segment,
-            "instrument": "INDEX",
-            "interval": "15",
-            "fromDate": today_str,
-            "toDate": today_str
-        }
-        
-        # For indices, API expects date-only format
-        print(f"🔍 Fetching index data for {today_str}")
-        
-        response = requests.post(url, headers=HEADERS, json=payload, timeout=10)
-        if response.status_code != 200:
-            error_msg = response.text[:100] if response.text else "No response text"
-            print(f"⚠️ Index data fetch failed ({response.status_code}): {error_msg}")
-            return False
-            
-        data = response.json()
-        if not data or 'close' not in data or len(data['close']) < 5:
-            print("⚠️ Insufficient index candle data")
-            return False
-            
-        closes = pd.Series(data['close']).astype(float)
-        
-        # Calculate RSI (14-period)
-        delta = closes.diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.rolling(14).mean().bfill()
-        avg_loss = loss.rolling(14).mean().bfill().replace(0, 0.01)
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        rsi_value = rsi.iloc[-1]
-        
-        # Calculate MACD (12,26,9)
-        ema12 = closes.ewm(span=12, adjust=False).mean()
-        ema26 = closes.ewm(span=26, adjust=False).mean()
-        macd = ema12 - ema26
-        signal = macd.ewm(span=9, adjust=False).mean()
-        histogram = macd - signal
-        
-        # Bullish if RSI > 50 and MACD histogram is positive and increasing
-        return (rsi_value > 50) and (histogram.iloc[-1] > 0) and (histogram.iloc[-1] > histogram.iloc[-2])
-        
-    except Exception as e:
-        print(f"⚠️ is_index_bullish failed: {str(e)[:100]}")
-        return False
+# ======== TECHNICAL INDICATORS ========
+def calculate_macd(closes):
+    if len(closes) < 26:
+        return 0, 0, False
+    
+    ema12 = closes.ewm(span=12, adjust=False).mean()
+    ema26 = closes.ewm(span=26, adjust=False).mean()
+    macd = ema12 - ema26
+    signal = macd.ewm(span=9, adjust=False).mean()
+    histogram = macd - signal
+    macd_crossover = macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] <= signal.iloc[-2]
+    
+    return macd.iloc[-1], histogram.iloc[-1], macd_crossover
+
+def calculate_rsi(closes):
+    if len(closes) < 14:
+        return 50
+    
+    delta = closes.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(14).mean().bfill()
+    avg_loss = loss.rolling(14).mean().bfill().replace(0, 0.01)
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
 
 # ======== LOAD MASTER SECURITY LIST ========
 try:
@@ -227,34 +214,14 @@ try:
     symbol_sector_map = build_sector_map(nifty100_symbols)
     master_df["base_symbol"] = master_df["SEM_TRADING_SYMBOL"].str.replace("-EQ", "").str.strip().str.upper()
     master_df["sector"] = master_df["base_symbol"].map(symbol_sector_map)
-    top_sectors = get_sector_strength()
+    top_sectors, market_condition, sector_strengths = get_sector_strength()
     
-    # Get Nifty 50 index ID for trend check
-    nifty50_row = master_df[
-        master_df["base_symbol"].str.upper().str.contains("NIFTY") &
-        master_df["SM_SYMBOL_NAME"].str.upper().str.contains("50")
-    ]
-    if not nifty50_row.empty:
-        nifty50_id = str(nifty50_row.iloc[0]["SEM_SMST_SECURITY_ID"])
-        nifty_segment = "IDX_I"
-    else:
-        print("❌ Nifty 50 index not found in master. Skipping trend check.")
-        nifty50_id = None
-        nifty_segment = None
-    
-    # Check market trend for Nifty 50 using correct segment
-    if nifty50_id and nifty_segment:
-        nifty_bullish = is_index_bullish(nifty50_id, nifty_segment)
-    else:
-        nifty_bullish = False
-    
-    market_status = "Bullish" if nifty_bullish else "Bearish"
-    print(f"📊 Market Trend: {market_status}")
-    
+    # Filter to Nifty 100 and top sectors
     nifty100_df = master_df[
-        (master_df["base_symbol"].isin(nifty100_symbols))
-    ]   
-    print(f"📊 Master list filtered to {len(nifty100_df)} Nifty 100 stocks")
+        (master_df["base_symbol"].isin(nifty100_symbols)) &
+        (master_df["sector"].isin(top_sectors))
+    ]
+    print(f"📊 Master list filtered to {len(nifty100_df)} Nifty 100 stocks in focus sectors")
     
     if len(nifty100_df) == 0:
         print("❌ No matching securities found in master list")
@@ -274,51 +241,42 @@ sma_passed = 0
 rsi_passed = 0
 final_selected = 0
 
-MIN_VOLUME = 300000  # 5 lakh shares
-MIN_ATR = 1.2  # ₹2 minimum daily range
-
 print("\n🚀 Starting pre-market scan...")
 for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
     total_scanned += 1
     symbol = row["base_symbol"]
     secid = str(row["SEM_SMST_SECURITY_ID"])
-    sector = row.get("sector", "UNKNOWN")
-    print(f"\n🔍 [{count}/{len(nifty100_df)}] Scanning {symbol} (Sector: {sector})")
-    
-    # Skip stocks not in top sectors during bearish market
-    if not nifty_bullish and sector not in top_sectors:
-        print(f"⏩ Skipping {symbol} - not in top sectors during bearish market")
-        continue
-    
+    sector = row["sector"]
+    print(f"\n🔍 [{count}/{len(nifty100_df)}] Scanning {symbol} ({sector})")
+
     try:
         # Step 1: Get pre-market LTP
         ltp = get_live_price(symbol, secid, premarket=True)       
         
-        # Fetch yesterday's close and open price from live quote API
+        # Fetch yesterday's close and open price
         try:
             quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}&exchange=NSE"
             quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
             
-            # Handle rate limiting for quote API
+            # Handle rate limiting
             if quote_resp.status_code == 429:
                 wait_time = 5 + random.uniform(0, 2)
                 print(f"⏳ Rate limited on quote API. Waiting {wait_time:.1f}s...")
                 time.sleep(wait_time)
-                # Retry once
                 quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
             
             quote_data = quote_resp.json()
             prev_close = float(quote_data.get("previousClose", 0))
             open_price = float(quote_data.get("openPrice", 0))
     
-            # ✅ Smart Gap-Up Rejection Logic
-            if prev_close > 0 and open_price > prev_close * 1.03:
-                if ltp < open_price:  # No follow-through after gap-up
+            # Smart Gap-Up Rejection Logic (1% threshold)
+            if prev_close > 0 and open_price > prev_close * (1 + GAP_UP_THRESHOLD):
+                if ltp < open_price:  # No follow-through
                     print(f"⛔ Gap-up trap: Open ₹{open_price:.2f} > Prev Close ₹{prev_close:.2f} but LTP ₹{ltp:.2f} dropped")
                     continue
     
-            # ✅ Reject weak gap-downs
-            if ltp <= prev_close * 0.995:
+            # Reject weak gap-downs in bullish markets
+            if market_condition == "bullish" and ltp <= prev_close * 0.995:
                 print(f"⛔ Not bullish: LTP ₹{ltp:.2f} ≤ Prev Close ₹{prev_close:.2f}")
                 continue
     
@@ -326,7 +284,7 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
             print(f"⚠️ Close fetch failed: {str(e)[:60]}")
             continue
     
-        # Step 2: Volume check (last 5 trading days)
+        # Step 2: Volume and volatility check
         try:
             url = "https://api.dhan.co/v2/charts/intraday"
             now = datetime.now()
@@ -345,7 +303,7 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
                 "toDate": to_date_str
             }
         
-            # Implement retry logic with exponential backoff
+            # Retry logic with exponential backoff
             max_retries = 3
             for attempt in range(max_retries):
                 try:
@@ -385,6 +343,8 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
                         break
                 
                     volume_passed += 1
+                    
+                    # Volatility check (ATR proxy)
                     df_vol["range"] = df_vol["high"] - df_vol["low"]
                     daily_range = df_vol.groupby("date")["range"].max()
                     atr = daily_range.tail(5).mean()
@@ -394,7 +354,7 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
                         break
                     
                     technical_passed += 1
-                    break
+                    break  # Success
                     
                 except Exception as e:
                     print(f"⚠️ Volume/ATR check attempt {attempt+1} failed: {str(e)[:70]}")
@@ -402,20 +362,24 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
                         raise
                     time.sleep((2 ** attempt) + random.uniform(0, 1))
             else:
-                continue
+                continue  # Skip to next stock
                 
         except Exception as e:
             print(f"⚠️ Volume/ATR check failed after retries: {str(e)[:70]}")
             continue
             
-        # ====== SMA and RSI Check ======
+        # ====== SMA, RSI, and MACD Check ======
         sma_20 = None
         rsi_value = None
+        macd_value = None
+        macd_hist = None
+        macd_crossover = False
         technical_ok = False
         
         try:
             from_date = (datetime.now() - timedelta(days=25)).strftime('%Y-%m-%d 09:15:00')
             to_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d 15:30:00')
+            
             max_retries = 3
             rejection_printed = False
             for attempt in range(max_retries):
@@ -450,7 +414,7 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
                     required_keys = {"open", "high", "low", "close", "volume", "timestamp"}
                     if not isinstance(data, dict) or not all(key in data for key in required_keys):
                         if not rejection_printed:
-                            print(f"❌ Invalid or incomplete response structure for {symbol}")
+                            print(f"❌ Invalid response structure for {symbol}")
                             rejection_printed = True
                         continue
             
@@ -485,15 +449,19 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
                             rejection_printed = True
                         continue
             
-                    delta = closes.diff()
-                    gain = delta.where(delta > 0, 0)
-                    loss = -delta.where(delta < 0, 0)
-                    avg_gain = gain.rolling(14).mean().bfill()
-                    avg_loss = loss.rolling(14).mean().bfill()
-                    avg_loss = avg_loss.replace(0, 0.01)
-                    rs = avg_gain / avg_loss
-                    rsi = 100 - (100 / (1 + rs))
-                    rsi_value = rsi.iloc[-1]
+                    # Calculate RSI (45-70 range for all market conditions)
+                    rsi_value = calculate_rsi(closes)
+                    
+                    # Calculate MACD
+                    macd_value, macd_hist, macd_crossover = calculate_macd(closes)
+                    
+                    # Standardized RSI check
+                    if rsi_value < RSI_MIN or rsi_value > RSI_MAX:
+                        if not rejection_printed:
+                            print(f"⛔ RSI out of range: {rsi_value:.2f} (Allowed: {RSI_MIN}-{RSI_MAX})")
+                            rejection_printed = True
+                        continue
+                    rsi_passed += 1
             
                     if ltp < sma_20:
                         if not rejection_printed:
@@ -501,13 +469,6 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
                             rejection_printed = True
                         continue
                     sma_passed += 1
-            
-                    if rsi_value < 50 or rsi_value > 70:
-                        if not rejection_printed:
-                            print(f"⛔ RSI out of range: {rsi_value:.2f}")
-                            rejection_printed = True
-                        continue
-                    rsi_passed += 1
             
                     technical_ok = True
                     break
@@ -519,7 +480,7 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
                         print(f"⏳ Retrying in {wait_time:.1f}s...")
                         time.sleep(wait_time)
             else:
-                continue
+                continue  # Skip to next stock
                 
         except Exception as e:
             print(f"⚠️ Technical indicator error: {str(e)[:70]}")
@@ -527,8 +488,8 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
             
         if not technical_ok:
             continue
-
-        # Step 4: Calculate position size
+            
+        # Step 4: Position sizing
         quantity = int(CAPITAL // ltp)
         if quantity <= 0:
             print(f"⛔ Unaffordable: ₹{ltp:,.2f} > ₹{CAPITAL:,.2f}")
@@ -548,40 +509,46 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
             "potential_profit": round(quantity * atr, 2),
             "sma_20": sma_20,
             "rsi": rsi_value,
+            "macd": macd_value,
+            "macd_hist": macd_hist,
+            "macd_crossover": int(macd_crossover),
             "sector": sector,
-            "market_trend": "Bullish" if nifty_bullish else "Bearish",
-            "in_top_sector": sector in top_sectors,
-            "stock_origin": "Dynamic"
+            "sector_strength": sector_strengths.get(sector, 0),
+            "stock_origin": "Dynamic",
+            "priority_score": round(atr * avg_volume, 2)  # Added priority score
         })
-        print(f"✅ SELECTED: ₹{ltp:,.2f} | Vol: {avg_volume:,.0f} | Range: ₹{atr:.2f}")
+        print(f"✅ SELECTED: ₹{ltp:,.2f} | Vol: {avg_volume:,.0f} | Range: ₹{atr:.2f} | RSI: {rsi_value:.2f}")
 
     except Exception as e:
         print(f"⚠️ Processing error: {str(e)[:70]}")
     finally:
-        time.sleep(0.5)
+        time.sleep(0.5)  # Jitter to avoid patterns
 
 # ======== SAVE RESULTS ========
 if results:
     results_df = pd.DataFrame(results)
-    
-    # Prioritize high volatility and volume with sector boost
-    results_df["sector_boost"] = results_df["in_top_sector"].astype(int) * 0.5  # 50% boost
-    results_df["priority_score"] = results_df["avg_range"] * results_df["avg_volume"] * (1 + results_df["sector_boost"])
+    # Priority score = ATR * Volume (higher is better)
+    results_df["priority_score"] = results_df["avg_range"] * results_df["avg_volume"]
     results_df = results_df.sort_values("priority_score", ascending=False)
     
+    # Save to CSV with additional technical data
     results_df.to_csv(OUTPUT_CSV, index=False)   
-    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "SUCCESS", 
-                   f"{len(results_df)} stocks saved to dynamic_stock_list. Market: {'Bullish' if nifty_bullish else 'Bearish'}")
+    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "SUCCESS", f"{len(results_df)} stocks saved to dynamic_stock_list and DB.")
     log_dynamic_stock_list(results_df)
     
-    # ====== Trending Nifty 100 Gainers ======
-    print("\n🚀 Adding trending Nifty 100 gainers to boost trade pool...")
+    # ====== 📈 Trending Stocks Boost ======
+    print("\n🚀 Adding trending stocks to boost trade pool...")
+    
     trending_additions = []
     
     for _, row in nifty100_df.iterrows():
         symbol = row["base_symbol"]
         secid = str(row["SEM_SMST_SECURITY_ID"])
-        sector = row.get("sector", "UNKNOWN")
+        sector = row.get("sector", "")
+        
+        # Skip if already selected
+        if symbol in results_df["symbol"].values:
+            continue
     
         try:
             quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}&exchange=NSE"
@@ -594,12 +561,15 @@ if results:
             if open_price <= 0 or ltp <= 0:
                 continue
     
-            pct_gain = ((ltp - open_price) / open_price) * 100
-    
-            if pct_gain < 2:
-                continue
-    
-            if symbol in results_df["symbol"].values:
+            # Calculate percentage move
+            if market_condition == "bullish":
+                pct_move = ((ltp - open_price) / open_price) * 100
+                min_move = 2.0  # Minimum 2% gain for bullish
+            else:
+                pct_move = ((open_price - ltp) / open_price) * 100
+                min_move = 1.5  # Minimum 1.5% drop for bearish
+            
+            if abs(pct_move) < min_move:
                 continue
     
             # Get RSI
@@ -621,17 +591,15 @@ if results:
             closes = pd.Series(hist["close"])
             if closes.empty or len(closes) < 14:
                 continue
-            delta = closes.diff()
-            gain = delta.where(delta > 0, 0)
-            loss = -delta.where(delta < 0, 0)
-            avg_gain = gain.rolling(14).mean().bfill()
-            avg_loss = loss.rolling(14).mean().bfill().replace(0, 0.01)
-            rs = avg_gain / avg_loss
-            rsi = 100 - (100 / (1 + rs))
-            rsi_val = rsi.iloc[-1]
+            rsi_val = calculate_rsi(closes)
     
-            if rsi_val >= 70:
-                continue
+            # Adjust RSI check for market condition
+            if market_condition == "bullish":
+                if rsi_val >= 70:  # Overbought
+                    continue
+            else:
+                if rsi_val <= 30:  # Oversold
+                    continue
     
             quantity = int(CAPITAL // ltp)
             if quantity <= 0:
@@ -649,11 +617,13 @@ if results:
                 "potential_profit": round(quantity * 2, 2),
                 "sma_20": None,
                 "rsi": rsi_val,
+                "macd": 0,
+                "macd_hist": 0,
+                "macd_crossover": 0,
                 "sector": sector,
-                "market_trend": "Bullish" if nifty_bullish else "Bearish",
-                "in_top_sector": sector in top_sectors,
-                "priority_score": pct_gain * 1000,
-                "stock_origin": "Trending"
+                "sector_strength": sector_strengths.get(sector, 0),
+                "priority_score": abs(pct_move) * 100,  # Sort by momentum strength
+                "stock_origin": "Bullish Trend" if market_condition == "bullish" else "Bearish Momentum"
             })
     
         except Exception as e:
@@ -671,7 +641,8 @@ if results:
         print("❌ No trending stocks passed filters.")
     
     print(f"\n✅ Saved {len(results_df)} stocks to {OUTPUT_CSV}")
-    # Save summary
+    
+    # 📄 Save summary to filter_summary_log.csv
     summary_path = "D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_log.csv"
     summary_row = {
         "date": datetime.now().strftime("%m/%d/%Y %H:%M"),
@@ -684,23 +655,24 @@ if results:
         "sma_passed": sma_passed,
         "rsi_passed": rsi_passed,
         "final_selected": final_selected,
-        "market_trend": "Bullish" if nifty_bullish else "Bearish"
+        "market_condition": market_condition
     }
     
     try:
         if os.path.exists(summary_path):
-            pd.DataFrame([summary_row]).to_csv(summary_path, mode='a', header=False, index=False)
+            summary_df = pd.read_csv(summary_path)
+            summary_df = pd.concat([summary_df, pd.DataFrame([summary_row])])
+            summary_df.to_csv(summary_path, index=False)
         else:
-            pd.DataFrame([summary_row]).to_csv(summary_path, mode='w', header=True, index=False)
+            pd.DataFrame([summary_row]).to_csv(summary_path, index=False)
     except Exception as e:
         print(f"⚠️ Could not write to filter_summary_log.csv: {e}")
     
     print(f"📊 Top 5 opportunities:")
-    print(results_df[["symbol", "ltp", "quantity", "potential_profit", "sector"]].head().to_string(index=False))
+    print(results_df[["symbol", "ltp", "quantity", "potential_profit", "priority_score", "stock_origin"]].head().to_string(index=False))
 else:
     print("\n❌ No stocks passed all filters")
-    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "WARNING", 
-                   f"No stocks selected today. Market: {'Bullish' if nifty_bullish else 'Bearish'}")
+    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "WARNING", "No stocks selected today.")
 
 # ======== PERFORMANCE METRICS ========
 elapsed = datetime.now() - start_time
@@ -710,6 +682,6 @@ seconds = int(total_sec % 60)
 print(f"\n⏱️ Total scan time: {minutes} min {seconds} sec")
 print(f"💵 Capital available: ₹{CAPITAL:,.2f}")
 print(f"📈 Potential positions: {len(results)}")
-# Save log
+# 📝 Save log
 with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/dynamic_stock_generator.txt", "w", encoding="utf-8") as f:
     f.write(log_buffer.getvalue())
