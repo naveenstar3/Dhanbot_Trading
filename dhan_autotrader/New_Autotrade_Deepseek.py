@@ -41,6 +41,10 @@ PORTFOLIO_LOG = "D:/Downloads/Dhanbot/dhan_autotrader/portfolio_log.csv"
 with open(CONFIG_PATH, "r") as f:
     config = json.load(f)
 
+# ========== Create DhanHQ global context and client ==========
+context = DhanContext(config["client_id"], config["access_token"])
+dhan = dhanhq(context)
+
 # ========== Telegram from config ==========
 TG_TOKEN = config["telegram_token"]
 TG_CHAT_ID = config["telegram_chat_id"]
@@ -122,26 +126,25 @@ def calculate_adr(security_id):
         from_dt = datetime.now() - timedelta(days=ADR_PERIOD + 5)
         to_dt = datetime.now()
         
-        # Create new context for each request to prevent staleness
-        with DhanContext(config["client_id"], config["access_token"]) as context:
-            dhan = dhanhq(context)
-            daily_data = dhan.historical_minute_data(
-                security_id=str(security_id), 
-                exchange_segment="NSE_EQ", 
-                instrument_type="EQUITY", 
-                from_date=from_dt.strftime("%Y-%m-%d"), 
-                to_date=to_dt.strftime("%Y-%m-%d"),
-                type='day'
-            )
+        daily_data = dhan.historical_daily_data(
+            security_id=str(security_id), 
+            exchange_segment="NSE_EQ", 
+            instrument_type="EQUITY", 
+            from_date=from_dt.strftime("%Y-%m-%d"), 
+            to_date=to_dt.strftime("%Y-%m-%d")
+        )
         
-        if not daily_data or not isinstance(daily_data, dict) or 'data' not in daily_data:
+        if not daily_data or not isinstance(daily_data, list) or len(daily_data) < ADR_PERIOD:
             return 0.0
             
-        data = daily_data.get('data', {})
-        if not data or not all(key in data for key in ['high', 'low']) or len(data['high']) < ADR_PERIOD:
+        # Extract highs and lows from candle dictionaries
+        try:
+            highs = [float(candle['high']) for candle in daily_data]
+            lows = [float(candle['low']) for candle in daily_data]
+        except (KeyError, TypeError, ValueError) as e:
+            print(f"❌ ADR data parsing failed: {e}")
             return 0.0
-            
-        daily_ranges = [abs(h - l) for h, l in zip(data['high'], data['low'])][-ADR_PERIOD:]
+        daily_ranges = [abs(high - low) for high, low in zip(highs, lows)][-ADR_PERIOD:]
         return sum(daily_ranges) / len(daily_ranges) if daily_ranges else 0.0
     except Exception as e:
         print(f"❌ ADR calculation failed: {e}")
@@ -181,22 +184,18 @@ def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", in
         return cache[cache_key]
 
     for attempt in range(3):  # Retry up to 3 times
-        try:
-            # Create new context for each request to prevent staleness
-            with DhanContext(config["client_id"], config["access_token"]) as context:
-                dhan = dhanhq(context)
-                
-                now = datetime.now()
-                from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
-                to_dt = now.replace(second=0, microsecond=0)
+        try:    
+            now = datetime.now()
+            from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
+            to_dt = now.replace(second=0, microsecond=0)
             
-                response = dhan.intraday_minute_data(
-                    security_id=str(security_id),
-                    exchange_segment=exchange_segment,
-                    instrument_type=instrument_type,
-                    from_date=from_dt.strftime("%Y-%m-%d"),
-                    to_date=to_dt.strftime("%Y-%m-%d")
-                )
+            response = dhan.intraday_minute_data(
+                security_id=str(security_id),
+                exchange_segment=exchange_segment,
+                instrument_type=instrument_type,
+                from_date=from_dt.strftime("%Y-%m-%d"),
+                to_date=to_dt.strftime("%Y-%m-%d")
+            )
 
             # Check if response is valid and extract data
             if not response or not isinstance(response, dict) or 'data' not in response:
@@ -243,6 +242,144 @@ def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", in
             print(f"❌ Error fetching candles for {security_id}: {e}")
             return []
     return []
+
+def detect_bullish_candlestick_pattern(candles, symbol=None):
+    """Detect bullish candlestick patterns using latest 3-5 candles"""
+    if not candles or len(candles) < 3:
+        return False, None, 0.0
+    
+    df = pd.DataFrame(candles)
+    o, h, l, c, v = df["open"], df["high"], df["low"], df["close"], df["volume"]
+    detected_patterns = []  # Store all detected patterns with scores
+    
+    # Volume confirmation helper
+    def volume_confirmed(index=-1, multiplier=1.2, lookback=5):
+        if len(df) < lookback + 1:
+            return True, 1.0  # Not enough data
+        vol_avg = v.iloc[-lookback-1:-1].mean()
+        vol_ratio = v.iloc[index] / vol_avg
+        return vol_ratio >= multiplier, vol_ratio
+    
+    # Body/Range scoring
+    def candle_score(index):
+        body = abs(c.iloc[index] - o.iloc[index])
+        candle_range = h.iloc[index] - l.iloc[index]
+        body_ratio = body / candle_range if candle_range > 0 else 0
+        upper_wick = h.iloc[index] - max(c.iloc[index], o.iloc[index])
+        lower_wick = min(c.iloc[index], o.iloc[index]) - l.iloc[index]
+        return min(1.0, body_ratio * 0.7 + (1 - (upper_wick + lower_wick)/candle_range) * 0.3)
+
+    # Morning Star
+    if len(c) >= 3:
+        body1 = o.iloc[-3] - c.iloc[-3]  # First candle body (bearish)
+        body2 = abs(c.iloc[-2] - o.iloc[-2])
+        if (c.iloc[-3] < o.iloc[-3] and
+            o.iloc[-2] < c.iloc[-3] and
+            body2 < 0.3 * body1 and
+            c.iloc[-1] > o.iloc[-1] and
+            o.iloc[-1] > c.iloc[-2] and
+            c.iloc[-1] > (o.iloc[-3] + c.iloc[-3]) / 2 and
+            v.iloc[-1] > v.iloc[-3]):  # Volume confirmation: third candle > first candle
+            vol_ok, vol_ratio = volume_confirmed(multiplier=1.5)  # Stricter volume check
+            if vol_ok:
+                pattern_score = min(1.0, 0.8 + (c.iloc[-1] - o.iloc[-1]) / (h.iloc[-1] - l.iloc[-1]))
+                detected_patterns.append(("Morning Star", pattern_score))
+                log_pattern_detection(symbol, "Morning Star", True)
+
+    # Bullish Engulfing
+    if len(c) >= 2:
+        if (c.iloc[-2] < o.iloc[-2] and 
+            c.iloc[-1] > o.iloc[-1] and
+            c.iloc[-1] > o.iloc[-2] and 
+            o.iloc[-1] < c.iloc[-2]):
+            vol_ok, vol_ratio = volume_confirmed()
+            if vol_ok:
+                pattern_score = candle_score(-1) * 0.85
+                detected_patterns.append(("Bullish Engulfing", pattern_score))
+                log_pattern_detection(symbol, "Bullish Engulfing", True)
+
+    # Breakout Marubozu
+    if len(c) >= 1:
+        body = abs(c.iloc[-1] - o.iloc[-1])
+        candle_range = h.iloc[-1] - l.iloc[-1]
+        body_ratio = body / candle_range if candle_range > 0 else 0
+        
+        # Look for no wicks and closing at high
+        if (body_ratio > 0.9 and 
+            min(c.iloc[-1], o.iloc[-1]) - l.iloc[-1] < candle_range * 0.05 and
+            h.iloc[-1] - max(c.iloc[-1], o.iloc[-1]) < candle_range * 0.05 and
+            c.iloc[-1] > o.iloc[-1] and
+            check_breakout([candles[-1]], period=1)):  # New high breakout
+            vol_ok, vol_ratio = volume_confirmed(multiplier=1.8)
+            if vol_ok:
+                pattern_score = min(1.0, 0.85 + body_ratio * 0.5)
+                detected_patterns.append(("Breakout Marubozu", pattern_score))
+                log_pattern_detection(symbol, "Breakout Marubozu", True)
+
+    # Bullish Harami
+    if len(c) >= 2:
+        if (c.iloc[-2] < o.iloc[-2] and 
+            c.iloc[-1] > o.iloc[-1] and
+            o.iloc[-1] > c.iloc[-2] and 
+            c.iloc[-1] < o.iloc[-2]):
+            vol_ok, vol_ratio = volume_confirmed()
+            if vol_ok:
+                pattern_score = candle_score(-1) * 0.75
+                detected_patterns.append(("Bullish Harami", pattern_score))
+                log_pattern_detection(symbol, "Bullish Harami", True)
+
+    # Three White Soldiers
+    if len(c) >= 3:
+        if (c.iloc[-3] > o.iloc[-3] and 
+            c.iloc[-2] > o.iloc[-2] and 
+            c.iloc[-1] > o.iloc[-1] and
+            c.iloc[-2] > c.iloc[-3] and 
+            c.iloc[-1] > c.iloc[-2]):
+            vol_ok, vol_ratio = volume_confirmed()
+            if vol_ok:
+                pattern_score = min(1.0, 0.9 * (vol_ratio / 2.0))
+                detected_patterns.append(("Three White Soldiers", pattern_score))
+                log_pattern_detection(symbol, "Three White Soldiers", True)
+
+    # Piercing Line
+    if len(c) >= 2:
+        if (c.iloc[-2] < o.iloc[-2] and 
+            c.iloc[-1] > o.iloc[-1] and
+            o.iloc[-1] < c.iloc[-2] and 
+            c.iloc[-1] > (o.iloc[-2] + c.iloc[-2]) / 2):
+            vol_ok, vol_ratio = volume_confirmed()
+            if vol_ok:
+                pattern_score = min(1.0, 0.8 * (c.iloc[-1] - o.iloc[-1]) / (h.iloc[-1] - l.iloc[-1]))
+                detected_patterns.append(("Piercing Line", pattern_score))
+                log_pattern_detection(symbol, "Piercing Line", True)
+
+    # Inverted Hammer
+    if len(c) >= 1:
+        body = abs(c.iloc[-1] - o.iloc[-1])
+        uw = h.iloc[-1] - max(c.iloc[-1], o.iloc[-1])
+        lw = min(c.iloc[-1], o.iloc[-1]) - l.iloc[-1]
+        if uw > 2 * body and lw < body:
+            vol_ok, vol_ratio = volume_confirmed()
+            if vol_ok:
+                pattern_score = min(1.0, 0.7 * (uw / body))
+                detected_patterns.append(("Inverted Hammer", pattern_score))
+                log_pattern_detection(symbol, "Inverted Hammer", True)
+
+    # PATTERN SELECTION LOGIC
+    if detected_patterns:
+        # Calculate composite scores (pattern weight * confidence score)
+        scored_patterns = []
+        for name, score in detected_patterns:
+            weight = PATTERN_WEIGHTS.get(name, {"weight": 1.0})["weight"]
+            composite_score = weight * score
+            scored_patterns.append((name, score, composite_score))
+        
+        # Select pattern with highest composite score
+        best_pattern = max(scored_patterns, key=lambda x: x[2])
+        print(f"🏆 Selected candlestick pattern: {best_pattern[0]} (Score: {best_pattern[1]:.2f}, Composite: {best_pattern[2]:.2f})")
+        return True, best_pattern[0], best_pattern[1]
+    
+    return False, None, 0.0
 
 def detect_bullish_pattern(candles, symbol=None):
     """Enhanced pattern detection with multi-pattern scoring"""
@@ -325,8 +462,8 @@ def detect_bullish_pattern(candles, symbol=None):
                 c.iloc[-1] > resistance):  # Close above resistance
                 
                 vol_ok, vol_ratio = volume_confirmed(multiplier=1.5)
+                pattern_name = "Double Bottom" if len(min_idxs) == 2 else "Triple Bottom"
                 if vol_ok:
-                    pattern_name = "Double Bottom" if len(min_idxs) == 2 else "Triple Bottom"
                     pattern_score = min(1.0, 0.7 + (c.iloc[-1] - resistance) / resistance * 5)
                     detected_patterns.append((pattern_name, pattern_score))
                     log_pattern_detection(symbol, pattern_name, True)
@@ -759,15 +896,12 @@ def check_breakout(candles, period=3):
 def check_gap_up(security_id):
     """Prevent entries after significant gap-ups"""
     try:
-        # Create new context for each request to prevent staleness
-        with DhanContext(config["client_id"], config["access_token"]) as context:
-            dhan = dhanhq(context)
-            quote = dhan.get_quote(security_id)
-            if not quote:
-                return False
-            prev_close = quote.get('previousClose', 0)
-            today_open = quote.get('open', 0)
-            return (today_open - prev_close) / prev_close > 0.01  # 1% gap-up threshold
+        quote = dhan.get_quote(security_id)
+        if not quote:
+            return False
+        prev_close = quote.get('previousClose', 0)
+        today_open = quote.get('open', 0)
+        return (today_open - prev_close) / prev_close > 0.01  # 1% gap-up threshold
     except:
         return False
 
@@ -959,7 +1093,7 @@ def detect_bearish_chart_pattern(candles):
         # Both should be positive but lows slope less positive (converging)
         if high_slope > 0 and low_slope > 0 and high_slope > low_slope:
             # Breakdown below lower trendline
-            if c.iloc[-1] < min(lows.iloc[:-1]):
+            if c.iloc[-1] < min(lows.iloc[:-1])):
                 return True
     
     # Rounded Top
@@ -1073,58 +1207,55 @@ def log_trade(symbol, security_id, action, price, qty, status, stop_pct=None, ta
 def place_exit_order(symbol, security_id, qty, tick_size_map):
     """Place exit order for position monitoring"""
     try:
-        # Create new context for each request to prevent staleness
-        with DhanContext(config["client_id"], config["access_token"]) as context:
-            dhan = dhanhq(context)
-            quote = dhan.get_quote(security_id)
-            if not quote:
-                return
-                
-            price = float(quote.get('ltp', 0))
-            if price <= 0:
-                print(f"⚠️ Invalid price for {symbol}: {price}")
-                return
-                
-            tick_size_value = tick_size_map.get(str(security_id), 0.05)
-            tick_size_dec = Decimal(str(tick_size_value))
+        quote = dhan.get_quote(security_id)
+        if not quote:
+            return
             
-            limit_price = Decimal(str(price)) * Decimal("0.998")
-            limit_price = (limit_price / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec
-            limit_price = float(limit_price)
+        price = float(quote.get('ltp', 0))
+        if price <= 0:
+            print(f"⚠️ Invalid price for {symbol}: {price}")
+            return
             
-            # Cancel existing SL/TP forever order if any
-            try:
-                dhan.cancel_forever_order(
-                    security_id=str(security_id),
-                    transaction_type="SELL",
-                    exchange_segment="NSE_EQ",
-                    product_type="CNC"
-                )
-                print(f"🧹 Cancelled existing SL/TP for {symbol}")
-            except Exception as e:
-                print(f"⚠️ Failed to cancel SL/TP for {symbol}: {e}")
+        tick_size_value = tick_size_map.get(str(security_id), 0.05)
+        tick_size_dec = Decimal(str(tick_size_value))
+        
+        limit_price = Decimal(str(price)) * Decimal("0.998")
+        limit_price = (limit_price / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec
+        limit_price = float(limit_price)
+        
+        # Cancel existing SL/TP forever order if any
+        try:
+            dhan.cancel_forever_order(
+                security_id=str(security_id),
+                transaction_type="SELL",
+                exchange_segment="NSE_EQ",
+                product_type="CNC"
+            )
+            print(f"🧹 Cancelled existing SL/TP for {symbol}")
+        except Exception as e:
+            print(f"⚠️ Failed to cancel SL/TP for {symbol}: {e}")
 
-            # Proceed with manual SELL
-            order = {
-                "security_id": str(security_id),
-                "exchange_segment": "NSE_EQ",
-                "transaction_type": "SELL",
-                "order_type": "LIMIT",
-                "product_type": "CNC",
-                "quantity": qty,
-                "price": limit_price,
-                "validity": "DAY"
-            }
+        # Proceed with manual SELL
+        order = {
+            "security_id": str(security_id),
+            "exchange_segment": "NSE_EQ",
+            "transaction_type": "SELL",
+            "order_type": "LIMIT",
+            "product_type": "CNC",
+            "quantity": qty,
+            "price": limit_price,
+            "validity": "DAY"
+        }
 
-            res = dhan.place_order(**order)
-            if res.get('status') == 'REJECTED':
-                print(f"❌ Exit order rejected for {symbol}: {res.get('message', 'No message')}")
-                send_telegram(f"❌ Exit order rejected for {symbol}: {res.get('message', 'No message')}")
-                return
-                
-            print(f"✅ Exit order placed for {symbol}: {res}")
-            send_telegram(f"⚠️ Exiting {symbol} due to reversal signal @ ₹{limit_price:.2f}")
-            log_trade(symbol, security_id, "SELL", limit_price, qty, "EXITED")
+        res = dhan.place_order(**order)
+        if res.get('status') == 'REJECTED':
+            print(f"❌ Exit order rejected for {symbol}: {res.get('message', 'No message')}")
+            send_telegram(f"❌ Exit order rejected for {symbol}: {res.get('message', 'No message')}")
+            return
+            
+        print(f"✅ Exit order placed for {symbol}: {res}")
+        send_telegram(f"⚠️ Exiting {symbol} due to reversal signal @ ₹{limit_price:.2f}")
+        log_trade(symbol, security_id, "SELL", limit_price, qty, "EXITED")
             
     except Exception as e:
         print(f"❌ Exit order failed for {symbol}: {e}")
@@ -1145,40 +1276,43 @@ def monitor_hold_position(cache=None, tick_size_map=None):
         
         # Check order status for executed SL/TP orders
         try:
-            with DhanContext(config["client_id"], config["access_token"]) as context:
-                dhan = dhanhq(context)
-                order_book = dhan.order_book()
-                if order_book and 'data' in order_book:
-                    for order in order_book['data']:
-                        if order['orderStatus'] in ['FILLED', 'TRADED']:
-                            security_id = str(order['securityId'])
-                            if security_id in hold_positions['security_id'].values:
-                                idx = df[
-                                    (df['security_id'] == security_id) &
-                                    (df['status'] == "HOLD")
-                                ].index[-1]
-
-                                exit_price = float(order.get('orderAverageTradedPrice', 0)) or float(order.get('orderPrice', 0))
-                                entry_price = float(df.at[idx, 'price'])
-                                status = "PROFIT" if exit_price > entry_price else "STOP LOSS"
-
-                                df.at[idx, 'exit_price'] = exit_price
-                                df.at[idx, 'status'] = status
-                                df.at[idx, 'last_checked'] = datetime.now().strftime("%H:%M:%S")
-                                
-                                symbol = df.at[idx, 'symbol']
-                                print(f"✅ SL/TP executed for {symbol} ➝ {status} @ ₹{exit_price:.2f} (Order ID: {order['orderId']})")
-
-                                # ✅ Update DB as well
-                                try:
-                                    from db_logger import update_portfolio_log_to_db
-                                    update_portfolio_log_to_db(
-                                        security_id=security_id,
-                                        exit_price=exit_price,
-                                        status=status
-                                    )
-                                except Exception as e:
-                                    print(f"❌ DB update failed: {e}")
+            order_list = dhan.get_order_list()
+            orders = []
+            if isinstance(order_list, dict) and 'data' in order_list:
+                orders = order_list['data']
+            elif isinstance(order_list, list):
+                orders = order_list
+                
+            for order in orders:
+                if order.get('orderStatus') in ['FILLED', 'TRADED']:
+                        security_id = str(order['securityId'])
+                        if security_id in hold_positions['security_id'].values:
+                            idx = df[
+                                (df['security_id'] == security_id) &
+                                (df['status'] == "HOLD")
+                            ].index[-1]
+            
+                            exit_price = float(order.get('orderAverageTradedPrice', 0)) or float(order.get('orderPrice', 0))
+                            entry_price = float(df.at[idx, 'price'])
+                            status = "PROFIT" if exit_price > entry_price else "STOP LOSS"
+            
+                            df.at[idx, 'exit_price'] = exit_price
+                            df.at[idx, 'status'] = status
+                            df.at[idx, 'last_checked'] = datetime.now().strftime("%H:%M:%S")
+                            
+                            symbol = df.at[idx, 'symbol']
+                            print(f"✅ SL/TP executed for {symbol} ➝ {status} @ ₹{exit_price:.2f} (Order ID: {order['orderId']})")
+            
+                            # ✅ Update DB as well
+                            try:
+                                from db_logger import update_portfolio_log_to_db
+                                update_portfolio_log_to_db(
+                                    security_id=security_id,
+                                    exit_price=exit_price,
+                                    status=status
+                                )
+                            except Exception as e:
+                                print(f"❌ DB update failed: {e}")
         except Exception as e:
             print(f"⚠️ Order status check failed: {e}")
         
@@ -1199,10 +1333,8 @@ def monitor_hold_position(cache=None, tick_size_map=None):
                 
             # Get current price
             try:
-                with DhanContext(config["client_id"], config["access_token"]) as context:
-                    dhan = dhanhq(context)
-                    quote = dhan.get_quote(security_id)
-                    current_price = float(quote.get('ltp', 0))
+                quote = dhan.get_quote(security_id)
+                current_price = float(quote.get('ltp', 0))
             except:
                 current_price = candles[-1]['close']
                 
@@ -1219,31 +1351,29 @@ def monitor_hold_position(cache=None, tick_size_map=None):
                 if 'stop_price' in pos and float(pos['stop_price']) < entry_price:
                     print(f"📈 Moving stop to breakeven for {symbol}")
                     try:
-                        with DhanContext(config["client_id"], config["access_token"]) as context:
-                            dhan = dhanhq(context)
-                            # Cancel existing stop
-                            dhan.cancel_forever_order(
-                                security_id=str(security_id),
-                                transaction_type="SELL",
-                                exchange_segment="NSE_EQ",
-                                product_type="CNC"
-                            )
-                            # Place new stop at breakeven
-                            tick_size_value = tick_size_map.get(str(security_id), 0.05)
-                            tick_size_dec = Decimal(str(tick_size_value))
-                            stop_price = entry_price * 0.999
-                            stop_price = float((Decimal(str(stop_price)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
-                            
-                            dhan.place_forever(
-                                security_id=str(security_id)),
-                                exchange_segment="NSE_EQ",
-                                transaction_type="SELL",
-                                product_type="CNC",
-                                quantity=qty,
-                                price=current_price,  # Target remains same
-                                trigger_price=stop_price
-                            )
-                            print(f"🔒 Trailing stop activated for {symbol} @ ₹{stop_price:.2f}")
+                        # Cancel existing stop
+                        dhan.cancel_forever_order(
+                            security_id=str(security_id),
+                            transaction_type="SELL",
+                            exchange_segment="NSE_EQ",
+                            product_type="CNC"
+                        )
+                        # Place new stop at breakeven
+                        tick_size_value = tick_size_map.get(str(security_id), 0.05)
+                        tick_size_dec = Decimal(str(tick_size_value))
+                        stop_price = entry_price * 0.999
+                        stop_price = float((Decimal(str(stop_price)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
+                        
+                        dhan.place_forever(
+                            security_id=str(security_id),
+                            exchange_segment="NSE_EQ",
+                            transaction_type="SELL",
+                            product_type="CNC",
+                            quantity=qty,
+                            price=current_price,  # Target remains same
+                            trigger_Price=stop_price
+                        )
+                        print(f"🔒 Trailing stop activated for {symbol} @ ₹{stop_price:.2f}")
                     except Exception as e:
                         print(f"⚠️ Failed to adjust trailing stop: {e}")
             
@@ -1292,118 +1422,116 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
     }
     
     try:
-        # Create new context for each request to prevent staleness
-        with DhanContext(config["client_id"], config["access_token"]) as context:
-            dhan = dhanhq(context)
-            res = dhan.place_order(**order)
+        res = dhan.place_order(**order)
+        
+        if res.get('status') == 'REJECTED':
+            print(f"❌ Order rejected for {symbol}: {res.get('message', 'No message')}")
+            send_telegram(f"❌ Order rejected for {symbol}: {res.get('message', 'No message')}")
+            return
             
-            if res.get('status') == 'REJECTED':
-                print(f"❌ Order rejected for {symbol}: {res.get('message', 'No message')}")
-                send_telegram(f"❌ Order rejected for {symbol}: {res.get('message', 'No message')}")
-                return
-                
-            print("✅ Order Placed:", res)
-            msg = f"✅ BUY {symbol} Qty: {qty} @ ₹{limit_price}"
-            if pattern_name:
-                msg += f" | Pattern: {pattern_name}"
-            send_telegram(msg)
-            now = datetime.now()
-            log_trade(symbol, security_id, "BUY", limit_price, qty, "HOLD", timestamp=now)
+        print("✅ Order Placed:", res)
+        msg = f"✅ BUY {symbol} Qty: {qty} @ ₹{limit_price}"
+        if pattern_name:
+            msg += f" | Pattern: {pattern_name}"
+        send_telegram(msg)
+        now = datetime.now()
+        log_trade(symbol, security_id, "BUY", limit_price, qty, status="HOLD", timestamp=now)
 
-            # Enhanced Stop Loss and Target via Forever Order
-            try:
-                # Base parameters
-                base_sl_pct = 0.005
-                base_tp_pct = 0.01
+        # Enhanced Stop Loss and Target via Forever Order
+        try:
+            # Base parameters
+            base_sl_pct = 0.005
+            base_tp_pct = 0.01
+            
+            # Pattern-specific adjustments
+            pattern_conf = PATTERN_WEIGHTS.get(pattern_name, {"weight": 1.0, "vol_scale": 1.0})
+            conf_weight = pattern_conf["weight"]
+            vol_scale = pattern_conf["vol_scale"]
                 
-                # Pattern-specific adjustments
-                pattern_conf = PATTERN_WEIGHTS.get(pattern_name, {"weight": 1.0, "vol_scale": 1.0})
-                conf_weight = pattern_conf["weight"]
-                vol_scale = pattern_conf["vol_scale"]
-                    
-                base_tp_pct = 0.01 * conf_weight
-                base_sl_pct = 0.005 * (2 - conf_weight/2)  # Inverse to weight
-                    
-                # Volatility adjustment using ATR
-                atr = calculate_atr(candles)
-                entry_price = Decimal(str(price))
-                atr_multiplier = vol_scale * (atr / float(entry_price)) if atr > 0 else 1.0
+            base_tp_pct = 0.01 * conf_weight
+            base_sl_pct = 0.005 * (2 - conf_weight/2)  # Inverse to weight
                 
-                # Apply volatility scaling
-                tp_pct = max(base_tp_pct, atr_multiplier)
-                sl_pct = min(base_sl_pct, atr_multiplier * 0.7)
+            # Volatility adjustment using ATR
+            atr = calculate_atr(candles)
+            entry_price = Decimal(str(price))
+            atr_multiplier = vol_scale * (atr / float(entry_price)) if atr > 0 else 1.0
+            
+            # Apply volatility scaling
+            tp_pct = max(base_tp_pct, atr_multiplier)
+            sl_pct = min(base_sl_pct, atr_multiplier * 0.7)
+            
+            # Time decay adjustment for late entries
+            market_close = dtime(15, 30)
+            now_time = datetime.now().time()
+            remaining_seconds = (datetime.combine(datetime.today(), market_close) - 
+                                datetime.combine(datetime.today(), now_time)).total_seconds()
+            remaining_hours = max(0.1, remaining_seconds / 3600)
+            time_decay = max(0.5, remaining_hours / 6.5)  # 6.5 trading hours
+            tp_pct *= time_decay
+            
+            # Ensure minimum 1:2 risk-reward ratio
+            if tp_pct / sl_pct < 2:
+                tp_pct = sl_pct * 2.2  # Add small buffer
                 
-                # Time decay adjustment for late entries
-                market_close = dtime(15, 30)
-                now_time = datetime.now().time()
-                remaining_seconds = (datetime.combine(datetime.today(), market_close) - 
-                                    datetime.combine(datetime.today(), now_time)).total_seconds()
-                remaining_hours = max(0.1, remaining_seconds / 3600)
-                time_decay = max(0.5, remaining_hours / 6.5)  # 6.5 trading hours
-                tp_pct *= time_decay
-                
-                # Ensure minimum 1:2 risk-reward ratio
-                if tp_pct / sl_pct < 2:
-                    tp_pct = sl_pct * 2.2  # Add small buffer
-                    
-                # Calculate final SL and TP
-                stop_loss = float(entry_price * (Decimal(1) - Decimal(sl_pct)))
-                target = float(entry_price * (Decimal(1) + Decimal(tp_pct)))
-                
-                # Apply ADR capping
-                max_move = adr * 0.3  # Allow up to 30% of ADR
-                target = min(target, price + max_move)
-                stop_loss = max(stop_loss, price - max_move * 0.7)
-                
-                # Round to nearest tick
-                stop_loss = float((Decimal(str(stop_loss)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
+            # Calculate final SL and TP
+            stop_loss = float(entry_price * (Decimal(1) - Decimal(sl_pct)))
+            target = float(entry_price * (Decimal(1) + Decimal(tp_pct)))
+            
+            # Apply ADR capping
+            max_move = adr * 0.3  # Allow up to 30% of ADR
+            target = min(target, price + max_move)
+            stop_loss = max(stop_loss, price - max_move * 0.7)
+            
+            # Round to nearest tick
+            stop_loss = float((Decimal(str(stop_loss)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
+            target = float((Decimal(str(target)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
+            
+            # Time feasibility check - don't set unrealistic targets
+            required_move = (target - price) / price
+            max_allowed_move = 0.015 * (remaining_hours / 1.5)  # Max 1.5% per hour
+            if required_move > max_allowed_move:
+                target = price * (1 + max_allowed_move)
                 target = float((Decimal(str(target)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
-                
-                # Time feasibility check - don't set unrealistic targets
-                required_move = (target - price) / price
-                max_allowed_move = 0.015 * (remaining_hours / 1.5)  # Max 1.5% per hour
-                if required_move > max_allowed_move:
-                    target = price * (1 + max_allowed_move)
-                    target = float((Decimal(str(target)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
-                    send_telegram(f"⚠️ Adjusted {symbol} target to ₹{target:.2f} for time constraints")
+                send_telegram(f"⚠️ Adjusted {symbol} target to ₹{target:.2f} for time constraints")
 
-                # Special handling for Morning Star pattern - confirm BEFORE placing SL/TP
-                if pattern_name == "Morning Star":
-                    # Add confirmation check
-                    time.sleep(2)  # Wait for next candle
-                    next_candle = fetch_candles(security_id, count=1)
-                    if next_candle and (
-                        next_candle[0]['close'] > candles[-1]['close'] and 
-                        next_candle[0]['volume'] > candles[-1]['volume']
-                    ):
-                        tp_pct *= 1.2
-                        target = float(entry_price * (1 + tp_pct))
-                        target = float((Decimal(str(target)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)               
-                        print(f"🌟 Morning Star confirmation - Increased target to ₹{target:.2f}")
+            # Special handling for Morning Star pattern - confirm BEFORE placing SL/TP
+            if pattern_name == "Morning Star":
+                # Add confirmation check
+                time.sleep(2)  # Wait for next candle
+                next_candle = fetch_candles(security_id, count=1)
+                if next_candle and (
+                    next_candle[0]['close'] > candles[-1]['close'] and 
+                    next_candle[0]['volume'] > candles[-1]['volume']
+                ):
+                    tp_pct *= 1.2
+                    target = float(entry_price * (1 + tp_pct))
+                    target = float((Decimal(str(target)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)               
+                    print(f"🌟 Morning Star confirmation - Increased target to ₹{target:.2f}")
 
-                # Small delay to avoid overlap
-                time.sleep(1.5)
+            # Small delay to avoid overlap
+            time.sleep(1.5)
 
-                dhan.place_forever(
-                    security_id=str(security_id),
-                    exchange_segment="NSE_EQ",
-                    transaction_type="SELL",
-                    product_type="CNC",
-                    quantity=qty,
-                    price=target,
-                    trigger_price=stop_loss
-                )
-                print(f"🎯 SL/TP set for {symbol}: Target ₹{target:.2f}, Stop ₹{stop_loss:.2f}")
-                send_telegram(
-                    f"🎯 {symbol} | {pattern_name}\n"
-                    f"ENTRY: ₹{limit_price:.2f} | QTY: {qty}\n"
-                    f"SL: ₹{stop_loss:.2f} ({sl_pct*100:.1f}%)\n"
-                    f"TARGET: ₹{target:.2f} ({tp_pct*100:.1f}%)"
-                )
+            dhan.place_forever(
+                security_id=str(security_id),
+                exchange_segment="NSE_EQ",
+                transaction_type="SELL",
+                product_type="CNC",
+                quantity=qty,
+                price=target,
+                trigger_Price=stop_loss,
+                order_type="SINGLE"
+            )
+            print(f"🎯 SL/TP set for {symbol}: Target ₹{target:.2f}, Stop ₹{stop_loss:.2f}")
+            send_telegram(
+                f"🎯 {symbol} | {pattern_name}\n"
+                f"ENTRY: ₹{limit_price:.2f} | QTY: {qty}\n"
+                f"SL: ₹{stop_loss:.2f} ({sl_pct*100:.1f}%)\n"
+                f"TARGET: ₹{target:.2f} ({tp_pct*100:.1f}%)"
+            )
 
-            except Exception as e:
-                print("⚠️ Failed to place SL/TP:", e)
-                send_telegram(f"⚠️ SL/TP setup failed for {symbol}: {e}")
+        except Exception as e:
+            print("⚠️ Failed to place SL/TP:", e)
+            send_telegram(f"⚠️ SL/TP setup failed for {symbol}: {e}")
     except Exception as e:
         print("❌ Order Failed:", e)
         send_telegram(f"❌ Order Failed for {symbol}: {e}")
@@ -1413,8 +1541,8 @@ def main():
     
     # Precompute market close time with buffer (15:30 - 20 minutes = 15:10)
     market_close = dtime(15, 30)
-    min_holding_window = timedelta(minutes=20)
-    end_time = datetime.combine(datetime.today(), market_close) - min_holding_window
+    new_trade_end_time = datetime.combine(datetime.today(), dtime(15, 10))
+    monitoring_end_time = datetime.combine(datetime.today(), dtime(15, 25))
     
     # Load master CSV once at start
     master_df = pd.read_csv(MASTER_CSV)
@@ -1450,7 +1578,7 @@ def main():
     nifty_id = nifty50_row.iloc[0]["SEM_SMST_SECURITY_ID"]
     
     # Continuous monitoring loop until market close
-    while datetime.now() < end_time:
+    while datetime.now() < monitoring_end_time:
         candle_cache = {}  # Reset cache for each iteration
         print(f"\n⏰ New scanning cycle at {datetime.now().strftime('%H:%M:%S')}")
         
@@ -1461,13 +1589,20 @@ def main():
             time.sleep(300)
             continue
         
+        # Skip new trades after 15:10
+        if datetime.now() >= new_trade_end_time:
+            print("⏰ New trade window closed (after 15:10). Only monitoring existing positions.")
+            time.sleep(300)  # Wait 5 minutes between checks
+            continue
+
         # ⏳ After profit exit, don't re-enter if it's too late
         current_time = datetime.now().time()
         cutoff_time = dtime(13, 40)
         if not has_hold() and current_time >= cutoff_time:
-            print("🛑 Too late for safe new entries. Ending session.")
-            send_telegram("✅ Profit secured. No new trades after 1:40 PM. Ending autotrade.")
-            break
+            print("🛑 Too late for new entries (after 13:40). Only monitoring.")
+            send_telegram("⚠️ No new trades after 1:40 PM. Monitoring until 3:25 PM.")
+            time.sleep(300)
+            continue
         
         try:
             # 2. Load capital and stock list (reload for potential daily updates)
@@ -1501,7 +1636,7 @@ def main():
         
             for index, row in df.iterrows():
                 try:
-                    if datetime.now() >= end_time:
+                    if datetime.now() >= new_trade_end_time:
                         print("⏰ Time window expired - stopping evaluation")
                         break
         
@@ -1535,8 +1670,17 @@ def main():
                         continue
         
                     # Bullish pattern detection
-                    detected, pattern_name, pattern_score = detect_bullish_pattern(candles, symbol)
-                    if not detected:
+                    chart_detected, chart_pattern, chart_score = detect_bullish_pattern(candles, symbol)
+                    candle_detected, candle_pattern, candle_score = detect_bullish_candlestick_pattern(candles, symbol)
+                    
+                    # Log both pattern types
+                    if chart_detected:
+                        print(f"📊 Detected chart pattern: {chart_pattern} (Score: {chart_score:.2f})")
+                    if candle_detected:
+                        print(f"🕯️ Detected candlestick pattern: {candle_pattern} (Score: {candle_score:.2f})")
+                    
+                    # Check if either pattern is detected
+                    if not (chart_detected or candle_detected):
                         print('📉 No bullish pattern detected, skipping...')
                         continue
         
@@ -1558,6 +1702,19 @@ def main():
                     if price <= 0:
                         print(f'⚠️ Invalid price for {symbol}: {price}, skipping...')
                         continue
+                    
+                    # Determine which pattern to use for confidence weighting
+                    if chart_detected and candle_detected:
+                        # Use the pattern with higher score
+                        pattern_name = chart_pattern if chart_score > candle_score else candle_pattern
+                        pattern_score = max(chart_score, candle_score)
+                    elif chart_detected:
+                        pattern_name = chart_pattern
+                        pattern_score = chart_score
+                    else:
+                        pattern_name = candle_pattern
+                        pattern_score = candle_score
+                        
                     base_qty = int(capital // price)
                     confidence = PATTERN_WEIGHTS.get(pattern_name, {"weight": 1.0})["weight"]
                     adj_qty = max(1, int(base_qty * confidence * pattern_score))
@@ -1575,11 +1732,21 @@ def main():
                         send_telegram(f"✅ High-confidence order placed for {symbol} with Qty: {adj_qty}. Exiting autotrade loop.")
                         order_placed = True
                         print("✅ Order placed. Continuing monitoring for reversals.")
-                        break
+                        continue
         
                     # Add to ranked candidates with pattern weight
                     pattern_weight = PATTERN_WEIGHTS.get(pattern_name, {"weight": 1.0})["weight"]
                     priority_score = pattern_weight * pattern_score * confidence
+
+                    # Incorporate ML Momentum Score
+                    ml_score = row.get("ml_momentum_score", 0.5)
+                    try:
+                        ml_score = float(ml_score)
+                        ml_score = max(0.0, min(1.0, ml_score))  # Clamp to 0-1 range
+                    except:
+                        ml_score = 0.5  # Default if invalid
+                    
+                    priority_score *= ml_score  # Adjust priority with ML score
                     
                     candidates.append({
                         "symbol": symbol,
@@ -1591,7 +1758,7 @@ def main():
                         "score": pattern_score,
                         "confidence": confidence,
                         "potential": profit_potential,
-                        "priority": priority_score  # New priority score
+                        "priority": priority_score
                     })
         
                 except Exception as e:
@@ -1607,7 +1774,7 @@ def main():
                 send_telegram(f"✅ Order placed for {best['symbol']} with Qty: {best['qty']}. Exiting autotrade loop.")
                 order_placed = True
                 print("✅ Order placed. Continuing monitoring for reversals.")
-                break
+                continue
             else:
                 print("❌ No valid trades found this cycle")
                 send_telegram("❌ No valid trades found this cycle")
