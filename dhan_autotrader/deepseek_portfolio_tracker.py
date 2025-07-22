@@ -1,732 +1,705 @@
-import csv
-import datetime
-import requests
-import json
-import os
-import pytz
-import time as systime
-from dhanhq import DhanContext, dhanhq
-from dhan_api import get_live_price, get_intraday_candles, get_historical_price, get_security_id
-from config import *
-from utils_logger import log_bot_action
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from utils_safety import safe_read_csv
-import pandas as pd
-import portalocker 
-from db_logger import insert_live_trail_to_db, insert_portfolio_log_to_db
-from utils_safety import safe_read_csv
+# ========== PART 2: AUTOTRADE MONITOR SCRIPT ==========
+# This script handles position monitoring and trend reversal detection
 
-# ✅ Enable TeeLogger to capture print logs to file
+import os
+import sys
+import json
+import pandas as pd
+import time
+from datetime import datetime, timedelta, time as dtime
+import pytz
+from dhanhq import DhanContext, dhanhq
+from decimal import Decimal, ROUND_HALF_UP
+import requests
+import numpy as np
+from db_logger import update_portfolio_log_to_db, log_to_postgres
+import math
 import io
+import traceback
+
 log_buffer = io.StringIO()
 
 class TeeLogger:
     def __init__(self, *streams):
         self.streams = streams
+        
     def write(self, message):
         for s in self.streams:
             s.write(message)
             s.flush()
+            
     def flush(self):
         for s in self.streams:
             s.flush()
 
-import sys
 sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
 
-# ✅ Trailing Exit Config
-LIVE_BUFFER_FILE = "live_trail_BUFFER.csv"
+# ========== Config ==========
+CONFIG_PATH = "D:/Downloads/Dhanbot/dhan_autotrader/config.json"
+MASTER_CSV = "D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv"
+CAPITAL_FILE = "D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv"
+PORTFOLIO_LOG = "D:/Downloads/Dhanbot/dhan_autotrader/portfolio_log.csv"
 
-# ✅ Load Dhan credentials
-with open("config.json") as f:
-    config_data = json.load(f)
+# ========== Load Config ==========
+with open(CONFIG_PATH, "r") as f:
+    config = json.load(f)
 
-ACCESS_TOKEN = config_data["access_token"]
-CLIENT_ID = config_data["client_id"]
-TELEGRAM_TOKEN = config_data.get("telegram_token")
-TELEGRAM_CHAT_ID = config_data.get("telegram_chat_id")
-
-HEADERS = {
-    "access-token": ACCESS_TOKEN,
-    "client-id": CLIENT_ID,
-    "Content-Type": "application/json"
-}
-
-# ✅ Initialize Dhan SDK
-context = DhanContext(CLIENT_ID, ACCESS_TOKEN)
+# ========== Create DhanHQ global context and client ==========
+context = DhanContext(config["client_id"], config["access_token"])
 dhan = dhanhq(context)
 
-# ✅ Bot Execution Logger
-def log_bot_action(script_name, action, status, message):
-    log_file = "bot_execution_log.csv"
-    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
-    headers = ["timestamp", "script_name", "action", "status", "message"]
+# ========== Telegram from config ==========
+TG_TOKEN = config["telegram_token"]
+TG_CHAT_ID = config["telegram_chat_id"]
 
-    new_row = [now, script_name, action, status, message]
-
-    file_exists = os.path.exists(log_file)
-
-    with open(log_file, mode='a', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(headers)
-        writer.writerow(new_row)
-        
-def monitor_hold_positions():
-    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-    if now.hour == 15 and now.minute >= 0 and now.minute < 5:  # Trigger at 3:00–3:04 PM
-        if not os.path.exists(PORTFOLIO_LOG):
-            return
-        with open(PORTFOLIO_LOG, newline="") as f:
-            reader = csv.DictReader(f)
-            hold_stocks = [row["symbol"] for row in reader if row["status"].upper() == "HOLD"]
-        
-        if hold_stocks:
-            msg = f"⏳ {len(hold_stocks)} stock(s) still HOLD at 3:00 PM: {', '.join(hold_stocks)}"
-            print(msg)
-            send_telegram_message(msg)
-            log_bot_action("portfolio_tracker.py", "3PM check", "⚠️ HOLDING", msg)
-
-def get_dynamic_minimum_net_profit(capital):
-    """
-    Returns scaled minimum net profit:
-    - Minimum ₹5
-    - Scales as 0.1% of current capital
-    """
-    return max(5, round(capital * 0.001, 2))
-    
-# ✅ Peak Exhaustion Detection — enhanced smart sell logic
-def is_peak_exhausted(symbol, target_pct=0.07, grace_band=0.01, min_retries=5):
+def send_telegram(msg):
     try:
-        now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-        if now.hour < 14 or (now.hour == 14 and now.minute < 15):
-            return False  # too early to judge exhaustion
-
-        if not os.path.exists(LIVE_BUFFER_FILE):
-            return False
-
-        recent_records = []
-        with portalocker.Lock(LIVE_BUFFER_FILE, 'r', timeout=5) as f:  # Added locking
-            reader = csv.reader(f)
-            for row in reader:
-                if len(row) < 4:
-                    continue
-                ts_str, sym, price, change = row
-                if sym.strip().upper() != symbol.upper():
-                    continue
-                ts = pytz.timezone("Asia/Kolkata").localize(datetime.datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S"))
-                if (now - ts).seconds <= 3600:  # last 60 min
-                    recent_records.append(float(change))
-
-        if len(recent_records) < 10:
-            return False
-
-        near_target_hits = [x for x in recent_records if (target_pct - grace_band) <= x < target_pct]
-        if len(near_target_hits) >= min_retries:
-            return True
-
-    except Exception as e:
-        print(f"⚠️ Error in peak exhaustion check for {symbol}: {e}")
-    return False
-    
-def log_live_trail(symbol, live_price, change_pct, order_id=None):
-    try:
-        print(f"📦 Entering log_live_trail for {symbol} at price {live_price} with change_pct {change_pct}")
-        print(f"🔒 Attempting to acquire lock on {LIVE_BUFFER_FILE}")
-
-        # Purge file if symbol being tracked is different from current
-        now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-        if now.hour == 9 and now.minute <= 30 and os.path.exists(LIVE_BUFFER_FILE):
-            print(f"🧹 Clearing buffer at market open for new day: {LIVE_BUFFER_FILE}")
-            with portalocker.Lock(LIVE_BUFFER_FILE, 'w', timeout=5) as f:
-                f.write("timestamp,symbol,price,change_pct\n")  # Removed order_id
-
-        # Append new price trail
-        with portalocker.Lock(LIVE_BUFFER_FILE, 'a', timeout=5, newline='') as f:
-            if os.stat(LIVE_BUFFER_FILE).st_size == 0:
-                f.write("timestamp,symbol,price,change_pct\n")  # Removed order_id
-            writer = csv.writer(f)
-            now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
-            writer.writerow([now, symbol, round(live_price, 2), round(change_pct, 2)])  # Removed order_id
-            # Keep DB logging with order_id
-            insert_live_trail_to_db(now, symbol, round(live_price, 2), round(change_pct, 2), order_id=order_id)
-            print(f"✅ Logged {symbol} trail to {LIVE_BUFFER_FILE}")
-
-    except Exception as e:
-        print(f"❌ Error in log_live_trail for {symbol}: {e}")
-
-# ✅ Telegram Notification Function
-def send_telegram_message(message):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+        url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+        payload = {"chat_id": TG_CHAT_ID, "text": msg}
         requests.post(url, data=payload)
     except Exception as e:
-        print(f"⚠️ Telegram send error: {e}")
+        print(f"❌ Telegram send failed: {e}")
 
-# ✅ Startup Mode Alert
-if TEST_MODE:
-    print("🛠️ Running in TEST MODE. No real sell orders will happen.")
-else:
-    print("🚀 Running in LIVE PRODUCTION MODE. Real sell orders will happen!")
-
-# ✅ Estimate Net Profit After Charges
-def estimate_net_profit(buy_price, sell_price, quantity):
-    gross_profit = (sell_price - buy_price) * quantity
-
-    brokerage_total = BROKERAGE_PER_ORDER * 2  # buy + sell
-    gst_on_brokerage = brokerage_total * (GST_PERCENTAGE / 100)
-    stt_sell = sell_price * quantity * (STT_PERCENTAGE / 100)
-    exchg_txn_charge = (buy_price + sell_price) * quantity * (EXCHANGE_TXN_CHARGE_PERCENTAGE / 100)
-    sebi_charge = (buy_price + sell_price) * quantity * (SEBI_CHARGE_PERCENTAGE / 100)
-
-    total_charges = brokerage_total + gst_on_brokerage + stt_sell + exchg_txn_charge + sebi_charge + DP_CHARGE_PER_SELL
-
-    net_profit = gross_profit - total_charges
-    return net_profit
-
-# ✅ Place sell order (Handles TEST_MODE internally)
-def place_sell_order(security_id, symbol, quantity, exchange_segment="NSE_EQ"):
-    if TEST_MODE:
-        print(f"🛠️ [TEST MODE] Simulating SELL order for {symbol}")
-        return 200, {"order_id": "TEST_ORDER_ID_SELL"}
-    try:
-        seg = dhan.NSE if exchange_segment.upper() == "NSE_EQ" else dhan.BSE
-        response = dhan.place_order(
-            security_id=security_id,
-            exchange_segment=seg,
-            transaction_type=dhan.SELL,
-            quantity=quantity,
-            order_type=dhan.MARKET,
-            product_type=dhan.CNC,
-            price=0
-        )
-        return 200, response
-    except Exception as e:
-        return 500, {"error": str(e)}
-
-# ✅ Fetch Trade Book
-def get_trade_book():
-    if TEST_MODE:
-        print("🛠️ [TEST MODE] Simulating Trade Book fetch...")
-        return [{"order_id": "TEST_ORDER_ID_SELL", "status": "TRADED"}]
-    else:
+def get_capital():
+    if not os.path.exists(CAPITAL_FILE):
+        return 0.0
+    with open(CAPITAL_FILE, "r") as f:
         try:
-            response = requests.get(TRADE_BOOK_URL, headers=HEADERS)
-            if response.status_code == 200:
-                return response.json()["data"]
-            else:
-                print(f"⚠️ Failed to fetch trade book: {response.status_code}")
-                return []
-        except Exception as e:
-            print(f"⚠️ Exception during trade_book fetch: {e}")
-            return []
+            return float(f.read().strip())
+        except:
+            return 0.0
 
-# ✅ Log Sell action
-def log_sell(symbol, security_id, quantity, exit_price, reason):
-    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
-    with open(SELL_LOG, mode='a', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([now, symbol, security_id, quantity, exit_price, reason])
-
-# ✅ Market Open Check
-def is_market_open():
-    now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).time()
-    return datetime.time(9, 30) <= now <= datetime.time(15, 30)
-    
-# ✅ Intelligent Early Exit Analyzer
-def should_exit_early(symbol, current_price):
+def has_hold():
+    if not os.path.exists(PORTFOLIO_LOG):
+        return False
     try:
-        records = []
-        if not os.path.exists(LIVE_BUFFER_FILE):
-            return False
-            
-        with portalocker.Lock(LIVE_BUFFER_FILE, 'r', timeout=5) as f:
-            reader = csv.reader(f)
-            for row in reader:
-                if len(row) < 4:
-                    continue
-                ts_str, sym, price, change = row
-                if sym.strip().upper() == symbol.upper():
-                    try:
-                        records.append((ts_str, float(change)))
-                    except:
-                        continue
-
-        if not records or len(records) < 4:
-            return False
-
-        max_change = max(records, key=lambda x: x[1])
-        peak_time = max_change[0]
-        peak_change = max_change[1]
-
-        now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-        current_change = records[-1][1]
-
-        if now.hour >= 14 and now.minute >= 45:
-            if (peak_change - current_change) >= 0.4:
-                return True
-
-        # ✅ RSI check using Dhan historical API
-        security_id = get_security_id(symbol)
-        candles = get_historical_price(security_id, interval="15")
-        if not candles:
-            return False
-            
-        closes = [candle['close'] for candle in candles if 'close' in candle]
-        if len(closes) < 14:
-            return False
-            
-        df = pd.DataFrame({"close": closes})
-        rsi_series = calculate_rsi(df['close'])
-        if not rsi_series.empty and rsi_series.iloc[-1] > 70:
-            print(f"⚠️ RSI triggered exit: {symbol} has RSI {round(rsi_series.iloc[-1], 2)}")
-            return True
-
-        return False
-
-    except Exception as e:
-        print(f"⚠️ Error in early exit check for {symbol}: {e}")
-        return False
-
-def calculate_rsi(close_prices, period=14):
-    delta = close_prices.diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window=period).mean()
-    avg_loss = loss.rolling(window=period).mean()
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
-
-# ✅ Main Portfolio Evaluation
-def is_nse_trading_day():
-    today = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).date()
-    if today.weekday() >= 5:
-        return False
-
-    year = today.year
-    fname = f"nse_holidays_{year}.csv"
-
-    if not os.path.exists(fname):
-        try:
-            print(f"📥 Downloading NSE holiday calendar for {year}...")
-            url = "https://www.nseindia.com/api/holiday-master?type=trading"
-            headers = {"User-Agent": "Mozilla/5.0"}
-            s = requests.Session()
-            s.headers.update(headers)
-            r = s.get(url, timeout=10)
-            data = r.json()
-            if "Trading" not in data:
-                raise ValueError("Missing 'Trading' key in NSE holiday API response")
-            holidays = data["Trading"]           
-            dates = [datetime.datetime.strptime(d["date"], "%d-%b-%Y").date() for d in holidays if str(year) in d["date"]]
-            pd.DataFrame({"date": dates}).to_csv(fname, index=False)
-        except Exception as e:
-            print(f"⚠️ NSE holiday fetch failed: {e}")
-            return True
-
-    try:
-        hdf = pd.read_csv(fname)
-        holiday_dates = pd.to_datetime(hdf["date"]).dt.date.tolist()
-        return today not in holiday_dates
+        df = pd.read_csv(PORTFOLIO_LOG)
+        today = datetime.now().strftime("%m/%d/%Y")
+        return any((df['status'].str.upper() == "HOLD") & df['timestamp'].str.contains(today))
     except:
-        return True
+        return False
 
-# Initialize traded symbols set
-if 'attempted_symbols' not in globals():
-    attempted_symbols = set()
-def check_portfolio():
-    if not is_market_open() or not is_nse_trading_day():
-        print("⏹️ Market closed or holiday. Skipping auto-sell.")
-        log_bot_action("portfolio_tracker.py", "market_status", "INFO", "Skipped: Market closed or holiday.")
-        return
+def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", instrument_type="EQUITY"):
+    """Fetch candles with caching and retry mechanism to prevent redundant calls"""
+    date_str = datetime.now().strftime("%Y%m%d")
+    cache_key = f"{date_str}_{security_id}_{count}_{exchange_segment}"
+    if cache_key in cache:
+        return cache[cache_key]
 
-    monitor_hold_positions()
-    ist_now = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-    if ist_now.hour == 9 and ist_now.minute <= 30 and os.path.exists(LIVE_BUFFER_FILE):
-        os.remove(LIVE_BUFFER_FILE)
-        print("🧹 Cleared live_trail_BUFFER.csv for new day.")
+    for attempt in range(3):  # Retry up to 3 times
+        try:    
+            now = datetime.now()
+            from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
+            to_dt = now.replace(second=0, microsecond=0)
+            
+            response = dhan.intraday_minute_data(
+                security_id=str(security_id),
+                exchange_segment=exchange_segment,
+                instrument_type=instrument_type,
+                from_date=from_dt.strftime("%Y-%m-%d"),
+                to_date=to_dt.strftime("%Y-%m-%d")
+            )
 
-    now = ist_now.strftime("%Y-%m-%d %H:%M")
-    headers = ["timestamp", "symbol", "security_id", "quantity", "buy_price", "momentum_5min",
-               "target_pct", "stop_pct", "live_price", "change_pct", "last_checked", "status", "exit_price", "order_id"]
-
-    if not os.path.exists(PORTFOLIO_LOG) or os.stat(PORTFOLIO_LOG).st_size == 0:
-        with open(PORTFOLIO_LOG, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(headers)
-        print("📁 Created new portfolio_log.csv with headers only.")
-        return
-    
-    try:
-        with portalocker.Lock(PORTFOLIO_LOG, 'r', timeout=5) as f:
-            # Verify file is not empty
-            if os.stat(PORTFOLIO_LOG).st_size == 0:
-                print("⚠️ Skipping: portfolio_log.csv is empty.")
-                return
+            # Check if response is valid and extract data
+            if not response or not isinstance(response, dict) or 'data' not in response:
+                print(f"⚠️ Invalid response structure for {security_id}")
+                return []
                 
-            # Read and parse CSV content
-            reader = csv.DictReader(f)
-            existing_rows = list(reader)
+            raw_data = response['data']
+            required_keys = ["open", "high", "low", "close", "volume", "timestamp"]
+            if (not raw_data or 
+                any(k not in raw_data for k in required_keys) or 
+                any(not raw_data[k] for k in required_keys) or 
+                len(set(len(raw_data[k]) for k in required_keys if k in raw_data)) > 1):
+                print(f"⚠️ Empty or malformed candle data for {security_id}")
+                return []
             
-            if not existing_rows:
-                print("⚠️ Skipping: No valid rows found in portfolio_log.csv")
-                return
+            candles = []
+            try:
+                for i in range(len(raw_data["open"])):
+                    candles.append({
+                        "open": raw_data["open"][i],
+                        "high": raw_data["high"][i],
+                        "low": raw_data["low"][i],
+                        "close": raw_data["close"][i],
+                        "volume": raw_data["volume"][i],
+                        "timestamp": datetime.fromtimestamp(raw_data["timestamp"][i])
+                    })
+            except Exception as e:
+                print(f"❌ Error while parsing candle for {security_id}: {e}")
+                return []
+            
+            if not candles:
+                print(f"⚠️ No valid parsed candles for {security_id}")
+                return []
+
+            # ✅ Candle Timestamp Freshness Check
+            last_candle_time = candles[-1]["timestamp"]
+            if (datetime.now() - last_candle_time) > timedelta(minutes=5):
+                print(f"⚠️ Stale data for {security_id}, ignoring cache")
+                del cache[cache_key]  # Force refresh
+                return fetch_candles(security_id, count, cache, exchange_segment, instrument_type)
+
+            cache[cache_key] = candles
+            return candles     
                 
-    except Exception as e:
-        print(f"⚠️ Error reading portfolio_log.csv: {e}")
-        return
-    
-    def process_sell_logic(row):
-        print(f"🔍 Starting processing for {row.get('symbol')}")
-        # Single symbol-based check - prevents duplicate processing
-        if row.get("status") in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
-            print(f"🛑 {row.get('symbol')} already closed. Skipping.")
-            return row
-        
-        if str(row.get("security_id")).strip() in attempted_symbols:
-            print(f"🛑 {row.get('symbol')} already attempted this session. Skipping.")
-            return row
-            
-
-        try:
-            symbol = row["symbol"]
-            security_id = str(row["security_id"]).strip()  # Use security_id from row
-            buy_price = float(row["buy_price"])
-            quantity = int(row["quantity"])
-            target_pct = float(row.get("target_pct", 1.5))
-            stop_pct = float(row.get("stop_pct", 1))
-
-            print(f"📌 Calling get_live_price for {symbol}")
-            live_price = get_live_price(symbol, security_id)
-            print(f"✅ Live price for {symbol} = {live_price}")
-            
-            if live_price is None:
-                print(f"⚠️ Failed to get live price for {symbol}")
-                return row
-            change_pct = ((live_price - buy_price) / buy_price) * 100
-            log_live_trail(symbol, live_price, change_pct, order_id=row.get("order_id", ""))
-
-            status = row.get("status", "HOLD")
-            exit_price = row.get("exit_price", "")
-            now = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M")
-
-            net_profit = estimate_net_profit(buy_price, live_price, quantity)
-            capital_in_stock = buy_price * quantity
-            MINIMUM_NET_PROFIT_REQUIRED = get_dynamic_minimum_net_profit(capital_in_stock)
-            max_rupee_loss = capital_in_stock * 0.004
-            actual_loss = (buy_price - live_price) * quantity
-
-            reason = ""
-            should_sell = False
-            
-            records = []
-            if os.path.exists(LIVE_BUFFER_FILE):
-                with portalocker.Lock(LIVE_BUFFER_FILE, 'r', timeout=5) as f:
-                    reader = csv.reader(f)
-                    for row_ in reader:
-                        if len(row_) != 4:
-                            continue
-                        ts_str, sym, price, change = row_
-                        if sym.strip().upper() == symbol.upper():
-                            try:
-                                records.append((ts_str, float(change)))
-                            except:
-                                continue
-            
-            max_trail = max([r[1] for r in records if r[1] is not None], default=0)
-            trailing_drop = max_trail - change_pct
-            
-            # EOD Auto-Exit at 3:25 PM
-            current_time = datetime.datetime.now(pytz.timezone("Asia/Kolkata"))
-            if current_time.hour == 15 and current_time.minute >= 25:
-                reason = "EOD AUTO-EXIT"
-                should_sell = True
-            elif change_pct >= target_pct:
-                reason = "TARGET HIT"
-                should_sell = True
-            # 🧠 Predictive peak logic using linear regression
-            elif len(records) >= 15:
-                import numpy as np
-                from sklearn.linear_model import LinearRegression
-            
-                X = np.array(list(range(len(records)))).reshape(-1, 1)
-                y = np.array([r[1] for r in records]).reshape(-1, 1)
-            
-                model = LinearRegression()
-                model.fit(X, y)
-            
-                future_index = len(records) + 5  # Predict 5 mins ahead
-                predicted_peak = float(model.predict([[future_index]])[0])
-                potential_upside = predicted_peak - change_pct
-            
-                print(f"🔮 AI Prediction: Current={round(change_pct,2)}%, Predicted Peak={round(predicted_peak,2)}%")
-            
-                if potential_upside < 0.2 and trailing_drop > 0.1:
-                    reason = f"AI EXIT: Predicted peak only {round(predicted_peak,2)}%, current={round(change_pct,2)}%"
-                    should_sell = True
-            
-            # Fallback to original peak drop
-            elif max_trail >= 0.5 and trailing_drop >= 0.25:
-                reason = f"PEAK DROP: Peaked at {round(max_trail,2)}%, now at {round(change_pct,2)}%"
-                should_sell = True            
-            
-            elif change_pct <= -stop_pct:
-                reason = "STOP LOSS"
-                should_sell = True
-            elif should_exit_early(symbol, live_price):
-                reason = "SMART EXIT: Dropped from peak after 2:45 PM"
-                should_sell = True
-            elif is_peak_exhausted(symbol, target_pct=target_pct):
-                reason = "SMART EXIT: Price exhausted near target multiple times"
-                should_sell = True
-
-            # ✅ Allow loss-side exit even if profit < min threshold
-            is_loss_exit = reason in ["STOP LOSS", "FORCED EXIT: Max ₹ loss", "EOD AUTO-EXIT"]            
-            # ✅ Smart SELL trigger: allow exit if price hit near target multiple times
-            near_target_hits = [r for r in records if target_pct - 0.1 <= r[1] <= target_pct + 0.05]
-            frequent_peaks = len(near_target_hits) >= 2
-            
-            if frequent_peaks:
-                print(f"🔁 Smart SELL allowed for {symbol} due to repeated target hits ({len(near_target_hits)}x)")
-            
-            # ✅ Allow exit if any of the following:
-            # - Profit ≥ minimum threshold
-            # - Loss-side trigger (STOP LOSS, FORCED EXIT, EOD EXIT)
-            # - Repeated peak hits near target
-            if should_sell and (net_profit >= MINIMUM_NET_PROFIT_REQUIRED or is_loss_exit or frequent_peaks):      
-                attempted_symbols.add(symbol)
-                exchange_segment = "NSE_EQ"
-                code, response = place_sell_order(security_id, symbol, quantity, exchange_segment)
-                if code == 200:
-                    order_id = str(response.get("order_id") or response.get("data", {}).get("orderId", ""))
-                    trade_status = None
-                    for _ in range(5):
-                        trade_book = get_trade_book()
-                        today_str = datetime.datetime.now().strftime("%Y-%m-%d")
-                        matching_trades = [
-                            t for t in trade_book
-                            if t.get("symbol", "").upper() == symbol.upper()
-                            and t.get("transactionType", "").upper() == "SELL"
-                            and str(t.get("orderDateTime", "")).startswith(today_str)
-                        ]
-                        
-                        if matching_trades:
-                            matching_trades.sort(key=lambda x: x.get("orderDateTime", ""), reverse=True)
-                            trade_status = matching_trades[0].get("status", "").upper()
-                            if trade_status in ["TRADED", "COMPLETE"]:
-                                break
-                        systime.sleep(2)
-                                
-                    if trade_status in ["TRADED", "COMPLETE"]:
-                        status = "PROFIT" if net_profit >= 0 else "STOP LOSS"
-                        exit_price = live_price
-                        log_sell(symbol, security_id, quantity, live_price, reason)
-                        print(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
-                        send_telegram_message(f"✅ SOLD {symbol} at ₹{live_price} ({reason}) Net Profit: ₹{round(net_profit, 2)}")
-                        log_bot_action("portfolio_tracker.py", "SELL executed", "✅ TRADED", f"{symbol} @ ₹{round(live_price, 2)} | Reason: {reason}")
-                    
-                        # ✅ DB Update
-                        insert_portfolio_log_to_db(
-                            datetime.datetime.now(pytz.timezone("Asia/Kolkata")),
-                            symbol,
-                            security_id,
-                            quantity,
-                            buy_price,
-                            stop_pct,
-                            status=status,
-                            exit_price=exit_price,
-                            order_id=str(order_id)
-                        )
-                    
-                        # ✅ Trade summary with % and status
-                        profit_status = "✅ PROFIT" if net_profit > 0 else "❌ LOSS"
-                        profit_pct = round(((exit_price - buy_price) / buy_price) * 100, 2)
-                        summary_msg = (
-                            f"📊 Trade Summary ({now})\n"
-                            f"Stock: {symbol}\n"
-                            f"Buy Price: ₹{round(buy_price, 2)}\n"
-                            f"Sell Price: ₹{round(exit_price, 2)}\n"
-                            f"Qty: {quantity}\n"
-                            f"Net Profit: ₹{round(net_profit, 2)}\n"
-                            f"Profit %: {profit_pct}%\n"
-                            f"Status: {profit_status}"
-                        )
-                        send_telegram_message(summary_msg)
-                    
-                    elif trade_status in ["TRANSIT", "UNKNOWN"]:
-                        print(f"⏳ Sell order for {symbol} is in status: {trade_status}. Will verify next run.")
-                        log_bot_action("portfolio_tracker.py", "SELL pending", f"⏳ {trade_status}", f"{symbol} sell placed. Awaiting trade book confirmation.")
-                        send_telegram_message(f"⏳ Sell order placed for {symbol} but status is '{trade_status}'. Rechecking later.")
-                    
-                        # Track pending symbols instead of order_id
-                        attempted_symbols.add(symbol)
-                        row.update({
-                            "status": "HOLD",
-                            "exit_price": "",
-                            "live_price": live_price,
-                            "change_pct": change_pct,
-                            "last_checked": now
-                        })
-                    
-                        # ✅ NEW GUARD: Block reprocessing of same order in next run
-                        print(f"🛡️ {symbol} has unconfirmed SELL order {order_id}. Skipping reprocessing.")
-                        return row
-                    
-                    else:
-                        print(f"⚠️ Sell order placed but NOT TRADED yet for {symbol}. Holding.")
-                    
-                        # ✅ NEW: Don't block future retries — avoid adding to attempted_symbols
-                        pending_security_id = str(security_id)
-                        if pending_security_id:
-                            print(f"🕓 Delaying confirmation for {symbol} | security_id = {pending_security_id}")
-                            row.update({
-                                "status": "HOLD",
-                                "exit_price": "",
-                                "live_price": live_price,
-                                "change_pct": change_pct,
-                                "last_checked": now,
-                                "security_id": pending_security_id
-                            })
-                        return row
-                    
-
-                    
-                else:
-                    print(f"❌ SELL failed for {symbol}: {response}")
-                    send_telegram_message(f"❌ SELL failed for {symbol}: {response}")
-                    
-                    order_id = response.get("data", {}).get("orderId", "")
-                    if row.get("status") not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
-                        row.update({
-                            "status": "HOLD",
-                            "exit_price": "",
-                            "order_id": str(order_id) if order_id else ""
-                        }) 
-                    return row
-                                   
-            else:
-                hold_reason = ""
-                if not should_sell:
-                    hold_reason = "🚫 Conditions not met: Target/Stop/Peak not triggered."
-                elif net_profit < MINIMUM_NET_PROFIT_REQUIRED:
-                    hold_reason = (
-                        f"💸 Blocked by Net Profit Rule: ₹{round(net_profit, 2)} < ₹{round(MINIMUM_NET_PROFIT_REQUIRED, 2)}"
-                    )
-                else:
-                    hold_reason = "❓ Unknown reason. Needs manual review."
-
-                print(f"⚠️ HOLDING {symbol}. Change%: {round(change_pct, 2)}%. "
-                      f"Net Profit: ₹{round(net_profit, 2)}. Reason: {hold_reason}")
-                log_bot_action("portfolio_tracker.py", "SELL skipped", "⚠️ HOLD", f"{symbol} | {hold_reason}")
-
-            # ✅ Always update exit_price and audit data
-            if status in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
-                row.update({
-                    "live_price": round(live_price, 2),
-                    "change_pct": round(change_pct, 2),
-                    "last_checked": now,
-                    "status": status,
-                    "exit_price": round(live_price, 2)
-                })
-            else:
-                row.update({
-                    "live_price": round(live_price, 2),
-                    "change_pct": round(change_pct, 2),
-                    "last_checked": now,
-                    "exit_price": round(net_profit, 2)
-                })
-            
-           
-            return row
+            cache[cache_key] = candles
+            return candles
 
         except Exception as e:
-            print(f"⚠️ Error processing {row.get('symbol')}: {e}")
-            return row
+            if "Rate_Limit" in str(e) and attempt < 2:
+                wait_time = (attempt + 1) * 10
+                print(f"⚠️ Rate limit hit for {security_id}, retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+                continue
+            print(f"❌ Error fetching candles for {security_id}: {e}")
+            return []
+    return []
 
-    # ✅ Execute all in parallel
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        results = list(executor.map(process_sell_logic, existing_rows))
-        updated_rows = [r for r in results if r]
+def detect_reversal_pattern(candles, pattern_type):
+    """Detect bearish reversal patterns for position monitoring"""
+    if not candles:
+        return False
+        
+    df = pd.DataFrame(candles)
+    o, h, l, c = df["open"], df["high"], df["low"], df["close"]
+    
+    # Shooting Star detection
+    if pattern_type == "Shooting Star" and len(c) >= 1:
+        body = abs(c.iloc[-1] - o.iloc[-1])
+        uw = h.iloc[-1] - max(c.iloc[-1], o.iloc[-1])
+        lw = min(c.iloc[-1], o.iloc[-1]) - l.iloc[-1]
+        if uw > 2 * body and lw < body:
+            return True
+            
+    # Bearish Engulfing detection
+    elif pattern_type == "Bearish Engulfing" and len(c) >= 2:
+        if (c.iloc[-2] > o.iloc[-2] and 
+            c.iloc[-1] < o.iloc[-1] and
+            o.iloc[-1] > c.iloc[-2] and 
+            c.iloc[-1] < o.iloc[-2]):
+            return True
+            
+    # Evening Star detection
+    elif pattern_type == "Evening Star" and len(c) >= 3:
+        body1 = c.iloc[-3] - o.iloc[-3]  # Bullish body
+        body2 = abs(c.iloc[-2] - o.iloc[-2])
+        if (c.iloc[-3] > o.iloc[-3] and
+            o.iloc[-2] > c.iloc[-3] and
+            body2 < 0.3 * body1 and
+            c.iloc[-1] < o.iloc[-1] and
+            o.iloc[-1] < c.iloc[-2] and
+            c.iloc[-1] < (o.iloc[-3] + c.iloc[-3]) / 2):
+            return True
+            
+    # Bearish Harami detection
+    elif pattern_type == "Bearish Harami" and len(c) >= 2:
+        if (c.iloc[-2] > o.iloc[-2] and 
+            c.iloc[-1] < o.iloc[-1] and
+            o.iloc[-1] < c.iloc[-2] and 
+            c.iloc[-1] > o.iloc[-2]):
+            return True
+            
+    # Three Black Crows detection
+    elif pattern_type == "Three Black Crows" and len(c) >= 3:
+        if (c.iloc[-3] < o.iloc[-3] and 
+            c.iloc[-2] < o.iloc[-2] and 
+            c.iloc[-1极 < o.iloc[-1] and
+            c.iloc[-3] > c.iloc[-2] and 
+            c.iloc[-2] > c.iloc[-1] and
+            o.iloc[-1] < o.iloc[-2] < o.iloc[-3]):
+            return True
+            
+    # Bearish Kicker detection
+    elif pattern_type == "Bearish Kicker" and len(c) >= 2:
+        if (c.iloc[-2] > o.iloc[-2] and
+            o.iloc[-1] < c.iloc[-2] and
+            c.iloc[-1] < o.iloc[-1]):
+            return True
+            
+    # Gravestone Doji detection
+    elif pattern_type == "Gravestone Doji" and len(c) >= 1:
+        body = abs(c.iloc[-1] - o.iloc[-1])
+        uw = h.iloc[-1] - max(c.iloc[-1], o.iloc[-1])
+        lw = min(c.iloc[-1], o.iloc[-1]) - l.iloc[-1]
+        if uw > 3 * body and lw < body * 0.1:
+            return True
+            
+    # Gap-Up Reversal detection
+    elif pattern_type == "Gap-Up Reversal" and len(c) >= 2:
+        gap_up = o.iloc[-1] > c.iloc[-2]
+        strong_reversal = c.iloc[-1] < o.iloc[-1] and (o.iloc[-1] - c.iloc[-1]) > (h.iloc[-1] - l.iloc[-1]) * 0.7
+        if gap_up and strong_reversal:
+            return True
+            
+    # Hanging Man detection
+    elif pattern_type == "Hanging Man" and len(c) >= 1:
+        body = abs(c.iloc[-1] - o.iloc[-1])
+        lw = min(c.iloc[-1], o.iloc[-1]) - l.iloc[-1]
+        uw = h.iloc[-1] - max(c.iloc[-1], o.iloc[-1])
+        if lw > 2 * body and uw < body * 0.5 and c.iloc[-1] < o.iloc[-1]:
+            return True
+            
+    # Breakdown Marubozu detection
+    elif pattern_type == "Breakdown Marubozu" and len(c) >= 1:
+        body = abs(c.iloc[-1] - o.iloc[-1])
+        candle_range = h.iloc[-1] - l.iloc[-1]
+        body_ratio = body / candle_range if candle_range > 0 else 0
+        
+        # Look for no wicks and closing at low
+        if (body_ratio > 0.9 and 
+            min(c.iloc[-1], o.iloc[-1]) - l.iloc[-1] < candle_range * 0.05 and
+            h.iloc[-1] - max(c.iloc[-1], o.iloc[-1]) < candle_range * 0.05 and
+            c.iloc[-1] < o.iloc[-1]):
+            return True
+            
+    return False
 
-    if updated_rows:
-        # 🔁 Load original rows
-        with open(PORTFOLIO_LOG, newline="", encoding="utf-8") as f:
-            original = list(csv.DictReader(f))
+def detect_bearish_chart_pattern(candles):
+    """Detect bearish chart patterns for position monitoring"""
+    if not candles or len(candles) < 10:
+        return False
+        
+    df = pd.DataFrame(candles)
+    o, h, l, c = df["open"], df["high"], df["low"], df["close"]
     
-        # 🧠 Build updated map
-        updated_map = {row["symbol"]: row for row in updated_rows}
+    # Head and Shoulders pattern
+    if len(c) >= 25:
+        # Find left shoulder
+        left_shoulder_idx = h.iloc[-25:-15].idxmax()
+        left_shoulder = h.iloc[left_shoulder_idx]
+        
+        # Find head (highest point)
+        head_idx = h.iloc[-20:-10].idxmax()
+        head_high = h.iloc[head_idx]
+        
+        # Find right shoulder
+        right_shoulder_idx = h.iloc[-10:-5].idxmax()
+        right_shoulder = h.iloc[right_shoulder_idx]
+        
+        # Neckline (support)
+        neckline = (l.iloc[left_shoulder_idx] + l.iloc[right_shoulder_idx]) / 2
+        
+        if (left_shoulder * 0.98 < right_shoulder < left_shoulder * 1.02 and
+            head_high > left_shoulder * 1.03 and
+            c.iloc[-1] < neckline):
+            return True
     
-        # 🛡️ Merge updates into original rows
-        final_rows = []
-        for row in original:
-            symbol = row.get("symbol")
-            if symbol in updated_map and row.get("status") not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
-                final_rows.append(updated_map[symbol])
+    # Double/Triple Top
+    if len(c) >= 20:
+        # Find significant highs
+        highs = h.rolling(5).max().dropna()
+        max_idxs = highs.nlargest(3).index.tolist()
+        max_idxs.sort()
+        
+        if len(max_idxs) >= 2:
+            # Check if highs are approximately equal
+            high1 = highs.iloc[max_idxs[0]]
+            high2 = highs.iloc[max_idxs[1]]
+            high_diff = abs(high1 - high2) / min(high1, high2)
+            
+            # Check breakdown below support
+            support = l.iloc[max_idxs[0]:max_idxs[1]].min()
+            if (high_diff < 0.02 and 
+                c.iloc[-1] < support):
+                return True
+    
+    # Descending Triangle
+    if len(c) >= 15:
+        # Horizontal support
+        support = l.rolling(5).min().iloc[-15:].mean()
+        support_range = l.iloc[-15:].max() - l.iloc[-15:].min()
+        
+        # Lower highs
+        high_min = h.iloc[-15:].min()
+        high_max = h.iloc[-15:].max()
+        slope, _ = np.polyfit(range(15), h.iloc[-15:], 1)
+        
+        if (support_range / support < 0.02 and
+            slope < 0 and
+            (high_max - high_min) / high_min > 0.03 and
+            c.iloc[-1] < support):
+            return True
+    
+    # Bearish Rectangle
+    if len(c) >= 10:
+        # Horizontal support and resistance
+        support = l.rolling(5).min().iloc[-10:].mean()
+        resistance = h.rolling(5).max().iloc[-10:].mean()
+        range_pct = (resistance - support) / support
+        
+        # Consolidation range
+        if range_pct < 0.03 and c.iloc[-1] < support:
+            return True
+    
+    # Bearish Wedge (Rising Wedge)
+    if len(c) >= 20:
+        # Converging trendlines both sloping upward
+        highs = h.iloc[-20:]
+        lows = l.iloc[-20:]
+        
+        high_slope, _ = np.polyfit(range(20), highs, 1)
+        low_slope, _ = np.polyfit(range(20), lows, 1)
+        
+        # Both should be positive but lows slope less positive (converging)
+        if high_slope > 0 and low_slope > 0 and high_slope > low_slope:
+            # Breakdown below lower trendline
+            if c.iloc[-1] < min(lows.iloc[:-1]):
+                return True
+    
+    # Rounded Top
+    if len(c) >= 30:
+        # Fit polynomial curve to highs
+        idx = np.array(range(30))
+        highs = h.iloc[-30:].values
+        coeffs = np.polyfit(idx, highs, 2)
+        
+        # Check inverted U-shape (negative quadratic coefficient)
+        if coeffs[0] < 0:
+            # Check if current price is below starting point
+            start_price = highs[0]
+            if c.iloc[-1] < start_price:
+                return True
+    
+    # Bearish Channel (Downward Channel)
+    if len(c) >= 20:
+        # Get highs and lows of last 20 candles
+        highs = h.iloc[-20:]
+        lows = l.iloc[-20:]
+        idx = np.array(range(20))
+        
+        # Fit trendlines to highs and lows
+        high_slope, high_intercept = np.polyfit(idx, highs, 1)
+        low_slope, low_intercept = np.polyfit(idx, lows, 1)
+        
+        # Check both trendlines are declining
+        if high_slope < 0 and low_slope < 0:
+            # Check channel is parallel (similar slopes)
+            slope_diff = abs(high_slope - low_slope)
+            if slope_diff / min(abs(high_slope), abs(low_slope)) < 0.25:
+                # Calculate current channel boundaries
+                current_high_bound = high_slope * 19 + high_intercept
+                current_low_bound = low_slope * 19 + low_intercept
+                
+                # Confirm price is in channel and showing weakness
+                if (h.iloc[-1] < current_high_bound and 
+                    l.iloc[-1] > current_low_bound and
+                    c.iloc[-1] < current_low_bound * 1.01):  # Closing near bottom
+                    return True
+    
+    # Distribution Zone (Volume-based pattern)
+    if len(c) >= 15:
+        # Higher volume on down days than up days
+        up_days_vol = 0
+        down_days_vol = 0
+        up_days = 0
+        down_days = 0
+        
+        for i in range(1, 15):
+            if c.iloc[-i] > c.iloc[-i-1]:
+                up_days_vol += v.iloc[-i]
+                up_days += 1
             else:
-                final_rows.append(row)           
-    
-        # ✅ Convert updated_rows to DataFrame
-        updated_df = pd.DataFrame(updated_rows)
+                down_days_vol += v.iloc[-i]
+                down_days += 1
         
-        # ✅ Read original file
-        if os.path.exists(PORTFOLIO_LOG):
-            original_df = pd.read_csv(PORTFOLIO_LOG)
-        else:
-            original_df = pd.DataFrame(columns=headers)
-        
-        # ✅ Merge by symbol — keep SOLD entries untouched
-        original_df.set_index("symbol", inplace=True)
-        updated_df.set_index("symbol", inplace=True)
-        
-        # ✅ Update only HOLD rows
-        updated_df = updated_df[~updated_df["status"].isin(["PROFIT", "STOP LOSS", "FORCE_EXIT"])]
-        for symbol in updated_df.index:
-            if (
-                symbol in original_df.index and 
-                original_df.loc[symbol]["status"] not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]
-            ):
-                # Create temporary copy for dtype conversion
-                updated_row = updated_df.loc[symbol].copy()
-                for col in original_df.columns:
-                    if col in updated_row.index:
-                        try:
-                            if original_df[col].dtype != updated_row[col].dtype:
-                                updated_row[col] = pd.Series(updated_row[col]).astype(original_df[col].dtype).iloc[0]
-                        except Exception as dtype_err:
-                            print(f"⚠️ Column '{col}' dtype cast failed. Skipping dtype alignment: {dtype_err}")
-                                               
-                original_df.loc[symbol] = updated_row
-            elif symbol not in original_df.index:
-                if updated_df.loc[symbol]["status"] not in ["PROFIT", "STOP LOSS", "FORCE_EXIT"]:
-                    # Create temporary copy for dtype conversion
-                    updated_row = updated_df.loc[symbol].copy()
-                    for col in original_df.columns:
-                        if col in updated_row.index:
-                            try:
-                                if original_df[col].dtype != updated_row[col].dtype:
-                                    updated_row[col] = pd.Series(updated_row[col]).astype(original_df[col].dtype).iloc[0]
-                            except Exception as dtype_err:
-                                print(f"⚠️ Column '{col}' dtype cast failed. Skipping dtype alignment: {dtype_err}")
-                            
-                    original_df.loc[symbol] = updated_row  
-        
-        # ✅ Save back safely
-        original_df.reset_index(inplace=True)
-        original_df["order_id"] = original_df["order_id"].astype(str)
-        original_df.to_csv(PORTFOLIO_LOG, index=False)
-        print("✅ Portfolio safely updated without overwriting new entries.")
+        if down_days > 0 and up_days > 0:
+            avg_down_vol = down_days_vol / down_days
+            avg_up_vol = up_days_vol / up_days
+            if avg_down_vol > avg_up_vol * 1.3:
+                return True
+                    
+    return False
 
-# ✅ Final log dump to file
+def log_trade(symbol, security_id, action, price, qty, status, stop_pct=None, target_pct=None, stop_price=None, target_price=None, order_id="N/A", timestamp=None):
+    if timestamp is None:
+        timestamp = datetime.now()
+    timestamp_str = timestamp.strftime("%m/%d/%Y %H:%M:%S")
+    
+    # CSV row log
+    log_row = [
+        symbol,
+        timestamp_str,
+        security_id,
+        qty,
+        price,
+        0,  # momentum_5min placeholder
+        target_pct if target_pct is not None else "",
+        stop_pct if stop_pct is not None else "",
+        "",  # live_price
+        "",  # change_pct
+        "",  # last_checked
+        status,  # ✅ Correctly placed here
+        "",  # exit_price
+        order_id,
+        target_price if target_price is not None else "",
+        stop_price if stop_price is not None else ""
+    ]
+
+    # CSV logging
+    with open(PORTFOLIO_LOG, "a") as f:
+        f.write(",".join(map(str, log_row)) + "\n")
+
+    # DB logging
+    try:
+        insert_portfolio_log_to_db(
+            trade_date=timestamp,
+            symbol=symbol,
+            security_id=security_id,
+            quantity=qty,
+            buy_price=price,
+            stop_pct=float(stop_pct) if stop_pct is not None else None,
+            target_pct=float(target_pct) if target_pct is not None else None,
+            stop_price=stop_price,
+            target_price=target_price,
+            status=status,
+            order_id=order_id
+        )
+    except Exception as e:
+        print("❌ DB log failed (portfolio_log):", e)
+
+def place_exit_order(symbol, security_id, qty, tick_size_map):
+    """Place exit order for position monitoring"""
+    try:
+        quote = dhan.get_quote(security_id)
+        if not quote:
+            return
+            
+        price = float(quote.get('ltp', 0))
+        if price <= 0:
+            print(f"⚠️ Invalid price for {symbol}: {price}")
+            return
+            
+        tick_size_value = tick_size_map.get(str(security_id), 0.05)
+        tick_size_dec = Decimal(str(tick_size_value))
+        
+        limit_price = Decimal(str(price)) * Decimal("0.998")
+        limit_price = (limit_price / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec
+        limit_price = float(limit_price)
+        
+        # Cancel existing SL/TP forever order if any
+        try:
+            dhan.cancel_forever_order(
+                security_id=str(security_id),
+                transaction_type="SELL",
+                exchange_segment="NSE_EQ",
+                product_type="CNC"
+            )
+            print(f"🧹 Cancelled existing SL/TP for {symbol}")
+        except Exception as e:
+            print(f"⚠️ Failed to cancel SL/TP for {symbol}: {e}")
+
+        # Proceed with manual SELL
+        order = {
+            "security_id": str(security_id),
+            "exchange_segment": "NSE_EQ",
+            "transaction_type": "SELL",
+            "order_type": "LIMIT",
+            "product_type": "CNC",
+            "quantity": qty,
+            "price": limit_price,
+            "validity": "DAY"
+        }
+
+        res = dhan.place_order(**order)
+        if res.get('status') == 'REJECTED':
+            print(f"❌ Exit order rejected for {symbol}: {res.get('message', 'No message')}")
+            send_telegram(f"❌ Exit order rejected for {symbol}: {res.get('message', 'No message')}")
+            return
+            
+        print(f"✅ Exit order placed for {symbol}: {res}")
+        send_telegram(f"⚠️ Exiting {symbol} due to reversal signal @ ₹{limit_price:.2f}")
+        log_trade(symbol, security_id, "SELL", limit_price, qty, "EXITED")
+        exit_reason = f"{symbol} exited via manual SELL due to reversal pattern or stop/target logic"
+        log_time = datetime.now()
+        
+        try:
+            # CSV Logging
+            with open("D:/Downloads/Dhanbot/dhan_autotrader/bot_execution_log.csv", "a") as flog:
+                flog.write(f"{log_time.strftime('%Y-%m-%d %H:%M:%S')},autotrade.py,SUCCESS,\"{exit_reason}\"\n")
+        
+            # DB Logging
+            log_to_postgres(
+                timestamp=log_time,
+                script="autotrade.py",
+                status="SELL",
+                message=exit_reason
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to log SELL reason: {e}")
+            
+    except Exception as e:
+        print(f"❌ Exit order failed for {symbol}: {e}")
+        send_telegram(f"❌ Exit order failed for {symbol}: {e}")
+
+def monitor_hold_position(cache=None, tick_size_map=None):
+    if cache is None:
+        cache = {}
+    if tick_size_map is None:
+        tick_size_map = {}
+    if not os.path.exists(PORTFOLIO_LOG):
+        return
+        
+    try:
+        df = pd.read_csv(PORTFOLIO_LOG)
+        today = datetime.now().strftime("%m/%d/%Y")
+        hold_positions = df[(df['status'] == "HOLD") & (df['timestamp'].str.contains(today))]
+        
+        # Check order status for executed SL/TP orders
+        try:
+            order_list = dhan.get_order_list()
+            orders = []
+            if isinstance(order_list, dict) and 'data' in order_list:
+                orders = order_list['data']
+            elif isinstance(order_list, list):
+                orders = order_list
+                
+            for order in orders:
+                if order.get('orderStatus') in ['FILLED', 'TRADED']:
+                        security_id = str(order['securityId'])
+                        if security_id in hold_positions['security_id'].values:
+                            idx = df[
+                                (df['security_id'] == security_id) &
+                                (df['status'] == "HOLD")
+                            ].index[-1]
+            
+                            exit_price = float(order.get('orderAverageTradedPrice', 0)) or float(order.get('orderPrice', 0))
+                            entry_price = float(df.at[idx, 'price'])
+                            status = "PROFIT" if exit_price > entry_price else "STOP LOSS"
+            
+                            df.at[idx, 'exit_price'] = exit_price
+                            df.at[idx, 'status'] = status
+                            df.at[idx, 'last_checked'] = datetime.now().strftime("%H:%M:%S")
+                            
+                            symbol = df.at[idx, 'symbol']
+                            print(f"✅ SL/TP executed for {symbol} ➝ {status} @ ₹{exit_price:.2f} (Order ID: {order['orderId']})")
+            
+                            # ✅ Update DB as well
+                            try:
+                                update_portfolio_log_to_db(
+                                    security_id=security_id,
+                                    exit_price=exit_price,
+                                    status=status
+                                )
+                            except Exception as e:
+                                print(f"❌ DB update failed: {e}")
+        except Exception as e:
+            print(f"⚠️ Order status check failed: {e}")
+        
+        # Save updated status to CSV
+        df.to_csv(PORTFOLIO_LOG, index=False)
+        
+        # Process positions still in HOLD status
+        hold_positions = df[(df['status'] == "HOLD") & (df['timestamp'].str.contains(today))]
+        for _, pos in hold_positions.iterrows():
+            security_id = pos['security_id']
+            symbol = pos['symbol']
+            entry_price = float(pos['price'])
+            qty = pos['qty']
+            
+            candles = fetch_candles(security_id, count=40, cache=cache)
+            if not candles:
+                continue
+                
+            # Get current price
+            try:
+                quote = dhan.get_quote(security_id)
+                current_price = float(quote.get('ltp', 0))
+            except:
+                current_price = candles[-1]['close']
+                
+            # Time-based exit (after 3:15 PM)
+            current_time = datetime.now().time()
+            if current_time >= dtime(15, 15):
+                status = "PROFIT" if current_price > entry_price else "STOP LOSS"
+                print(f"⏰ Time-based exit for {symbol} ({status})")
+                place_exit_order(symbol, security_id, qty, tick_size_map)
+                continue
+                
+            # Trailing stop logic (move stop to breakeven at 1% profit)
+            if current_price > entry_price * 1.01:
+                # Check if we need to move stop to breakeven
+                if 'stop_price' in pos and float(pos['stop_price']) < entry_price:
+                    print(f"📈 Moving stop to breakeven for {symbol}")
+                    try:
+                        # Cancel existing stop
+                        dhan.cancel_forever_order(
+                            security_id=str(security_id),
+                            transaction_type="SELL",
+                            exchange_segment="NSE_EQ",
+                            product_type="CNC"
+                        )
+                        # Place new stop at breakeven
+                        tick_size_value = tick_size_map.get(str(security_id), 0.05)
+                        tick_size_dec = Decimal(str(tick_size_value))
+                        stop_price = entry_price * 0.999
+                        stop_price = float((Decimal(str(stop_price)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
+                        
+                        dhan.place_forever(
+                            security_id=str(security_id),
+                            exchange_segment="NSE_EQ",
+                            transaction_type="SELL",
+                            product_type="CNC",
+                            quantity=qty,
+                            price=current_price,  # Target remains same
+                            trigger_Price=stop_price
+                        )
+                        print(f"🔒 Trailing stop activated for {symbol} @ ₹{stop_price:.2f}")
+                    except Exception as e:
+                        print(f"⚠️ Failed to adjust trailing stop: {e}")
+            
+            # Check for bearish reversal candlestick patterns
+            bearish_patterns = [
+                "Shooting Star", "Bearish Engulfing", "Evening Star",
+                "Bearish Harami", "Three Black Crows", "Bearish Kicker",
+                "Gravestone Doji", "Gap-Up Reversal", "Hanging Man", "Breakdown Marubozu"
+            ]
+            for pattern in bearish_patterns:
+                if detect_reversal_pattern(candles, pattern):
+                    place_exit_order(symbol, security_id, qty, tick_size_map)
+                    break
+                    
+            # Check for bearish chart patterns
+            if detect_bearish_chart_pattern(candles):
+                place_exit_order(symbol, security_id, qty, tick_size_map)
+                continue
+    except Exception as e:
+        print(f"❌ Position monitoring failed: {e}")
+
+def main():
+    print('📌 Starting position monitoring')
+    
+    # Precompute market close time
+    monitoring_end_time = datetime.combine(datetime.today(), dtime(15, 25))
+    
+    # Load master CSV for tick size map
+    master_df = pd.read_csv(MASTER_CSV)
+    tick_size_map = dict(zip(
+        master_df['SEM_SMST_SECURITY_ID'].astype(str), 
+        master_df['SEM_TICK_SIZE']
+    ))
+    
+    # Continuous monitoring loop until market close
+    while datetime.now() < monitoring_end_time:
+        candle_cache = {}  # Reset cache for each iteration
+        print(f"\n⏰ New monitoring cycle at {datetime.now().strftime('%H:%M:%S')}")
+        
+        # Monitor existing positions
+        monitor_hold_position(cache=candle_cache, tick_size_map=tick_size_map)
+        
+        # Wait before next scan
+        print("🔄 Waiting for next monitoring cycle in 60 seconds...")
+        time.sleep(60)
+    
+    print("🛑 Monitoring window closed - stopping script")
+
+# Save execution log
 try:
-    with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/portfolio_tracker_log.txt", "w", encoding="utf-8") as f:
-        f.write(log_buffer.getvalue())
+    log_path = "D:/Downloads/Dhanbot/dhan_autotrader/Logs/New_Autotrade_Monitor.txt"
+    with open(log_path, "w", encoding="utf-8") as log_file:
+        log_file.write(log_buffer.getvalue())
 except Exception as e:
-    print(f"⚠️ Log write failed: {e}")    
+    print(f"⚠️ Failed to write log file: {e}")
 
 if __name__ == "__main__":
-    if os.path.exists("emergency_exit.txt"):
-        send_telegram_message("⛔ Emergency Exit active. Skipping HOLD monitoring.")
-        log_bot_action("portfolio_tracker.py", "SKIPPED", "EMERGENCY EXIT", "Monitoring skipped due to emergency exit.")
-    else:
-        check_portfolio()
+    main()
