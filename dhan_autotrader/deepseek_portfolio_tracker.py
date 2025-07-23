@@ -37,7 +37,6 @@ sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
 # ========== Config ==========
 CONFIG_PATH = "D:/Downloads/Dhanbot/dhan_autotrader/config.json"
 MASTER_CSV = "D:/Downloads/Dhanbot/dhan_autotrader/dhan_master.csv"
-CAPITAL_FILE = "D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv"
 PORTFOLIO_LOG = "D:/Downloads/Dhanbot/dhan_autotrader/portfolio_log.csv"
 
 # ========== Load Config ==========
@@ -51,6 +50,13 @@ dhan = dhanhq(context)
 # ========== Telegram from config ==========
 TG_TOKEN = config["telegram_token"]
 TG_CHAT_ID = config["telegram_chat_id"]
+
+
+def get_capital():
+    try:
+        return float(config.get("capital", 0.0))
+    except:
+        return 0.0
 
 def send_telegram(msg):
     try:
@@ -204,11 +210,12 @@ def detect_reversal_pattern(candles, pattern_type):
     elif pattern_type == "Three Black Crows" and len(c) >= 3:
         if (c.iloc[-3] < o.iloc[-3] and 
             c.iloc[-2] < o.iloc[-2] and 
-            c.iloc[-1极 < o.iloc[-1] and
+            c.iloc[-1] < o.iloc[-1] and
             c.iloc[-3] > c.iloc[-2] and 
             c.iloc[-2] > c.iloc[-1] and
-            o.iloc[-1] < o.iloc[-2] < o.iloc[-3]):
+            (o.iloc[-1] < o.iloc[-2] < o.iloc[-3])):
             return True
+    
             
     # Bearish Kicker detection
     elif pattern_type == "Bearish Kicker" and len(c) >= 2:
@@ -564,7 +571,7 @@ def monitor_hold_position(cache=None, tick_size_map=None):
                             ].index[-1]
             
                             exit_price = float(order.get('orderAverageTradedPrice', 0)) or float(order.get('orderPrice', 0))
-                            entry_price = float(df.at[idx, 'price'])
+                            entry_price = float(df.at[idx, 'buy_price'])
                             status = "PROFIT" if exit_price > entry_price else "STOP LOSS"
             
                             df.at[idx, 'exit_price'] = exit_price
@@ -594,7 +601,7 @@ def monitor_hold_position(cache=None, tick_size_map=None):
         for _, pos in hold_positions.iterrows():
             security_id = pos['security_id']
             symbol = pos['symbol']
-            entry_price = float(pos['price'])
+            entry_price = float(pos['buy_price'])
             qty = pos['qty']
             
             candles = fetch_candles(security_id, count=40, cache=cache)
