@@ -181,6 +181,32 @@ def get_sector_strength():
         print("🐂 Bullish market - Dynamic positive sectors:", top_sectors)   
     
     return top_sectors, market_condition, sector_gains
+    
+# ======== BETA CALCULATION ========
+    
+def calculate_beta(stock_returns, index_returns='^NSEI'):
+    """Calculate 6-month beta against Nifty 50"""
+    try:
+        if len(stock_returns) < 30:  # Minimum 30 days data
+            return 1.0  # Neutral default
+        
+        # Get index returns if not provided
+        if isinstance(index_returns, str):
+            index_data = yfinance.download(index_returns, period="6mo")['Adj Close'].pct_change().dropna()
+            index_returns = index_data.values
+        
+        # Align dates
+        aligned_returns = pd.DataFrame({
+            'stock': stock_returns[-len(index_returns):],
+            'index': index_returns
+        }).dropna()
+        
+        cov_matrix = np.cov(aligned_returns['stock'], aligned_returns['index'])
+        beta = cov_matrix[0,1]/cov_matrix[1,1]
+        return round(beta, 2)
+    
+    except Exception:
+        return 1.0  # Fallback to neutral beta
 
 # ======== TECHNICAL INDICATORS ========
 def calculate_macd(closes):
@@ -206,7 +232,8 @@ def calculate_rsi(closes):
     avg_gain = gain.rolling(14).mean().bfill()
     avg_loss = loss.rolling(14).mean().bfill().replace(0, 0.01)
     rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+    rsi_series = 100 - (100 / (1 + rs))
+    return rsi_series.iloc[-1]  # Return only the last RSI value
 
 # ======== LOAD MASTER SECURITY LIST ========
 try:
@@ -255,7 +282,8 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
         
         # Fetch yesterday's close and open price
         try:
-            quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}&exchange=NSE"
+            # FIXED: Revert to old version's API endpoint
+            quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}"
             quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
             
             # Handle rate limiting
@@ -551,7 +579,8 @@ if results:
             continue
     
         try:
-            quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}&exchange=NSE"
+            # FIXED: Revert to old version's API endpoint
+            quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}"
             quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
             if quote_resp.status_code != 200:
                 continue

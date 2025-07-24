@@ -434,24 +434,34 @@ def detect_bullish_pattern(candles, symbol=None):
                     log_pattern_detection(symbol, "Volume Breakout Candle", True)
         
         # Move volume breakout pattern to chart patterns only
-        if not skip_chart and len(c) >= 15:
-            # Identify resistance level (previous swing high)
-            resistance = max(h.iloc[-15:-5])
-            current_close = c.iloc[-1]
-            current_vol = v.iloc[-1]
-            avg_vol = v.iloc[-15:-1].mean()
-            
-            # Breakout confirmation with stronger volume requirement
-            if (current_close > resistance and 
-                current_vol > 2.0 * avg_vol and  # Increased from 1.8x to 2.0x
-                current_vol > v.iloc[-2]):  # Volume increasing
-                pattern_score = min(1.0, 0.85 + (current_vol / avg_vol) / 5)  # Stronger weighting
+        if not skip_chart and len(c) >= 20:  # Increased lookback for better resistance
+            # Identify true resistance (swing high + consolidation zone)
+            resistance_period = 20
+            resistance_candidates = h.iloc[-resistance_period:-5]
+            if len(resistance_candidates) > 0:
+                resistance_level = resistance_candidates.max()
+                # Verify resistance has been tested at least twice
+                resistance_tests = sum(resistance_candidates >= resistance_level * 0.995)
                 
-                # Remove Volume Breakout Candle if exists
-                detected_patterns = [p for p in detected_patterns if p[0] != "Volume Breakout Candle"]
+                current_close = c.iloc[-1]
+                current_vol = v.iloc[-1]
+                avg_vol = v.iloc[-15:-1].mean()
                 
-                detected_patterns.append(("Volume Breakout Pattern", pattern_score))
-                log_pattern_detection(symbol, "Volume Breakout Pattern", True)
+                # Breakout confirmation with stronger requirements
+                if (current_close > resistance_level * 1.005 and  # 0.5% clearance
+                    current_vol > max(2.5 * avg_vol, 1.5 * v.iloc[-2]) and  # Strong volume surge
+                    resistance_tests >= 2):  # At least 2 prior tests
+                    
+                    pattern_score = min(1.0, 0.9 + (current_vol / avg_vol) / 10)  # Stronger weighting
+                    
+                    # Remove Volume Breakout Candle if exists
+                    detected_patterns = [p for p in detected_patterns if p[0] != "Volume Breakout Candle"]
+                    
+                    detected_patterns.append(("Volume Breakout Pattern", pattern_score))
+                    log_pattern_detection(symbol, "Volume Breakout Pattern", True)
+                else:
+                    reason = f"Resistance: {resistance_level:.2f}, Vol: {current_vol/avg_vol:.1f}x, Tests: {resistance_tests}"
+                    log_pattern_detection(symbol, "Volume Breakout Pattern", False, reason)
     
         # 9. Gap-Down Reversal (with next candle confirmation)
         if len(c) >= 3:
@@ -1162,7 +1172,7 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
             # Small delay to avoid overlap
             time.sleep(1.5)
 
-            dhan.place_forever(
+            response = dhan.place_forever(
                 security_id=str(security_id),
                 exchange_segment="NSE_EQ",
                 transaction_type="SELL",
@@ -1172,13 +1182,19 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
                 trigger_Price=stop_loss,
                 order_type="SINGLE"
             )
-            print(f"🎯 SL/TP set for {symbol}: Target ₹{target:.2f}, Stop ₹{stop_loss:.2f}")
-            send_telegram(
-                f"🎯 {symbol} | {pattern_name}\n"
-                f"ENTRY: ₹{limit_price:.2f} | QTY: {qty}\n"
-                f"SL: ₹{stop_loss:.2f} ({sl_pct*100:.1f}%)\n"
-                f"TARGET: ₹{target:.2f} ({tp_pct*100:.1f}%)"
-            )
+            
+            if response.get('status') == 'success':
+                print(f"🎯 SL/TP set for {symbol}: Target ₹{target:.2f}, Stop ₹{stop_loss:.2f}")
+                send_telegram(
+                    f"🎯 {symbol} | {pattern_name}\n"
+                    f"ENTRY: ₹{limit_price:.2f} | QTY: {qty}\n"
+                    f"SL: ₹{stop_loss:.2f} ({sl_pct*100:.1f}%)\n"
+                    f"TARGET: ₹{target:.2f} ({tp_pct*100:.1f}%)"
+                )
+            else:
+                print(f"⚠️ SL/TP failed for {symbol}: {response}")
+                send_telegram(f"⚠️ SL/TP setup failed for {symbol}: {response}")
+            
 
         except Exception as e:
             print("⚠️ Failed to place SL/TP:", e)
@@ -1368,26 +1384,62 @@ def main():
                         if not vol_ok:
                             print(f'❌ Triple Bottom volume insufficient ({vol_ratio:.2f}x < 1.8x), skipping...')
                             continue
-                            
+                    
                     elif pattern_name == "Morning Star":
                         # For Morning Star, require closing above 50% of pattern range
                         star_low = min(l.iloc[-3], l.iloc[-2], l.iloc[-1])
                         star_high = max(h.iloc[-3], h.iloc[-2], h.iloc[-1])
                         if c.iloc[-1] < (star_low + (star_high - star_low) * 0.5):
                             print('❌ Morning Star close below 50% of pattern range, skipping...')
-                            continue                            
-        
-                    # Position sizing
-                    price = closes.iloc[-1]
+                            continue
+                    
+                    # ======== NEW: RESISTANCE CHECK ========
+                    # Calculate resistance (max of last 20 candles)
+                    resistance_period = 20
+                    if len(candles) >= resistance_period:
+                        resistance_level = max(candle['high'] for candle in candles[-resistance_period:])
+                    else:
+                        resistance_level = max(candle['high'] for candle in candles)
+                    
+                    # Skip if within 0.5% of resistance
+                    RESISTANCE_BUFFER = 0.005  # 0.5%
+                    current_price = closes.iloc[-1]
+                    if current_price >= resistance_level * (1 - RESISTANCE_BUFFER):
+                        print(f'🚫 Near resistance ({resistance_level:.2f}): {symbol} too close to resistance. Skipping...')
+                        continue
+                    # ======== END RESISTANCE CHECK ========
+                    
+                    # Position sizing with resistance discount factor
+                    price = current_price
                     if price <= 0:
                         print(f'⚠️ Invalid price for {symbol}: {price}, skipping...')
                         continue
                     
-                    # Calculate max quantity (10% of capital)
-                    max_investment = capital  # ✅ Deploy full capital per strategy
+                    # Apply resistance discount to position size
+                    resistance_distance = 1 - (price / resistance_level)
+                    position_discount = max(0.3, min(1.0, resistance_distance * 2))  # Scale 0.5% distance -> 100% allocation
+                    
+                    # Enhanced resistance check - require confirmation for breakout patterns
+                    BREAKOUT_PATTERNS = {
+                        "Volume Breakout Pattern", 
+                        "Bullish Rectangle",
+                        "Ascending Triangle",
+                        "Cup and Handle"
+                    }
+                    
+                    # For breakout patterns, require 1% clearance above resistance
+                    if pattern_name in BREAKOUT_PATTERNS:
+                        if price < resistance_level * 1.01:
+                            print(f'🚫 Breakout pattern requires 1% clearance above resistance ({resistance_level:.2f})')
+                            continue
+                    
+                    # Calculate max quantity with resistance discount
+                    max_investment = capital * position_discount
                     base_qty = int(max_investment // price)
                     if base_qty == 0:  # Ensure minimum 1 share if affordable
                         base_qty = 1 if price <= capital else 0
+                    
+                    print(f'📉 Resistance discount: {position_discount*100:.1f}% | Allocation: ₹{max_investment:.2f}')
                     
                     if base_qty > 0:
                         # Apply pattern confidence weighting
@@ -1395,7 +1447,7 @@ def main():
                         investment_value = price * adj_qty
                         print(f'💸 Final Price: ₹{price:.2f}, Base Qty: {base_qty}, Adj Qty: {adj_qty}, Investment: ₹{investment_value:.2f}')
                     else:
-                        print(f'⚠️ {symbol} price ₹{price:.2f} exceeds 10% capital allocation, skipping')
+                        print(f'⚠️ {symbol} price ₹{price:.2f} exceeds allocated capital, skipping')
                         continue
         
                     # Add to ranked candidates

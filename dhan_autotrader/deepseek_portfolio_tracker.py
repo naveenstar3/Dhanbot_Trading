@@ -12,7 +12,7 @@ from dhanhq import DhanContext, dhanhq
 from decimal import Decimal, ROUND_HALF_UP
 import requests
 import numpy as np
-from db_logger import update_portfolio_log_to_db, log_to_postgres
+from db_logger import update_portfolio_log_to_db, insert_portfolio_log_to_db, log_to_postgres
 import math
 import io
 import traceback
@@ -268,7 +268,7 @@ def detect_bearish_chart_pattern(candles):
         return False
         
     df = pd.DataFrame(candles)
-    o, h, l, c = df["open"], df["high"], df["low"], df["close"]
+    o, h, l, c, v = df["open"], df["high"], df["low"], df["close"], df["volume"]
     
     # Head and Shoulders pattern
     if len(c) >= 25:
@@ -468,11 +468,69 @@ def log_trade(symbol, security_id, action, price, qty, status, stop_pct=None, ta
 def place_exit_order(symbol, security_id, qty, tick_size_map):
     """Place exit order for position monitoring"""
     try:
-        quote = dhan.get_quote(security_id)
-        if not quote:
-            return
+        try:
+            quote_resp = dhan.ohlc_data(securities={"NSE_EQ": [int(security_id)]})
+        
+            # 🛡️ Full structure + status validation
+            if (
+                isinstance(quote_resp, dict) and
+                quote_resp.get("status") == "success" and
+                isinstance(quote_resp.get("data"), dict) and
+                isinstance(quote_resp["data"].get("data"), dict) and
+                "NSE_EQ" in quote_resp["data"]["data"] and
+                isinstance(quote_resp["data"]["data"]["NSE_EQ"], dict)
+            ):
+                eq_data = quote_resp["data"]["data"]["NSE_EQ"]
+                sec_str = str(security_id)
+        
+                if sec_str in eq_data and isinstance(eq_data[sec_str], dict):
+                    qd = eq_data[sec_str]
+                    ltp = qd.get("ltp") or qd.get("last_price")
+                    if ltp is not None:
+                        quote = {"ltp": float(ltp)}
+                    else:
+                        print(f"⚠️ 'ltp' / 'last_price' missing for {symbol}. Falling back to candles...")
+                        fallback_candles = fetch_candles(security_id, count=2, cache={})
+                        if fallback_candles:
+                            quote = {"ltp": float(fallback_candles[-1]["close"])}
+                            print(f"ℹ️ Fallback LTP for {symbol} from candles ➝ ₹{quote['ltp']:.2f}")
+                        else:
+                            print(f"❌ No fallback candle data available for {symbol}. Skipping exit order.")
+                            return
+                else:
+                    print(f"⚠️ Security ID {security_id} not found in NSE_EQ data. Falling back to candles...")
+                    fallback_candles = fetch_candles(security_id, count=2, cache={})
+                    if fallback_candles:
+                        quote = {"ltp": float(fallback_candles[-1]["close"])}
+                        print(f"ℹ️ Fallback LTP for {symbol} from candles ➝ ₹{quote['ltp']:.2f}")
+                    else:
+                        print(f"❌ No fallback candle data available for {symbol}. Skipping exit order.")
+                        return
+            else:
+                print(f"⚠️ Invalid or failed quote structure for {symbol}: {quote_resp}. Falling back to candles...")
+                fallback_candles = fetch_candles(security_id, count=2, cache={})
+                if fallback_candles:
+                    quote = {"ltp": float(fallback_candles[-1]["close"])}
+                    print(f"ℹ️ Fallback LTP for {symbol} from candles ➝ ₹{quote['ltp']:.2f}")
+                else:
+                    print(f"❌ No fallback candle data available for {symbol}. Skipping exit order.")
+                    return
+        
+        except Exception as e:
+            print(f"❌ Quote API failed for {symbol}: {e}. Trying candle fallback...")
+            try:
+                fallback_candles = fetch_candles(security_id, count=2, cache={})
+                if fallback_candles:
+                    quote = {"ltp": float(fallback_candles[-1]["close"])}
+                    print(f"ℹ️ Fallback LTP for {symbol} from candles after exception ➝ ₹{quote['ltp']:.2f}")
+                else:
+                    print(f"❌ No fallback candle data available for {symbol} after exception. Skipping exit order.")
+                    return
+            except Exception as ie:
+                print(f"❌ Candle fallback also failed for {symbol}: {ie}")
+                return           
             
-        price = float(quote.get('ltp', 0))
+        price = float(quote['ltp'])
         if price <= 0:
             print(f"⚠️ Invalid price for {symbol}: {price}")
             return
@@ -516,7 +574,14 @@ def place_exit_order(symbol, security_id, qty, tick_size_map):
             
         print(f"✅ Exit order placed for {symbol}: {res}")
         send_telegram(f"⚠️ Exiting {symbol} due to reversal signal @ ₹{limit_price:.2f}")
-        log_trade(symbol, security_id, "SELL", limit_price, qty, "EXITED")
+        # Determine exit status: PROFIT or STOP LOSS
+        entry_df = pd.read_csv(PORTFOLIO_LOG)
+        entry_row = entry_df[(entry_df["symbol"] == symbol) & (entry_df["status"] == "HOLD")].iloc[-1]
+        entry_price = float(entry_row["buy_price"])
+        status = "PROFIT" if limit_price > entry_price else "TREND REVERSAL"
+        
+        log_trade(symbol, security_id, "SELL", limit_price, qty, status)
+        
         exit_reason = f"{symbol} exited via manual SELL due to reversal pattern or stop/target logic"
         log_time = datetime.now()
         
@@ -602,19 +667,70 @@ def monitor_hold_position(cache=None, tick_size_map=None):
             security_id = pos['security_id']
             symbol = pos['symbol']
             entry_price = float(pos['buy_price'])
-            qty = pos['qty']
+            qty = pos['quantity']
             
             candles = fetch_candles(security_id, count=40, cache=cache)
             if not candles:
                 continue
-                
-            # Get current price
+
+            # Get current price using reliable method
             try:
-                quote = dhan.get_quote(security_id)
-                current_price = float(quote.get('ltp', 0))
-            except:
-                current_price = candles[-1]['close']
-                
+                # Use correct DhanHQ API method for quotes
+                quote_resp = dhan.ohlc_data(securities={"NSE_EQ": [int(security_id)]})
+            
+                # Validate response structure comprehensively
+                if (
+                    isinstance(quote_resp, dict) and
+                    quote_resp.get("status") == "success" and
+                    isinstance(quote_resp.get("data"), dict) and
+                    isinstance(quote_resp["data"].get("data"), dict) and
+                    "NSE_EQ" in quote_resp["data"]["data"] and
+                    isinstance(quote_resp["data"]["data"]["NSE_EQ"], dict)
+                ):
+                    eq_data = quote_resp["data"]["data"]["NSE_EQ"]
+                    security_str = str(security_id)
+            
+                    if security_str in eq_data and isinstance(eq_data[security_str], dict):
+                        quote_data = eq_data[security_str]
+                        if "last_price" in quote_data:
+                            current_price = float(quote_data["last_price"])
+                            print(f"📊 {symbol}: Current ₹{current_price:.2f} | Entry ₹{entry_price:.2f} | Qty {qty}")
+                        else:
+                            print(f"⚠️ 'last_price' missing in quote data for {symbol}")
+                            if candles and isinstance(candles, list) and len(candles) > 0:
+                                current_price = candles[-1]["close"]
+                                print(f"ℹ️ Fallback: Using last candle close for {symbol} ➝ ₹{current_price:.2f}")
+                            else:
+                                print(f"❌ No fallback available for {symbol} (empty or invalid candles). Skipping...")
+                                continue
+                    else:
+                        print(f"⚠️ Security ID {security_id} not found in NSE_EQ data")
+                        if candles and isinstance(candles, list) and len(candles) > 0:
+                            current_price = candles[-1]["close"]
+                            print(f"ℹ️ Fallback: Using last candle close for {symbol} ➝ ₹{current_price:.2f}")
+                        else:
+                            print(f"❌ No fallback available for {symbol} (empty or invalid candles). Skipping...")
+                            continue
+                else:
+                    # Handle failure responses and malformed data
+                    print(f"⚠️ Invalid or failed quote structure for {symbol}: {quote_resp}")
+                    print(f"📉 Attempting to fallback using candle data...")
+                    if candles and isinstance(candles, list) and len(candles) > 0:
+                        try:
+                            current_price = candles[-1]["close"]
+                            print(f"ℹ️ Fallback: Using last candle close for {symbol} ➝ ₹{current_price:.2f}")
+                        except Exception as e:
+                            print(f"❌ Error accessing last candle close for {symbol}: {e}")
+                            continue
+                    else:
+                        print(f"❌ No fallback price available for {symbol} (empty candles). Skipping...")
+                        continue
+            
+                           
+            except Exception as e:
+                print(f"❌ Quote API failed for {symbol}: {str(e)}")
+                current_price = candles[-1]["close"]            
+            
             # Time-based exit (after 3:15 PM)
             current_time = datetime.now().time()
             if current_time >= dtime(15, 15):
@@ -678,26 +794,38 @@ def main():
     
     # Precompute market close time
     monitoring_end_time = datetime.combine(datetime.today(), dtime(15, 25))
-    
+
     # Load master CSV for tick size map
     master_df = pd.read_csv(MASTER_CSV)
     tick_size_map = dict(zip(
         master_df['SEM_SMST_SECURITY_ID'].astype(str), 
         master_df['SEM_TICK_SIZE']
     ))
-    
-    # Continuous monitoring loop until market close
+
+    # Continuous monitoring loop until market close or all positions exited
     while datetime.now() < monitoring_end_time:
         candle_cache = {}  # Reset cache for each iteration
         print(f"\n⏰ New monitoring cycle at {datetime.now().strftime('%H:%M:%S')}")
-        
+
         # Monitor existing positions
         monitor_hold_position(cache=candle_cache, tick_size_map=tick_size_map)
-        
+
+        # ✅ Stop execution if all today's positions exited
+        try:
+            if os.path.exists(PORTFOLIO_LOG):
+                df_check = pd.read_csv(PORTFOLIO_LOG)
+                today_str = datetime.now().strftime("%m/%d/%Y")
+                df_check = df_check[df_check['timestamp'].str.contains(today_str)]
+                if df_check[df_check['status'].str.upper() == 'HOLD'].empty:
+                    print("✅ All positions exited. Stopping execution.")
+                    return
+        except Exception as e:
+            print(f"⚠️ Failed to verify exit condition: {e}")
+
         # Wait before next scan
         print("🔄 Waiting for next monitoring cycle in 60 seconds...")
         time.sleep(60)
-    
+
     print("🛑 Monitoring window closed - stopping script")
 
 # Save execution log
