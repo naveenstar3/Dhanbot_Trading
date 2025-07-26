@@ -1,19 +1,21 @@
-# premarket_nifty100_scanner.py
+# consolidated_dynamic_stock_generator.py
 import os
 import sys
 import json
 import pandas as pd
+import numpy as np
 import requests
 from datetime import datetime, timedelta
 import pytz
 import time
 from nsepython import nsefetch
-from db_logger import log_dynamic_stock_list, log_to_postgres
+from ta.momentum import RSIIndicator
+from ta.volatility import AverageTrueRange
+from ta.trend import SMAIndicator
 import io
-import sys
-from dhan_api import get_live_price, get_historical_price
 import random
-import numpy as np
+from dhan_api import get_live_price
+import logging
 
 # ======== CONSTANTS ========
 RSI_MIN = 45
@@ -21,6 +23,9 @@ RSI_MAX = 70
 GAP_UP_THRESHOLD = 0.01  # 1% gap-up threshold
 MIN_VOLUME = 300000
 MIN_ATR = 1.2
+SMALLCAP_MIN_VOLUME = 500000
+SMALLCAP_MIN_ATR = 2.0
+SMALLCAP_MAX_RSI = 70
 
 log_buffer = io.StringIO()
 class TeeLogger:
@@ -40,7 +45,6 @@ sys.stdout = TeeLogger(sys.__stdout__, log_buffer)
 
 # ======== CONFIGURATION ========
 start_time = datetime.now()
-CAPITAL_PATH = "D:/Downloads/Dhanbot/dhan_autotrader/current_capital.csv"
 CONFIG_PATH = "D:/Downloads/Dhanbot/dhan_autotrader/config.json"
 OUTPUT_CSV = "D:/Downloads/Dhanbot/dhan_autotrader/dynamic_stock_list.csv"
 NIFTY100_CACHE = "D:/Downloads/Dhanbot/dhan_autotrader/nifty100_constituents.csv"
@@ -73,14 +77,16 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+# CAPITAL is now loaded from config.json instead of CSV
 try:
-    CAPITAL = float(pd.read_csv(CAPITAL_PATH, header=None).iloc[0, 0])
-    print(f"💰 Capital Loaded: ₹{CAPITAL:,.2f}")
-    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "INFO", f"Capital loaded: ₹{CAPITAL:,.2f}")    
+    CAPITAL = float(config.get("capital", 0))
+    if CAPITAL <= 0:
+        raise ValueError("Capital must be greater than zero.")
+    print(f"💰 Capital Loaded from config: ₹{CAPITAL:,.2f}")
 except Exception as e:
-    print(f"❌ Capital loading failed: {e}")
-    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "ERROR", f"Capital loading failed: {e}")   
+    print(f"❌ Capital loading from config failed: {e}")
     sys.exit(1)
+
 
 # ======== RELIABLE NIFTY 100 FETCH ========
 def get_nifty100_constituents():
@@ -182,32 +188,6 @@ def get_sector_strength():
     
     return top_sectors, market_condition, sector_gains
     
-# ======== BETA CALCULATION ========
-    
-def calculate_beta(stock_returns, index_returns='^NSEI'):
-    """Calculate 6-month beta against Nifty 50"""
-    try:
-        if len(stock_returns) < 30:  # Minimum 30 days data
-            return 1.0  # Neutral default
-        
-        # Get index returns if not provided
-        if isinstance(index_returns, str):
-            index_data = yfinance.download(index_returns, period="6mo")['Adj Close'].pct_change().dropna()
-            index_returns = index_data.values
-        
-        # Align dates
-        aligned_returns = pd.DataFrame({
-            'stock': stock_returns[-len(index_returns):],
-            'index': index_returns
-        }).dropna()
-        
-        cov_matrix = np.cov(aligned_returns['stock'], aligned_returns['index'])
-        beta = cov_matrix[0,1]/cov_matrix[1,1]
-        return round(beta, 2)
-    
-    except Exception:
-        return 1.0  # Fallback to neutral beta
-
 # ======== TECHNICAL INDICATORS ========
 def calculate_macd(closes):
     if len(closes) < 26:
@@ -257,8 +237,8 @@ except Exception as e:
     print(f"❌ Master CSV load failed: {e}")
     sys.exit(1)
 
-# ======== PRE-MARKET SCAN ========
-results = []
+# ======== PRE-MARKET SCAN (NIFTY100) ========
+nifty100_results = []
 total_scanned = 0
 affordable = 0
 technical_passed = 0
@@ -268,13 +248,13 @@ sma_passed = 0
 rsi_passed = 0
 final_selected = 0
 
-print("\n🚀 Starting pre-market scan...")
+print("\n🚀 Starting Nifty100 pre-market scan...")
 for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
     total_scanned += 1
     symbol = row["base_symbol"]
     secid = str(row["SEM_SMST_SECURITY_ID"])
     sector = row["sector"]
-    print(f"\n🔍 [{count}/{len(nifty100_df)}] Scanning {symbol} ({sector})")
+    print(f"\n🔍 [{count}/{len(nifty100_df)}] Scanning NIFTY100: {symbol} ({sector})")
 
     try:
         # Step 1: Get pre-market LTP
@@ -282,7 +262,6 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
         
         # Fetch yesterday's close and open price
         try:
-            # FIXED: Revert to old version's API endpoint
             quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}"
             quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
             
@@ -526,7 +505,7 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
         capital_used = quantity * ltp
         
         final_selected += 1
-        results.append({
+        nifty100_results.append({
             "symbol": symbol,
             "security_id": secid,
             "ltp": ltp,
@@ -542,7 +521,7 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
             "macd_crossover": int(macd_crossover),
             "sector": sector,
             "sector_strength": sector_strengths.get(sector, 0),
-            "stock_origin": "Dynamic",
+            "stock_origin": "Nifty100",
             "priority_score": round(atr * avg_volume, 2)  # Added priority score
         })
         print(f"✅ SELECTED: ₹{ltp:,.2f} | Vol: {avg_volume:,.0f} | Range: ₹{atr:.2f} | RSI: {rsi_value:.2f}")
@@ -552,19 +531,132 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
     finally:
         time.sleep(0.5)  # Jitter to avoid patterns
 
-# ======== SAVE RESULTS ========
-if results:
-    results_df = pd.DataFrame(results)
+# ======== SMALL CAP SCAN ========
+print("\n🚀 Starting Small Cap scan...")
+smallcap_results = []
+
+# Filter only EQ/NSE_EQ & skip SME/PSU/ETF/REIT
+symbol_col = "SEM_TRADING_SYMBOL"
+series_col = "SEM_SERIES"
+segment_col = "SEM_SEGMENT"
+security_id_col = "SEM_SMST_SECURITY_ID"
+
+smallcap_df = master_df[
+    (master_df[series_col] == "EQ") &
+    (master_df[segment_col] == "NSE_EQ") &
+    (~master_df[symbol_col].str.contains("SME|PSU|ETF|REIT", case=False, na=False))
+]
+
+for _, row in smallcap_df.iterrows():
+    try:
+        sym = row[symbol_col]
+        sec_id = str(row[security_id_col])
+        sector = "UNKNOWN"
+
+        print(f"🔍 Scanning SMALLCAP: {sym}")
+
+        # Fetch intraday 1-min data
+        today = datetime.date.today().strftime("%Y-%m-%d")
+        payload = {
+            "securityId": sec_id,
+            "exchangeSegment": "NSE_EQ",
+            "instrument": "EQUITY",
+            "expiryCode": 0,
+            "fromDate": today,
+            "toDate": today
+        }
+        
+        response = requests.post(
+            "https://api.dhan.co/v2/charts/intraday", 
+            headers=HEADERS, 
+            json=payload,
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            print(f"⛔ Failed to fetch data for {sym}: {response.status_code}")
+            continue
+            
+        data = response.json()
+        df = pd.DataFrame(data["data"])
+        if df.empty or len(df) < 20:
+            print(f"⛔ {sym}: Insufficient data")
+            continue
+
+        df["datetime"] = pd.to_datetime(df["timestamp"], unit="s", utc=True).tz_convert("Asia/Kolkata")
+        df.set_index("datetime", inplace=True)
+        df = df.astype(float).sort_index()
+
+        # Apply all filters
+        ltp = df["close"].iloc[-1]
+        if ltp > CAPITAL:
+            print(f"⛔ Price too high: ₹{ltp:.2f} > ₹{CAPITAL:,.2f}")
+            continue
+
+        rsi = RSIIndicator(df["close"], window=14).rsi().iloc[-1]
+        if rsi > SMALLCAP_MAX_RSI:
+            print(f"⛔ RSI too high: {rsi:.2f} > {SMALLCAP_MAX_RSI}")
+            continue
+
+        atr = AverageTrueRange(df["high"], df["low"], df["close"], window=14).average_true_range().iloc[-1]
+        if atr < SMALLCAP_MIN_ATR:
+            print(f"⛔ Low volatility: ₹{atr:.2f} < ₹{SMALLCAP_MIN_ATR:.2f}")
+            continue
+
+        avg_vol = df["volume"].tail(5).mean()
+        if avg_vol < SMALLCAP_MIN_VOLUME:
+            print(f"⛔ Low volume: {avg_vol:,.0f} < {SMALLCAP_MIN_VOLUME:,.0f}")
+            continue
+
+        if df["close"].iloc[-1] < df["close"].iloc[-5]:
+            print(f"⛔ Negative momentum")
+            continue
+
+        sma_20 = SMAIndicator(df["close"], window=20).sma_indicator().iloc[-1]
+
+        qty = int(CAPITAL // ltp)
+        capital_used = round(qty * ltp, 2)
+        potential_profit = round(atr * qty, 2)
+        priority_score = round(avg_vol * atr, 2)
+
+        smallcap_results.append({
+            "symbol": sym,
+            "security_id": sec_id,
+            "ltp": round(ltp, 2),
+            "quantity": qty,
+            "capital_used": capital_used,
+            "avg_volume": int(avg_vol),
+            "avg_range": round(atr, 2),
+            "potential_profit": potential_profit,
+            "sma_20": round(sma_20, 2),
+            "rsi": round(rsi, 2),
+            "macd": 0,  # Not calculated for smallcaps
+            "macd_hist": 0,
+            "macd_crossover": 0,
+            "sector": sector,
+            "sector_strength": 0,  # Not available for smallcaps
+            "stock_origin": "SmallCap",
+            "priority_score": priority_score
+        })
+        print(f"✅ SELECTED: ₹{ltp:.2f} | Vol: {avg_vol:,.0f} | Range: ₹{atr:.2f} | RSI: {rsi:.2f}")
+
+    except Exception as e:
+        print(f"❌ {sym} failed: {e}")
+
+# ======== COMBINE RESULTS ========
+print("\n🚀 Combining scan results...")
+all_results = nifty100_results + smallcap_results
+
+if all_results:
+    results_df = pd.DataFrame(all_results)
     # Priority score = ATR * Volume (higher is better)
     results_df["priority_score"] = results_df["avg_range"] * results_df["avg_volume"]
     results_df = results_df.sort_values("priority_score", ascending=False)
     
     # Save to CSV with additional technical data
     results_df.to_csv(OUTPUT_CSV, index=False)   
-    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "SUCCESS", f"{len(results_df)} stocks saved to dynamic_stock_list and DB.")
-    log_dynamic_stock_list(results_df)
     
-    # ====== 📈 Trending Stocks Boost ======
+    # ======== TRENDING STOCKS BOOST ========
     print("\n🚀 Adding trending stocks to boost trade pool...")
     
     trending_additions = []
@@ -579,7 +671,6 @@ if results:
             continue
     
         try:
-            # FIXED: Revert to old version's API endpoint
             quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}"
             quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
             if quote_resp.status_code != 200:
@@ -652,7 +743,7 @@ if results:
                 "sector": sector,
                 "sector_strength": sector_strengths.get(sector, 0),
                 "priority_score": abs(pct_move) * 100,  # Sort by momentum strength
-                "stock_origin": "Bullish Trend" if market_condition == "bullish" else "Bearish Momentum"
+                "stock_origin": "Nifty100"
             })
     
         except Exception as e:
@@ -670,20 +761,24 @@ if results:
         print("❌ No trending stocks passed filters.")
     
     print(f"\n✅ Saved {len(results_df)} stocks to {OUTPUT_CSV}")
+    print(f"📊 Breakdown:")
+    print(f"- Nifty100 stocks: {len(nifty100_results)}")
+    print(f"- SmallCap stocks: {len(smallcap_results)}")
+    print(f"- Trending stocks: {len(trending_additions)}")
     
     # 📄 Save summary to filter_summary_log.csv
     summary_path = "D:/Downloads/Dhanbot/dhan_autotrader/filter_summary_log.csv"
     summary_row = {
         "date": datetime.now().strftime("%m/%d/%Y %H:%M"),
-        "Script_Name": "dynamic_stock_generator.py",
-        "total_scanned": total_scanned,
-        "affordable": affordable,
-        "technical_passed": technical_passed,
-        "volume_passed": volume_passed,
+        "Script_Name": "consolidated_dynamic_stock_generator.py",
+        "total_scanned": total_scanned + len(smallcap_df),
+        "affordable": affordable + len(smallcap_results),
+        "technical_passed": technical_passed + len(smallcap_results),
+        "volume_passed": volume_passed + len(smallcap_results),
         "sentiment_passed": sentiment_passed,
-        "sma_passed": sma_passed,
-        "rsi_passed": rsi_passed,
-        "final_selected": final_selected,
+        "sma_passed": sma_passed + len(smallcap_results),
+        "rsi_passed": rsi_passed + len(smallcap_results),
+        "final_selected": len(results_df),
         "market_condition": market_condition
     }
     
@@ -701,7 +796,6 @@ if results:
     print(results_df[["symbol", "ltp", "quantity", "potential_profit", "priority_score", "stock_origin"]].head().to_string(index=False))
 else:
     print("\n❌ No stocks passed all filters")
-    log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "WARNING", "No stocks selected today.")
 
 # ======== PERFORMANCE METRICS ========
 elapsed = datetime.now() - start_time
@@ -710,7 +804,7 @@ minutes = int(total_sec // 60)
 seconds = int(total_sec % 60)
 print(f"\n⏱️ Total scan time: {minutes} min {seconds} sec")
 print(f"💵 Capital available: ₹{CAPITAL:,.2f}")
-print(f"📈 Potential positions: {len(results)}")
+print(f"📈 Potential positions: {len(all_results)}")
 # 📝 Save log
-with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/dynamic_stock_generator.txt", "w", encoding="utf-8") as f:
+with open("D:/Downloads/Dhanbot/dhan_autotrader/Logs/consolidated_dynamic_stock_generator.txt", "w", encoding="utf-8") as f:
     f.write(log_buffer.getvalue())
