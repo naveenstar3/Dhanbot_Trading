@@ -252,7 +252,7 @@ def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", in
             now = datetime.now()
             from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
             to_dt = now.replace(second=0, microsecond=0)
-            
+            print(f"📡 Fetching candles for {security_id} — segment: {exchange_segment}, type: {instrument_type}")
             response = dhan.intraday_minute_data(
                 security_id=str(security_id),
                 exchange_segment=exchange_segment,
@@ -267,53 +267,61 @@ def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", in
                 return []
                 
             raw_data = response['data']
+            # 🔒 Defensive check for unsupported string response
+            if isinstance(raw_data, str):
+                if raw_data.strip() == "":
+                    print(f"❌ Empty response string for {security_id} — possible Dhan API failure or invalid session")
+                else:
+                    print(f"⚠️ Unsupported data format for {security_id}: {type(raw_data)} - content:\n{raw_data}\n")
+                return []
             
+            
+            candles = []  # Initialize candles to empty list
+
             # Handle both list and dict formats
             if isinstance(raw_data, list):
                 # Process as list of candles
-                if isinstance(raw_data, list):
-                    candles = []
-                    for candle in raw_data:
-                        try:
-                            candles.append({
-                                "open": candle["open"],
-                                "high": candle["high"],
-                                "low": candle["low"],
-                                "close": candle["close"],
-                                "volume": candle["volume"],
-                                "timestamp": datetime.fromtimestamp(candle["timestamp"])
-                            })
-                        except KeyError:
-                            continue
-                    if not candles:
-                        print(f"⚠️ Empty list-style candle data for {security_id}")
-                        return []
-                        
-                # Process as dictionary of arrays
-                elif isinstance(raw_data, dict):
-                    required_keys = ["open", "high", "low", "close", "volume", "timestamp"]
-                    if not all(k in raw_data and raw_data[k] for k in required_keys):
-                        print(f"⚠️ Malformed dict-style candle data for {security_id}")
-                        return []
-                    
-                    candles = []
+                for candle in raw_data:
                     try:
-                        for i in range(len(raw_data["open"])):
-                            candles.append({
-                                "open": raw_data["open"][i],
-                                "high": raw_data["high"][i],
-                                "low": raw_data["low"][i],
-                                "close": raw_data["close"][i],
-                                "volume": raw_data["volume"][i],
-                                "timestamp": datetime.fromtimestamp(raw_data["timestamp"][i])
-                            })
-                    except Exception as e:
-                        print(f"❌ Error parsing dict candles for {security_id}: {e}")
-                        return []
+                        candles.append({
+                            "open": candle["open"],
+                            "high": candle["high"],
+                            "low": candle["low"],
+                            "close": candle["close"],
+                            "volume": candle["volume"],
+                            "timestamp": datetime.fromtimestamp(candle["timestamp"])
+                        })
+                    except KeyError:
+                        continue
+                if not candles:
+                    print(f"⚠️ Empty list-style candle data for {security_id}")
+                    return []
+            elif isinstance(raw_data, dict):
+                required_keys = ["open", "high", "low", "close", "volume", "timestamp"]
+                if not all(k in raw_data and raw_data[k] for k in required_keys):
+                    print(f"⚠️ Malformed dict-style candle data for {security_id}")
+                    return []
+                try:
+                    n = len(raw_data['open'])
+                    for i in range(n):
+                        candles.append({
+                            "open": raw_data["open"][i],
+                            "high": raw_data["high"][i],
+                            "low": raw_data["low"][i],
+                            "close": raw_data["close"][i],
+                            "volume": raw_data["volume"][i],
+                            "timestamp": datetime.fromtimestamp(raw_data["timestamp"][i])
+                        })
+                except Exception as e:
+                    print(f"❌ Error parsing dict candles for {security_id}: {e}")
+                    return []
+            else:
+                print(f"⚠️ Unsupported data format for {security_id}: {type(raw_data)}")
+                return []
+
             if not candles:
                 print(f"⚠️ No valid parsed candles for {security_id}")
                 return []
-
             # ✅ Candle Timestamp Freshness Check
             last_candle_time = candles[-1]["timestamp"]
             now = datetime.now(pytz.utc)
@@ -324,9 +332,6 @@ def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", in
 
             cache[cache_key] = candles
             return candles     
-                
-            cache[cache_key] = candles
-            return candles
 
         except Exception as e:
             if "Rate_Limit" in str(e) and attempt < 2:
@@ -1066,7 +1071,9 @@ def is_index_bullish(index_id):
         instrument_type="INDEX"
     )
     if not candles:
+        print(f"❌ No candles returned for index ID {index_id} — skipping bullish check")
         return False
+
     closes = pd.Series([c["close"] for c in candles])
     rsi, macd_hist, macd_cross = compute_rsi_macd(closes)
     detected, _, _ = detect_bullish_pattern(candles)
@@ -1508,7 +1515,7 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
             else:
                 print(f"⚠️ SL/TP failed for {symbol}: {response}")
                 send_telegram(f"⚠️ SL/TP setup failed for {symbol}. Retrying with lower TP...")
-        
+
                 # 🔁 Retry with reduced TP
                 target = float((Decimal(str(limit_price * 1.012)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
                 print(f"🔁 Retrying Forever Order with lower TP: ₹{target:.2f}")
@@ -1522,7 +1529,7 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
                     trigger_Price=stop_loss,
                     order_type="SINGLE"
                 )
-        
+
                 if response_retry.get('status') == 'success':
                     print(f"✅ Retry success: SL/TP set for {symbol} at lower TP ₹{target:.2f}")
                     send_telegram(
@@ -1532,17 +1539,6 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
                 else:
                     print(f"❌ Retry also failed for SL/TP: {response_retry}")
                     send_telegram(f"❌ Retry failed: Could not set SL/TP for {symbol}")
-                        
-                        # Implement break-even SL shift when profit > 1.5x risk
-                        current_profit = float(Decimal(str(next_close)) - entry_price)
-                        if current_profit > 1.5 * risk:
-                            # Shift SL to entry price (break-even)
-                            stop_loss = float(entry_price)
-                            print(f"🔒 Moving to break-even SL at entry price: ₹{stop_loss:.2f}")
-                    else:
-                        print(f"⚠️ {pattern_name} not confirmed by next candle. Proceeding with original target.")
-                else:
-                    print(f"⚠️ Could not fetch next candle for {pattern_name} confirmation. Proceeding.")
 
             # Small delay to avoid overlap
             time.sleep(1.5)
@@ -1709,37 +1705,58 @@ def main():
         # VIX check function
         def is_vix_ok(threshold=20.0, hard_limit=22.0):
             try:
-                vix_row = master_df[master_df["SM_SYMBOL_NAME"].str.upper() == "INDIA VIX"]
-                if vix_row.empty:
-                    raise ValueError("India VIX not found in master data")
-                vix_id = vix_row.iloc[0]["SEM_SMST_SECURITY_ID"]
-                vix_candles = fetch_candles(
-                    vix_id,
-                    count=1,
-                    exchange_segment="NSE_INDEX",
-                    instrument_type="INDEX"
+                session = requests.Session()
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Accept": "*/*",
+                    "Referer": "https://www.nseindia.com/",
+                }
+                session.headers.update(headers)
+                # First request to set cookies
+                session.get("https://www.nseindia.com", timeout=5)
+                # Fetch VIX data
+                response = session.get(
+                    "https://www.nseindia.com/api/allIndices", 
+                    timeout=10
                 )
-                if not vix_candles:
-                    raise ValueError("No VIX candle data available")
-                vix_value = vix_candles[-1]['close']
+                response.raise_for_status()
+                data = response.json()
                 
+                # Try multiple possible names for India VIX (case-insensitive)
+                vix_index_names = ["India VIX", "INDIA VIX", "VIX", "INDIA-VIX", "INDIA VIX INDEX"]
+                india_vix = None
+                for idx in data["data"]:
+                    if any(name in idx["index"].upper() for name in [n.upper() for n in vix_index_names]):
+                        india_vix = idx
+                        break
+                        
+                if not india_vix:
+                    # Log available indices for debugging (first 5)
+                    available_indices = ", ".join([idx["index"] for idx in data["data"][:5]]) + ("..." if len(data["data"]) > 5 else "")
+                    raise ValueError(f"India VIX not found in NSE response. Available indices: {available_indices}")
+                
+                vix_value = float(india_vix["last"])
                 if vix_value >= hard_limit:
                     print(f"🛑 VIX {vix_value:.2f} >= {hard_limit} - halting script for the day")
                     send_telegram(f"🛑 VIX {vix_value:.2f} >= {hard_limit} - halting script")
                     sys.exit(0)
-
                 if vix_value >= threshold:
                     print(f"⚠️ VIX {vix_value:.2f} >= {threshold} - skipping trade")
                     send_telegram(f"⚠️ VIX {vix_value:.2f} >= {threshold} - skipping trade")
                     return False
-                
                 print(f"✅ VIX {vix_value:.2f} < {threshold} - proceeding")
                 return True
+            except Exception as e:
+                print(f"❌ VIX check failed: {e}")
+                send_telegram(f"❌ VIX check failed: {e}")
+                return False
 
             except Exception as e:
                 print(f"❌ VIX check failed: {e}")
                 send_telegram(f"❌ VIX check failed: {e}")
                 return False
+
 
         # Apply VIX check
         if not is_vix_ok():
@@ -1806,20 +1823,26 @@ def main():
                     if sector == "nan" or not sector:
                         sector = "UNKNOWN"
                     
-                    # Small-cap filter - fail loudly if market_cap missing
-                    if 'market_cap' not in row:
+                    # Small-cap filter - fail loudly if market_cap missing or blank
+                    if 'market_cap' not in row or pd.isna(row['market_cap']):
                         raise KeyError(f"❌ Market cap data missing for {symbol} - required for small-cap trading")
                     if row['market_cap'] < 5000:  # Cr.
                         print(f'  ⚠️ Market cap too small ({row["market_cap"]} Cr) - skipping')
-                        continue
+                        continue                   
                         
                     print(f'➡️ Evaluating {symbol} ({sector} sector)')
                     
                     # Enforce sector confirmation for small caps
+                    sector_key = sector.upper().replace("NIFTY", "").replace(" ", "").strip()
                     if not nifty_bullish or sector == "UNKNOWN":
-                        if sector not in sector_status or not sector_status[sector]:
-                            print(f'  ❌ Sector confirmation failed for {symbol} - skipping')
+                        # Find matching sector key using startswith for broader matching
+                        matched_sector = next((k for k in sector_status.keys() if sector_key.startswith(k)), None)
+                        
+                        if not matched_sector or not sector_status[matched_sector]:
+                            print(f'  ❌ Sector confirmation failed for {symbol} (sector: {sector}, mapped: {matched_sector}) - skipping')
                             continue
+                        # Update sector_key for downstream use
+                        sector_key = matched_sector
         
                     # Fetch candles with rate limit control
                     try:
