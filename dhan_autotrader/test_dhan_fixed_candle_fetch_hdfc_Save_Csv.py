@@ -21,7 +21,7 @@ HEADERS = {
 }
 
 payload = {
-    "securityId": "1333",  # HDFC
+    "securityId": "11574",  # HDFC
     "exchangeSegment": "NSE_EQ",
     "instrument": "EQUITY",
     "interval": "1",  # 1-min candles

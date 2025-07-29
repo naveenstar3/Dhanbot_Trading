@@ -18,8 +18,10 @@ import math
 import io
 import traceback
 from scipy.stats import linregress  # Added for trend analysis
+from Index_Check_Qwen import get_sector_sentiment_map
 
 log_buffer = io.StringIO()
+test_mode = True
 
 class TeeLogger:
     def __init__(self, *streams):
@@ -56,6 +58,44 @@ dhan = dhanhq(context)
 # ========== Telegram from config ==========
 TG_TOKEN = config["telegram_token"]
 TG_CHAT_ID = config["telegram_chat_id"]
+
+
+# ✅ Sector-to-NIFTY Index Mapping + Dhan Security IDs
+sector_index_ids = {
+    "NIFTY AUTO": "13604",
+    "NIFTY BANK": "13605",
+    "NIFTY ENERGY": "13607",
+    "NIFTY FIN SERVICE": "13606",
+    "NIFTY IT": "13609",
+    "NIFTY FMCG": "13608",
+    "NIFTY METAL": "13610",
+    "NIFTY INFRA": "13613",
+    "NIFTY PHARMA": "13611",
+    "NIFTY COMMODITIES": "13612",
+    "NIFTY SERVICES SECTOR": "13614"
+}
+
+# ✅ Map raw sector names to above NIFTY sectors
+sector_indices = {
+    "AUTO ANCILLARIES": "NIFTY AUTO",
+    "NIFTY AUTO": "NIFTY AUTO",
+    "BANKING": "NIFTY BANK",
+    "NIFTY BANK": "NIFTY BANK",
+    "FINANCIAL SERVICES": "NIFTY FIN SERVICE",
+    "NIFTY FIN SERVICE": "NIFTY FIN SERVICE",
+    "POWER": "NIFTY ENERGY",
+    "NIFTY ENERGY": "NIFTY ENERGY",
+    "FMCG": "NIFTY FMCG",
+    "NIFTY FMCG": "NIFTY FMCG",
+    "IT SERVICES": "NIFTY IT",
+    "NIFTY IT": "NIFTY IT",
+    "NIFTY METAL": "NIFTY METAL",
+    "PHARMACEUTICALS": "NIFTY PHARMA",
+    "AGROCHEMICALS": "NIFTY COMMODITIES",
+    "LOGISTICS": "NIFTY SERVICES SECTOR",
+    "INSURANCE": "NIFTY FIN SERVICE",
+    "INFRASTRUCTURE": "NIFTY INFRA"
+}
 
 # ========== Pattern Confidence Weights ==========
 PATTERN_WEIGHTS = {
@@ -158,8 +198,11 @@ def calculate_adr(security_id):
             to_date=to_dt.strftime("%Y-%m-%d")
         )
         
-        if not daily_data or not isinstance(daily_data, list) or len(daily_data) < ADR_PERIOD:
-            return 0.0
+        if not isinstance(daily_data, list) or len(daily_data) < ADR_PERIOD:
+            raise ValueError(
+                f"❌ Invalid ADR data for {security_id}: "
+                f"Expected list of {ADR_PERIOD}+ candles, got {type(daily_data)}"
+            )
             
         # Extract highs and lows from candle dictionaries
         try:
@@ -324,6 +367,13 @@ def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", in
                 return []
             # ✅ Candle Timestamp Freshness Check
             last_candle_time = candles[-1]["timestamp"]
+            # Validate timestamp type
+            if not isinstance(last_candle_time, datetime):
+                raise TypeError(
+                    f"❌ Invalid candle timestamp type: "
+                    f"Expected datetime, got {type(last_candle_time)}"
+                )
+            
             now = datetime.now(pytz.utc)
             if (now - last_candle_time) > timedelta(minutes=2) or now.date() > last_candle_time.date():
                 print(f"❌ Stale candle data for {security_id} ({last_candle_time}), forcing refresh")
@@ -346,8 +396,13 @@ def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", in
 def detect_bullish_pattern(candles, symbol=None):
     """Enhanced pattern detection with multi-pattern scoring and priority system"""
     skip_chart = False  # ✅ Initialize at the beginning to avoid scope issues
-    if not candles or len(candles) < 5:
-        return False, None, 0.0
+    if not candles:
+        raise ValueError("❌ Empty candles passed to pattern detection")
+    if len(candles) < 5:
+        raise ValueError(
+            f"❌ Insufficient candles ({len(candles)}) for "
+            f"pattern detection on {symbol}"
+        )
 
     # Get 15-minute trend for chart patterns
     chart_pattern_trend = None
@@ -371,6 +426,14 @@ def detect_bullish_pattern(candles, symbol=None):
             lookback = 3  # Shorter period for breakouts
         
         vol_avg = v.iloc[-lookback-1:-1].mean()
+        
+        # Fail loudly on invalid volume
+        if vol_avg <= 0:
+            raise ValueError(
+                f"❌ Invalid volume average ({vol_avg}) for {symbol} "
+                f"in {pattern_type} pattern"
+            )
+        
         vol_ratio = v.iloc[index] / vol_avg
         
         # For reversal patterns, allow slightly lower volume
@@ -1608,8 +1671,10 @@ def monitor_breakout(security_id, breakout_level, symbol, qty):
     for i in range(3):  # Check next 3 candles
         time.sleep(60)  # Wait for next candle
         
-        # Fetch latest candle
+        # Fetch latest candle with API rate limit compliance
         candles = fetch_candles(security_id, count=1)
+        time.sleep(1)  # ⚠️ Added 1-second delay to comply with DHAN API rate limit
+        
         if not candles:
             print(f"⚠️ Could not fetch candle for {symbol}, attempt {i+1}/3")
             continue
@@ -1666,13 +1731,31 @@ def main():
     
     # Sector mapping setup
     sector_indices = {
-        "BANK": "NIFTY BANK", 
+        "BANK": "NIFTY BANK",
+        "NIFTY BANK": "NIFTY BANK",
+        "BANKING": "NIFTY BANK",
+        "FINANCIAL SERVICES": "NIFTY FIN SERVICE",
+        "NIFTY FIN SERVICE": "NIFTY FIN SERVICE",
         "IT": "NIFTY IT",
+        "NIFTY IT": "NIFTY IT",
         "AUTO": "NIFTY AUTO",
+        "NIFTY AUTO": "NIFTY AUTO",
+        "AUTO ANCILLARIES": "NIFTY AUTO",
         "PHARMA": "NIFTY PHARMA",
         "FMCG": "NIFTY FMCG",
-        "METAL": "NIFTY METAL"
+        "METAL": "NIFTY METAL",
+        "NIFTY METAL": "NIFTY METAL",
+        "ENERGY": "NIFTY ENERGY",
+        "NIFTY ENERGY": "NIFTY ENERGY",
+        "POWER": "NIFTY ENERGY",
+        "INFRASTRUCTURE": "NIFTY INFRA",
+        "NIFTY INFRA": "NIFTY INFRA",
+        "INSURANCE": "NIFTY FIN SERVICE",
+        "AGROCHEMICALS": "NIFTY COMMODITIES",
+        "LOGISTICS": "NIFTY SERVICES SECTOR",
+        "IT SERVICES": "NIFTY IT"
     }
+
     
     # Find NIFTY index ID once
     nifty50_row = master_df[
@@ -1697,7 +1780,7 @@ def main():
             return
         
         # Skip new trades after 14:45
-        if datetime.now() >= new_trade_end_time:
+        if not test_mode and datetime.now() >= new_trade_end_time:
             print("⏰ New trade window closed (after 14:45)")
             send_telegram("⏰ New trade window closed - no orders placed")
             return
@@ -1710,53 +1793,70 @@ def main():
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                     "Accept-Language": "en-US,en;q=0.9",
                     "Accept": "*/*",
-                    "Referer": "https://www.nseindia.com/",
+                    "Referer": "https://www.nseindia.com/market-data/vix",
+                    "X-Requested-With": "XMLHttpRequest"
                 }
                 session.headers.update(headers)
-                # First request to set cookies
-                session.get("https://www.nseindia.com", timeout=5)
-                # Fetch VIX data
-                response = session.get(
-                    "https://www.nseindia.com/api/allIndices", 
-                    timeout=10
-                )
+        
+                # Step 1: Load homepage to set initial cookies
+                home_url = "https://www.nseindia.com"
+                session.get(home_url, timeout=10, verify=True)
+        
+                # Step 2: Load market data page (required for session activation)
+                market_url = "https://www.nseindia.com/market-data"
+                session.get(market_url, timeout=10, verify=True)
+        
+                # Optional delay to mimic human behavior (helps avoid blocks)
+                time.sleep(2)
+        
+                # Step 3: Now try fetching indices
+                api_url = "https://www.nseindia.com/api/allIndices"
+                response = session.get(api_url, timeout=10)
                 response.raise_for_status()
                 data = response.json()
-                
-                # Try multiple possible names for India VIX (case-insensitive)
-                vix_index_names = ["India VIX", "INDIA VIX", "VIX", "INDIA-VIX", "INDIA VIX INDEX"]
+        
+                # Search for India VIX
+                vix_index_names = ["India VIX", "INDIA VIX", "VIX", "INDIA-VIX"]
                 india_vix = None
                 for idx in data["data"]:
-                    if any(name in idx["index"].upper() for name in [n.upper() for n in vix_index_names]):
+                    if any(name.upper() in idx["index"].upper() for name in vix_index_names):
                         india_vix = idx
                         break
-                        
+        
                 if not india_vix:
-                    # Log available indices for debugging (first 5)
-                    available_indices = ", ".join([idx["index"] for idx in data["data"][:5]]) + ("..." if len(data["data"]) > 5 else "")
-                    raise ValueError(f"India VIX not found in NSE response. Available indices: {available_indices}")
-                
+                    available = ", ".join([d["index"] for d in data["data"][:5]])
+                    raise ValueError(f"India VIX not found. Found: {available}...")
+        
                 vix_value = float(india_vix["last"])
+        
                 if vix_value >= hard_limit:
                     print(f"🛑 VIX {vix_value:.2f} >= {hard_limit} - halting script for the day")
                     send_telegram(f"🛑 VIX {vix_value:.2f} >= {hard_limit} - halting script")
                     sys.exit(0)
-                if vix_value >= threshold:
+                elif vix_value >= threshold:
                     print(f"⚠️ VIX {vix_value:.2f} >= {threshold} - skipping trade")
                     send_telegram(f"⚠️ VIX {vix_value:.2f} >= {threshold} - skipping trade")
                     return False
-                print(f"✅ VIX {vix_value:.2f} < {threshold} - proceeding")
+                else:
+                    print(f"✅ VIX {vix_value:.2f} < {threshold} - proceeding")
+                    return True
+        
+            except requests.exceptions.HTTPError as e:
+                print(f"❌ HTTP error in VIX check: {e}")
+                if e.response.status_code == 401:
+                    print("💡 Tip: NSE blocked access. Try updating headers or adding delay.")
+            except requests.exceptions.ConnectionError:
+                print("❌ Network error: Could not connect to NSE")
+            except Exception as e:
+                print(f"❌ VIX check failed: {e}")
+                traceback.print_exc()
+        
+            # Return True in case of failure IF in test_mode
+            if 'test_mode' in globals() and test_mode:
+                print("🧪 Test mode: Skipping VIX failure")
                 return True
-            except Exception as e:
-                print(f"❌ VIX check failed: {e}")
-                send_telegram(f"❌ VIX check failed: {e}")
+            else:
                 return False
-
-            except Exception as e:
-                print(f"❌ VIX check failed: {e}")
-                send_telegram(f"❌ VIX check failed: {e}")
-                return False
-
 
         # Apply VIX check
         if not is_vix_ok():
@@ -1773,36 +1873,32 @@ def main():
             print(f'📄 Loaded dynamic_stock_list.csv with {len(df)} entries')
             
             # Check market sentiment
-            nifty_bullish = is_index_bullish(nifty_id)
-            sector_status = {}
+            if 'sector_sentiment_map' not in globals():
+                print("⏳ Fetching sector sentiment from proxy/Index method...")
+                sector_sentiment_map = get_sector_sentiment_map(print_table=True)
             
-            # Create sector beta map
-            sector_beta_map = {}
-            for sector, index_name in sector_indices.items():
-                sector_row = master_df[master_df["SM_SYMBOL_NAME"] == index_name]
-                if not sector_row.empty:
-                    sector_id = sector_row.iloc[0]["SEM_SMST_SECURITY_ID"]
-                    candles = fetch_candles(
-                        sector_id, 
-                        count=20,
-                        exchange_segment="NSE_INDEX",
-                        instrument_type="INDEX"
-                    )
-                    if candles:
-                        closes = pd.Series([c["close"] for c in candles])
-                        if len(closes) > 1:
-                            returns = closes.pct_change().dropna()
-                            if len(returns) > 0:
-                                sector_beta_map[sector] = np.std(returns)
-                        
-            # Check all sectors once per cycle
-            for sector, index_name in sector_indices.items():
-                sector_row = master_df[master_df["SM_SYMBOL_NAME"] == index_name].head(1)
-                if not sector_row.empty:
-                    sector_id = sector_row.iloc[0]["SEM_SMST_SECURITY_ID"]
-                    sector_status[sector] = is_index_bullish(sector_id)
-                    status = "bullish" if sector_status[sector] else "bearish"
-                    print(f'  📈 {index_name} sector: {status}')
+            nifty_bullish = sector_sentiment_map.get("NIFTY 50", True)  # True if NIFTY 50 not found (fails open)
+            
+            unique_sectors = df['sector'].dropna().str.strip().str.upper().unique()
+            
+            # 🧠 Use sector sentiment map from Index_Check_Qwen
+            if 'sector_sentiment_map' not in globals():
+                print("⏳ Fetching sector sentiment from proxy/Index method...")
+                sector_sentiment_map = get_sector_sentiment_map(print_table=True)
+            
+            sector_status = {}
+            for sector in unique_sectors:
+                mapped_sector = sector_indices.get(sector.upper(), None)
+                if not mapped_sector:
+                    print(f'⚠️ Sector mapping not found for {sector}, skipping bullish check')
+                    sector_status[sector] = False
+                    continue
+            
+                # Use proxy result (True if bullish, False otherwise)
+                sector_bullish = sector_sentiment_map.get(mapped_sector, False)
+                sector_status[mapped_sector] = sector_bullish
+                status = "bullish" if sector_bullish else "bearish"
+                print(f'📈 Sector {mapped_sector}: {status} (via Index_Check_Qwen)')                    
             
             if not nifty_bullish:
                 print("📉 Overall market bearish - focusing on bullish sectors")
@@ -1833,17 +1929,11 @@ def main():
                     print(f'➡️ Evaluating {symbol} ({sector} sector)')
                     
                     # Enforce sector confirmation for small caps
-                    sector_key = sector.upper().replace("NIFTY", "").replace(" ", "").strip()
-                    if not nifty_bullish or sector == "UNKNOWN":
-                        # Find matching sector key using startswith for broader matching
-                        matched_sector = next((k for k in sector_status.keys() if sector_key.startswith(k)), None)
-                        
-                        if not matched_sector or not sector_status[matched_sector]:
-                            print(f'  ❌ Sector confirmation failed for {symbol} (sector: {sector}, mapped: {matched_sector}) - skipping')
-                            continue
-                        # Update sector_key for downstream use
-                        sector_key = matched_sector
-        
+                    mapped_sector = sector_indices.get(sector.strip().upper(), None)
+                    
+                    if not nifty_bullish or not mapped_sector or not sector_status.get(mapped_sector, False):
+                        print(f'  ❌ Sector confirmation failed for {symbol} (sector: {sector}, mapped: {mapped_sector}) - skipping')
+                        continue
                     # Fetch candles with rate limit control
                     try:
                         candles = fetch_candles(secid, count=75)  # Increased for chart patterns
@@ -2126,9 +2216,12 @@ def main():
                     # Apply resistance discount
                     max_investment = min(capital * position_discount, max_shares * price)
                     base_qty = int(max_investment // price)
-                    if base_qty == 0:  # Ensure minimum 1 share if affordable
-                        base_qty = 1 if price <= capital else 0
-                    
+                    if base_qty < 1:
+                        raise ValueError(
+                            f"❌ Unaffordable position: {symbol} price ₹{price:.2f} "
+                            f"exceeds allocation ₹{max_investment:.2f}"
+                        )
+                 
                     print(f'📉 Resistance discount: {position_discount*100:.1f}% | Allocation: ₹{max_investment:.2f}')
                     
                     if base_qty > 0:
