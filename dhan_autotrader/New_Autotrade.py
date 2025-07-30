@@ -1,7 +1,4 @@
 # ========== PART 1: AUTOTRADE ENTRY SCRIPT ==========
-# This script handles pattern detection, order placement, and SL/TP setup
-# Terminates after successful order placement
-
 import os
 import sys
 import json
@@ -13,12 +10,12 @@ from dhanhq import DhanContext, dhanhq
 from decimal import Decimal, ROUND_HALF_UP
 import requests
 import numpy as np
+from scipy.stats import linregress
 from db_logger import insert_portfolio_log_to_db, log_to_postgres
-import math
 import io
-import traceback
 
 log_buffer = io.StringIO()
+test_mode = False
 
 class TeeLogger:
     def __init__(self, *streams):
@@ -56,7 +53,112 @@ dhan = dhanhq(context)
 TG_TOKEN = config["telegram_token"]
 TG_CHAT_ID = config["telegram_chat_id"]
 
-# ========== Pattern Confidence Weights ==========
+# Security IDs for NSE indices
+INDEX_SECURITY_MAP = {
+    "NIFTY 50": 26000,
+    "NIFTY BANK": 26009,
+    "NIFTY AUTO": 26010,
+    "NIFTY IT": 26011,
+    "NIFTY FMCG": 26012,
+    "NIFTY FIN SERVICE": 26013,
+    "NIFTY PHARMA": 26014,
+    "NIFTY REALTY": 26015,
+    "NIFTY ENERGY": 26018,
+    "NIFTY METAL": 26019,
+    "NIFTY OIL & GAS": 26020,
+    "NIFTY CONSUMER DURABLES": 26022,
+    "NIFTY HEALTHCARE": 26023,
+    "NIFTY INFRA": 26024,
+    "NIFTY MEDIA": 26025,
+    "NIFTY PSU BANK": 26026,
+    "NIFTY PRIVATE BANK": 26028,
+    "NIFTY SERVICES SECTOR": 26037,
+    "NIFTY COMMODITIES": 26045
+}
+
+# Multi-proxy stocks for each sector
+MULTI_PROXY_MAP = {
+    "NIFTY 50": [{"name": "RELIANCE INDUSTRIES LTD", "security_id": 2885},
+                 {"name": "HDFC BANK LTD", "security_id": 1333},
+                 {"name": "INFOSYS LIMITED", "security_id": 1594}],
+    "NIFTY BANK": [{"name": "HDFC BANK LTD", "security_id": 1333},
+                   {"name": "ICICI BANK LTD", "security_id": 4963},
+                   {"name": "STATE BANK OF INDIA", "security_id": 3045}],
+    "NIFTY AUTO": [{"name": "MARUTI SUZUKI INDIA LTD.", "security_id": 10999},
+                   {"name": "TATA MOTORS LTD", "security_id": 3435},
+                   {"name": "MAHINDRA & MAHINDRA LTD", "security_id": 2031}],
+    "NIFTY IT": [{"name": "INFOSYS LIMITED", "security_id": 1594},
+                 {"name": "TATA CONSULTANCY SERVICES LTD", "security_id": 3413},
+                 {"name": "WIPRO LIMITED", "security_id": 1348}],
+    "NIFTY FMCG": [{"name": "HINDUSTAN UNILEVER LTD.", "security_id": 1394},
+                   {"name": "ITC LIMITED", "security_id": 1660},
+                   {"name": "NESTLE INDIA LIMITED", "security_id": 4595}],
+    "NIFTY FIN SERVICE": [{"name": "BAJAJ FINANCE LIMITED", "security_id": 317},
+                          {"name": "HDFC BANK LTD", "security_id": 1333},
+                          {"name": "HDFC LIFE INSURANCE COMPANY LTD", "security_id": 7929}],
+    "NIFTY PHARMA": [{"name": "SUN PHARMACEUTICAL IND L", "security_id": 3351},
+                     {"name": "DR. REDDYS LABORATORIES LTD", "security_id": 910},
+                     {"name": "CIPLA LTD", "security_id": 599}],
+    "NIFTY REALTY": [{"name": "DLF LIMITED", "security_id": 14732},
+                     {"name": "GODREJ PROPERTIES LTD", "security_id": 2607},
+                     {"name": "OBEROI REALTY LTD", "security_id": 11184}],
+    "NIFTY ENERGY": [{"name": "RELIANCE INDUSTRIES LTD", "security_id": 2885},
+                     {"name": "NTPC LIMITED", "security_id": 11630},
+                     {"name": "POWER GRID CORPORATION OF INDIA LTD", "security_id": 383}],
+    "NIFTY METAL": [{"name": "TATA STEEL LIMITED", "security_id": 3499},
+                    {"name": "HINDALCO INDUSTRIES LTD", "security_id": 1363},
+                    {"name": "VEDANTA LIMITED", "security_id": 3063}],
+    "NIFTY OIL & GAS": [{"name": "RELIANCE INDUSTRIES LTD", "security_id": 2885},
+                        {"name": "ONGC", "security_id": 1181},
+                        {"name": "GAIL (INDIA) LIMITED", "security_id": 1201}],
+    "NIFTY CONSUMER DURABLES": [{"name": "TITAN COMPANY LIMITED", "security_id": 3506},
+                                {"name": "VOLTAS LIMITED", "security_id": 1324},
+                                {"name": "BLUE STAR LIMITED", "security_id": 505}],
+    "NIFTY HEALTHCARE": [{"name": "DIVI S LABORATORIES LTD", "security_id": 10940},
+                         {"name": "APOLLO HOSPITALS ENTERPRISE LTD", "security_id": 157},
+                         {"name": "FORTIS HEALTHCARE LIMITED", "security_id": 1053}],
+    "NIFTY INFRA": [{"name": "LARSEN & TOUBRO LTD.", "security_id": 11483},
+                    {"name": "ADANI PORTS AND SPECIAL ECONOMIC ZONE LTD", "security_id": 15083},
+                    {"name": "ULTRATECH CEMENT LIMITED", "security_id": 11536}],
+    "NIFTY MEDIA": [{"name": "SUN TV NETWORK LIMITED", "security_id": 13404},
+                    {"name": "ZEE ENTERTAINMENT ENTERPRISES LTD", "security_id": 1385},
+                    {"name": "PVR INOX LTD", "security_id": 11827}],
+    "NIFTY PSU BANK": [{"name": "STATE BANK OF INDIA", "security_id": 3045},
+                       {"name": "PUNJAB NATIONAL BANK", "security_id": 257},
+                       {"name": "BANK OF BARODA", "security_id": 4747}],
+    "NIFTY PRIVATE BANK": [{"name": "ICICI BANK LTD.", "security_id": 4963},
+                           {"name": "AXIS BANK LTD", "security_id": 5900},
+                           {"name": "KOTAK MAHINDRA BANK LTD", "security_id": 1922}],
+    "NIFTY SERVICES SECTOR": [{"name": "CONTAINER CORPORATION OF INDIA LTD", "security_id": 1217},
+                              {"name": "INDIABULLS HOUSING FINANCE LTD", "security_id": 10217},
+                              {"name": "ADANI ENTERPRISES LTD", "security_id": 25}],
+    "NIFTY COMMODITIES": [{"name": "GRASIM INDUSTRIES LTD", "security_id": 1232},
+                          {"name": "JSW STEEL LIMITED", "security_id": 11723},
+                          {"name": "ADANI ENTERPRISES LTD", "security_id": 25}]
+}
+
+# Sector-to-NIFTY Index Mapping
+sector_index_ids = {
+    "NIFTY AUTO": "13604", "NIFTY BANK": "13605", "NIFTY ENERGY": "13607",
+    "NIFTY FIN SERVICE": "13606", "NIFTY IT": "13609", "NIFTY FMCG": "13608",
+    "NIFTY METAL": "13610", "NIFTY INFRA": "13613", "NIFTY PHARMA": "13611",
+    "NIFTY COMMODITIES": "13612", "NIFTY SERVICES SECTOR": "13614"
+}
+
+# Map raw sector names to NIFTY sectors
+sector_indices = {
+    "BANK": "NIFTY BANK", "NIFTY BANK": "NIFTY BANK", "BANKING": "NIFTY BANK",
+    "FINANCIAL SERVICES": "NIFTY FIN SERVICE", "NIFTY FIN SERVICE": "NIFTY FIN SERVICE",
+    "IT": "NIFTY IT", "NIFTY IT": "NIFTY IT", "IT SERVICES": "NIFTY IT",
+    "AUTO": "NIFTY AUTO", "NIFTY AUTO": "NIFTY AUTO", "AUTO ANCILLARIES": "NIFTY AUTO",
+    "PHARMA": "NIFTY PHARMA", "PHARMACEUTICALS": "NIFTY PHARMA", "FMCG": "NIFTY FMCG",
+    "NIFTY FMCG": "NIFTY FMCG", "METAL": "NIFTY METAL", "NIFTY METAL": "NIFTY METAL",
+    "ENERGY": "NIFTY ENERGY", "NIFTY ENERGY": "NIFTY ENERGY", "POWER": "NIFTY ENERGY",
+    "INFRASTRUCTURE": "NIFTY INFRA", "NIFTY INFRA": "NIFTY INFRA", "INSURANCE": "NIFTY FIN SERVICE",
+    "AGROCHEMICALS": "NIFTY COMMODITIES", "LOGISTICS": "NIFTY SERVICES SECTOR"
+}
+
+# Pattern Confidence Weights
 PATTERN_WEIGHTS = {
     # Candlestick patterns
     "Bullish Hammer": {"weight": 1.1, "vol_scale": 1.2},
@@ -81,8 +183,8 @@ PATTERN_WEIGHTS = {
     "Inverse Head and Shoulders": {"weight": 1.8, "vol_scale": 2.2},
     "Rounded Consolidation (Roundboom)": {"weight": 1.3, "vol_scale": 1.5},
     "Bullish Rectangle": {"weight": 1.4, "vol_scale": 1.7},
-    "Bullish Flag": {"weight": 1.5, "vol_scale": 1.8},  # New pattern
-    "Symmetrical Triangle": {"weight": 1.4, "vol_scale": 1.6},  # New pattern
+    "Bullish Flag": {"weight": 1.5, "vol_scale": 1.8},
+    "Symmetrical Triangle": {"weight": 1.4, "vol_scale": 1.6},
     # Bearish patterns
     "Head and Shoulders": {"weight": 1.8, "vol_scale": 2.0},
     "Double Top": {"weight": 1.6, "vol_scale": 1.8},
@@ -95,7 +197,27 @@ PATTERN_WEIGHTS = {
     "Distribution Zone": {"weight": 1.3, "vol_scale": 1.5}
 }
 
-def log_pattern_detection(symbol, pattern_name, detected, reason=""):
+# Define reversal and breakout patterns
+REVERSAL_PATTERNS = {
+    "Bullish Hammer", "Bullish Engulfing", "Piercing Line", "Morning Star",
+    "Inverted Hammer", "Bullish Harami", "Three White Soldiers", "Bullish Kicker",
+    "Gap-Down Reversal", "Double Bottom", "Triple Bottom", "Inverse Head and Shoulders",
+    "Rounding Bottom"
+}
+
+BREAKOUT_PATTERNS = {
+    "Breakout Marubozu", "Volume Breakout Candle", "Volume Breakout Pattern",
+    "Cup and Handle", "Ascending Triangle", "Bullish Pennant",
+    "Bullish Wedge (Falling Wedge)", "Bullish Rectangle", "Bullish Flag",
+    "Symmetrical Triangle"
+}
+
+# Technical indicator constants
+AVERAGE_TRUE_RANGE_PERIOD = 14
+ADR_PERIOD = 10  # Days for Average Daily Range
+
+# ========== Helper Functions ==========
+def log_pattern_detection(symbol: str, pattern_name: str, detected: bool, reason: str = "") -> None:
     """Log pattern detection result for debugging"""
     prefix = f"{symbol}: " if symbol else ""
     if detected:
@@ -106,11 +228,186 @@ def log_pattern_detection(symbol, pattern_name, detected, reason=""):
         else:
             print(f"❌ {prefix}Pattern {pattern_name} not detected")
 
-# ========== ATR/ADR Calculation ==========
-AVERAGE_TRUE_RANGE_PERIOD = 14
-ADR_PERIOD = 10  # Days for Average Daily Range
+def send_telegram(msg: str) -> None:
+    """Send message via Telegram"""
+    try:
+        url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
+        payload = {"chat_id": TG_CHAT_ID, "text": msg}
+        requests.post(url, data=payload)
+    except Exception as e:
+        print(f"❌ Telegram send failed: {e}")
 
-def calculate_atr(candles):
+def get_capital() -> float:
+    """Get trading capital from config"""
+    try:
+        return float(config.get("capital", 0.0))
+    except:
+        return 0.0
+
+def has_hold() -> bool:
+    """Check if there's an existing HOLD position"""
+    if not os.path.exists(PORTFOLIO_LOG):
+        return False
+    try:
+        df = pd.read_csv(PORTFOLIO_LOG)
+        today = datetime.now().strftime("%m/%d/%Y")
+        return any((df['status'].str.upper() == "HOLD") & df['timestamp'].str.contains(today))
+    except:
+        return False
+
+def fetch_intraday_candles(security_id: int, symbol_name: str, is_index: bool = False) -> list:
+    """Fetch historical candles for stocks or indices"""
+    if not security_id:
+        print(f"⚠️ No security_id provided for {symbol_name}")
+        return []
+    
+    exchange_segment = "NSE_INDEX" if is_index else "NSE_EQ"
+    instrument_type = "INDEX" if is_index else "EQUITY"
+    from_dt = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    to_dt = datetime.now().strftime("%Y-%m-%d")
+    
+    print(f"📊 Fetching {'index' if is_index else 'stock'} data: "
+          f"{symbol_name} [ID: {security_id}] ({from_dt} to {to_dt})")
+    
+    try:
+        candles = dhan.historical_daily_data(
+            security_id=str(security_id),
+            exchange_segment=exchange_segment,
+            instrument_type=instrument_type,
+            from_date=from_dt,
+            to_date=to_dt
+        )
+    except Exception as e:
+        print(f"🚨 API Error for {symbol_name}: {str(e)}")
+        return []
+    
+    if not candles or not isinstance(candles, dict) or 'data' not in candles:
+        print(f"⚠️ No data returned for {symbol_name}")
+        return []
+    
+    data = candles['data']
+    if not all(key in data for key in ('open', 'high', 'low', 'close', 'volume', 'timestamp')):
+        print(f"⚠️ Incomplete data structure for {symbol_name}")
+        return []
+    
+    num_candles = len(data['close'])
+    merged_candles = [
+        {
+            "timestamp": data["timestamp"][i],
+            "open": data["open"][i],
+            "high": data["high"][i],
+            "low": data["low"][i],
+            "close": data["close"][i],
+            "volume": data["volume"][i],
+        }
+        for i in range(num_candles)
+    ]
+    
+    print(f"✅ Retrieved {len(merged_candles)} candles for {symbol_name}")
+    return merged_candles
+
+def fetch_candles(security_id: int, count: int = 20, cache: dict = {}, 
+                  exchange_segment: str = "NSE_EQ", instrument_type: str = "EQUITY") -> list:
+    """Fetch candles with caching and retry mechanism"""
+    date_str = datetime.now().strftime("%Y%m%d")
+    cache_key = f"{date_str}_{security_id}_{count}_{exchange_segment}"
+    if cache_key in cache:
+        return cache[cache_key]
+
+    for attempt in range(3):  # Retry up to 3 times
+        try:    
+            now = datetime.now()
+            from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
+            to_dt = now.replace(second=0, microsecond=0)
+            print(f"📡 Fetching candles for {security_id} — segment: {exchange_segment}, type: {instrument_type}")
+            response = dhan.intraday_minute_data(
+                security_id=str(security_id),
+                exchange_segment=exchange_segment,
+                instrument_type=instrument_type,
+                from_date=from_dt.strftime("%Y-%m-%d"),
+                to_date=to_dt.strftime("%Y-%m-%d")
+            )
+
+            # Check if response is valid and extract data
+            if not response or not isinstance(response, dict) or 'data' not in response:
+                print(f"⚠️ Invalid response structure for {security_id}")
+                return []
+                
+            raw_data = response['data']
+            # Handle both list and dict formats
+            candles = []  # Initialize candles to empty list
+            if isinstance(raw_data, list):
+                # Process as list of candles
+                for candle in raw_data:
+                    try:
+                        candles.append({
+                            "open": candle["open"],
+                            "high": candle["high"],
+                            "low": candle["low"],
+                            "close": candle["close"],
+                            "volume": candle["volume"],
+                            "timestamp": datetime.fromtimestamp(candle["timestamp"])
+                        })
+                    except KeyError:
+                        continue
+                if not candles:
+                    print(f"⚠️ Empty list-style candle data for {security_id}")
+                    return []
+            elif isinstance(raw_data, dict):
+                required_keys = ["open", "high", "low", "close", "volume", "timestamp"]
+                if not all(k in raw_data and raw_data[k] for k in required_keys):
+                    print(f"⚠️ Malformed dict-style candle data for {security_id}")
+                    return []
+                try:
+                    n = len(raw_data['open'])
+                    for i in range(n):
+                        candles.append({
+                            "open": raw_data["open"][i],
+                            "high": raw_data["high"][i],
+                            "low": raw_data["low"][i],
+                            "close": raw_data["close"][i],
+                            "volume": raw_data["volume"][i],
+                            "timestamp": datetime.fromtimestamp(raw_data["timestamp"][i])
+                        })
+                except Exception as e:
+                    print(f"❌ Error parsing dict candles for {security_id}: {e}")
+                    return []
+            else:
+                print(f"⚠️ Unsupported data format for {security_id}: {type(raw_data)}")
+                return []
+
+            if not candles:
+                print(f"⚠️ No valid parsed candles for {security_id}")
+                return []
+            
+            # Candle Timestamp Freshness Check
+            last_candle_time = candles[-1]["timestamp"]
+            if not isinstance(last_candle_time, datetime):
+                raise TypeError(
+                    f"❌ Invalid candle timestamp type: "
+                    f"Expected datetime, got {type(last_candle_time)}"
+                )
+            
+            now = datetime.now(pytz.utc)
+            if (now - last_candle_time) > timedelta(minutes=2) or now.date() > last_candle_time.date():
+                print(f"❌ Stale candle data for {security_id} ({last_candle_time}), forcing refresh")
+                del cache[cache_key]
+                return fetch_candles(security_id, count, cache, exchange_segment, instrument_type)
+
+            cache[cache_key] = candles
+            return candles     
+
+        except Exception as e:
+            if "Rate_Limit" in str(e) and attempt < 2:
+                wait_time = (attempt + 1) * 10
+                print(f"⚠️ Rate limit hit for {security_id}, retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+                continue
+            print(f"❌ Error fetching candles for {security_id}: {e}")
+            return []
+    return []
+
+def calculate_atr(candles: list) -> float:
     """Calculate Average True Range (ATR) for volatility measurement"""
     if len(candles) < AVERAGE_TRUE_RANGE_PERIOD + 1:
         return 0.0
@@ -128,7 +425,7 @@ def calculate_atr(candles):
     atr = true_range.rolling(AVERAGE_TRUE_RANGE_PERIOD).mean().iloc[-1]
     return atr
 
-def calculate_adr(security_id):
+def calculate_adr(security_id: int) -> float:
     """Calculate Average Daily Range (ADR) for realistic TP/SL capping"""
     try:
         from_dt = datetime.now() - timedelta(days=ADR_PERIOD + 5)
@@ -142,8 +439,11 @@ def calculate_adr(security_id):
             to_date=to_dt.strftime("%Y-%m-%d")
         )
         
-        if not daily_data or not isinstance(daily_data, list) or len(daily_data) < ADR_PERIOD:
-            return 0.0
+        if not isinstance(daily_data, list) or len(daily_data) < ADR_PERIOD:
+            raise ValueError(
+                f"❌ Invalid ADR data for {security_id}: "
+                f"Expected list of {ADR_PERIOD}+ candles, got {type(daily_data)}"
+            )
             
         # Extract highs and lows from candle dictionaries
         try:
@@ -158,120 +458,391 @@ def calculate_adr(security_id):
         print(f"❌ ADR calculation failed: {e}")
         return 0.0
 
-def send_telegram(msg):
+def has_rsi_divergence(highs: pd.Series, rsi_series: pd.Series, lookback: int = 14) -> bool:
+    """Detect bearish RSI divergence"""
+    # Validate input lengths
+    if len(highs) < lookback or len(rsi_series) < lookback:
+        print(f"❌ RSI divergence check failed: Need {lookback} periods, got {len(highs)} highs and {len(rsi_series)} RSI values")
+        return False
+    
     try:
-        url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
-        payload = {"chat_id": TG_CHAT_ID, "text": msg}
-        requests.post(url, data=payload)
-    except Exception as e:
-        print(f"❌ Telegram send failed: {e}")
+        # Find highest high in lookback period
+        lookback_highs = highs.iloc[-lookback:]
+        if lookback_highs.empty:
+            print(f"❌ Empty lookback window for RSI divergence")
+            return False
+            
+        max_high_idx = lookback_highs.idxmax()
+        max_high = highs.loc[max_high_idx]
+        
+        # Find corresponding RSI value
+        rsi_at_high = rsi_series.loc[max_high_idx]
+        
+        # Check current RSI vs RSI at high
+        current_high = highs.iloc[-1]
+        current_rsi = rsi_series.iloc[-1]
+        
+        divergence_detected = current_high > max_high and current_rsi < rsi_at_high
+        
+        if divergence_detected:
+            print(f"⚠️ Bearish RSI divergence detected: "
+                  f"Price {current_high:.2f} > {max_high:.2f} "
+                  f"but RSI {current_rsi:.2f} < {rsi_at_high:.2f}")
+        
+        return divergence_detected
+        
+    except (IndexError, KeyError) as e:
+        print(f"❌ RSI divergence calculation error: {str(e)}")
+        return False
 
-def get_capital():
+def compute_rsi_macd(closes: pd.Series) -> tuple:
+    """Calculate RSI and MACD values"""
+    delta = closes.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(14).mean().bfill()
+    avg_loss = loss.rolling(14).mean().bfill().replace(0, 0.01)
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    ema12 = closes.ewm(span=12, adjust=False).mean()
+    ema26 = closes.ewm(span=26, adjust=False).mean()
+    macd = ema12 - ema26
+    signal = macd.ewm(span=9, adjust=False).mean()
+    histogram = macd - signal
+    macd_crossover = macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] <= signal.iloc[-2]
+    return rsi.iloc[-1], histogram.iloc[-1], macd_crossover
+
+def is_bullish(candles: list, days: int = 5) -> bool:
+    """Determine bullish trend based on closing prices"""
+    if not candles or len(candles) < days:
+        return False
+    
+    # Use the last 'days' trading days
+    recent_closes = [candle["close"] for candle in candles[-days:]]
+    
+    # Simple trend: current close > previous close (momentum)
+    if recent_closes[-1] > recent_closes[-2]:
+        return True
+    
+    # Medium-term: current close > average of last 'days' closes
+    avg_close = sum(recent_closes) / len(recent_closes)
+    return recent_closes[-1] > avg_close
+
+def analyze_index(sector: str, security_id: int) -> bool:
+    """Analyze sector using actual index data"""
+    candles = fetch_intraday_candles(security_id, sector, is_index=True)
+    if not candles:
+        print(f"⚠️ Could not fetch index data for {sector}")
+        return None
+    
+    return is_bullish(candles)
+
+def analyze_proxies(sector: str, proxies: list) -> bool:
+    """Analyze sector using multiple proxy stocks"""
+    if not proxies:
+        print(f"⚠️ No proxies defined for {sector}")
+        return None
+    
+    bullish_count = 0
+    valid_proxies = 0
+    
+    for proxy in proxies:
+        candles = fetch_intraday_candles(proxy['security_id'], proxy['name'])
+        time.sleep(1.2)  # Rate limit protection
+        
+        if not candles or len(candles) < 5:
+            continue
+            
+        valid_proxies += 1
+        if is_bullish(candles):
+            bullish_count += 1
+    
+    if valid_proxies == 0:
+        print(f"⚠️ No valid proxies for {sector}")
+        return None
+    
+    return bullish_count / valid_proxies >= 0.6  # 60% threshold
+
+def get_sector_sentiment_map(print_table: bool = False) -> dict:
+    """
+    Returns: dict { sector_name (str) : True (bullish) / False (bearish/unknown) }
+    Optionally prints summary table if print_table is True.
+    """
+    sector_results = []
+    sentiment_map = {}
+
+    for sector in INDEX_SECURITY_MAP.keys():
+        print(f"\n🔍 Analyzing {sector}")
+
+        # Try index first
+        index_id = INDEX_SECURITY_MAP[sector]
+        result = analyze_index(sector, index_id)
+        used_proxy = False
+
+        # Fallback to proxies if index analysis fails
+        if result is None:
+            print(f"🔄 Falling back to proxy analysis for {sector}")
+            proxies = MULTI_PROXY_MAP.get(sector, [])
+            result = analyze_proxies(sector, proxies)
+            used_proxy = True
+
+        # Final determination
+        if result is None:
+            trend = "UNKNOWN"
+            status = "⛔"
+            sentiment_map[sector] = False  # Treat UNKNOWN as not bullish
+        elif result:
+            trend = "BULLISH"
+            status = "✅"
+            sentiment_map[sector] = True
+        else:
+            trend = "BEARISH"
+            status = "❌"
+            sentiment_map[sector] = False
+
+        sector_results.append({
+            "SECTOR": sector,
+            "TREND": trend,
+            "STATUS": status,
+            "METHOD": "PROXY" if used_proxy else "INDEX"
+        })
+
+        print(f"📌 {sector} Trend: {trend} {status} (by {'PROXY' if used_proxy else 'INDEX'})")
+
+    if print_table:
+        print("\n" + "="*50)
+        print("SECTOR TREND SUMMARY TABLE")
+        print("="*50)
+        results_df = pd.DataFrame(sector_results)
+        print(results_df.to_string(index=False))
+        print("="*50)
+        print("ANALYSIS COMPLETE")
+        print("="*50)
+
+    return sentiment_map
+
+def is_index_bullish(index_id: int) -> bool:
+    """Check bullishness for any index (NIFTY/Sector)"""
+    candles = fetch_candles(
+        index_id, 
+        count=20,
+        exchange_segment="NSE_INDEX",
+        instrument_type="INDEX"
+    )
+    if not candles:
+        print(f"❌ No candles returned for index ID {index_id} — skipping bullish check")
+        return False
+
+    closes = pd.Series([c["close"] for c in candles])
+    rsi, macd_hist, macd_cross = compute_rsi_macd(closes)
+    detected, _, _ = detect_bullish_pattern(candles)
+    return detected and rsi > 50 and macd_hist > 0 and macd_cross
+
+def check_breakout(candles: list, period: int = 3) -> bool:
+    """Confirm 15-min high breakout with closing confirmation"""
     try:
-        return float(config.get("capital", 0.0))
+        if len(candles) < period + 1:
+            return False
+        current_close = candles[-1]['close']
+        prev_candles = candles[-period-1:-1]
+        if not prev_candles:
+            return False
+        prev_high = max(c['high'] for c in prev_candles)
+        return current_close > prev_high
+    except (IndexError, ValueError, KeyError):
+        return False
+
+def check_gap_up(security_id: int) -> bool:
+    """Prevent entries after significant gap-ups with recent price check"""
+    try:
+        quote = dhan.get_quote(security_id)
+        if not quote:
+            return False
+            
+        prev_close = float(quote.get('previousClose', 0))
+        today_open = float(quote.get('open', 0))
+        current_price = float(quote.get('ltp', 0))
+        
+        if prev_close <= 0:
+            return False
+        
+        gap_up = (today_open - prev_close) / prev_close > 0.01
+        
+        # Block all gap-ups >1% regardless of pullback
+        if gap_up:
+            print(f"❌ Gap-up detected: {security_id} (Open: {today_open:.2f} > Prev Close: {prev_close:.2f})")
+            return True
+        return False
+            
     except:
+        return False
+
+def is_near_support(candles: list, buffer: float = 0.005) -> bool:
+    """Check if current price is near support level (within buffer%)"""
+    if len(candles) < 10:
+        return False
+    # Find recent low (support level)
+    recent_lows = [candle['low'] for candle in candles[-10:]]
+    support_level = min(recent_lows)
+    current_price = candles[-1]['close']
+    # Check if current price is within buffer above support
+    return current_price <= support_level * (1 + buffer)
+
+def get_15min_trend(candles_1min: list, min_candles: int = 5) -> bool:
+    """Check if 15-minute trend is bullish using linear regression slope"""
+    if len(candles_1min) < min_candles * 15:
+        return False
+    df = pd.DataFrame(candles_1min)
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df.set_index('timestamp', inplace=True)
+    # Resample to 15 minutes
+    ohlc_dict = {
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+        'volume': 'sum'
+    }
+    df_15min = df.resample('15min').apply(ohlc_dict).dropna()
+    if len(df_15min) < min_candles:
+        return False
+    # Get closing prices
+    closes = df_15min['close'].iloc[-min_candles:]
+    # Calculate slope
+    x = np.arange(len(closes))
+    slope, _, _, _, _ = linregress(x, closes)
+    # Bullish if slope positive
+    return slope > 0
+
+def detect_bearish_pattern(candles: list, current_pattern: str = None) -> float:
+    """Enhanced bearish pattern detection with conflict checking, returns confidence score (0-1)"""
+    if len(candles) < 3:
         return 0.0
+    df = pd.DataFrame(candles)
+    o, h, l, c = df["open"], df["high"], df["low"], df["close"]
+    
+    # Pattern-specific conflict rules
+    lookback = 2 if current_pattern in REVERSAL_PATTERNS else 3
+    bearish_score = 0.0
+    
+    # 1. Doji: small body relative to range
+    for i in range(-lookback,0):
+        body = abs(c.iloc[i] - o.iloc[i])
+        total_range = h.iloc[i] - l.iloc[i]
+        if total_range == 0:
+            continue
+        body_ratio = body / total_range
+        if body_ratio < 0.1:
+            # Stronger weight for recent candles
+            recency_factor = 1.0 - (abs(i) / (lookback + 1))
+            bearish_score = max(bearish_score, 0.5 * recency_factor)
+            
+    # 2. Shooting Star: long upper wick, small body
+    body = abs(c.iloc[-1] - o.iloc[-1])
+    if body > 0:
+        upper_wick = h.iloc[-1] - max(c.iloc[-1], o.iloc[-1])
+        lower_wick = min(c.iloc[-1], o.iloc[-1]) - l.iloc[-1]
+        if upper_wick > 2 * body and lower_wick < body:
+            bearish_score = max(bearish_score, 0.7)
+    
+    # 3. Bearish Engulfing
+    if len(c) >= 2:
+        if (c.iloc[-2] > o.iloc[-2] and  # Previous candle green
+            c.iloc[-1] < o.iloc[-1] and   # Current candle red
+            o.iloc[-1] > c.iloc[-2] and 
+            c.iloc[-1] < o.iloc[-2]):
+            bearish_score = max(bearish_score, 0.8)
+    
+    # 4. Dark Cloud Cover
+    if len(c) >= 2:
+        prev_mid = (o.iloc[-2] + c.iloc[-2]) / 2
+        if (c.iloc[-2] > o.iloc[-2] and  # Prev green
+            o.iloc[-1] > c.iloc[-2] and   # Open above prev close
+            c.iloc[-1] < prev_mid and     # Close below midpoint
+            c.iloc[-1] > o.iloc[-2]):     # Close above prev open
+            bearish_score = max(bearish_score, 0.75)
+    
+    # 5. Evening Star (only if current pattern is reversal)
+    body_middle = abs(o.iloc[-2] - c.iloc[-2])
+    body_range = h.iloc[-2] - l.iloc[-2]
+    if (c.iloc[-3] > o.iloc[-3] and  # First candle green
+        body_middle < 0.3 * body_range and  # Small body
+        o.iloc[-1] < c.iloc[-2] and  # Third candle opens below middle
+        c.iloc[-1] < (o.iloc[-3] + c.iloc[-3]) / 2):  # Closes below midpoint of first
+        bearish_score = max(bearish_score, 0.9)   
+    
+    return bearish_score
 
-def has_hold():
-    if not os.path.exists(PORTFOLIO_LOG):
-        return False
+def log_trade(symbol: str, security_id: int, action: str, price: float, qty: int, 
+              status: str, stop_pct: float = None, target_pct: float = None, 
+              stop_price: float = None, target_price: float = None, 
+              order_id: str = "N/A", timestamp: datetime = None) -> None:
+    """Log trade details to CSV and database"""
+    if timestamp is None:
+        timestamp = datetime.now()
+    timestamp_str = timestamp.strftime("%m/%d/%Y %H:%M:%S")
+    
+    # CSV row log
+    log_row = [
+        symbol,
+        timestamp_str,
+        security_id,
+        qty,
+        price,
+        0,  # momentum_5min placeholder
+        target_pct if target_pct is not None else "",
+        stop_pct if stop_pct is not None else "",
+        "",  # live_price
+        "",  # change_pct
+        "",  # last_checked
+        status,
+        "",  # exit_price
+        order_id,
+        target_price if target_price is not None else "",
+        stop_price if stop_price is not None else ""
+    ]
+
+    # CSV logging
+    with open(PORTFOLIO_LOG, "a") as f:
+        f.write(",".join(map(str, log_row)) + "\n")
+
+    # DB logging
     try:
-        df = pd.read_csv(PORTFOLIO_LOG)
-        today = datetime.now().strftime("%m/%d/%Y")
-        return any((df['status'].str.upper() == "HOLD") & df['timestamp'].str.contains(today))
-    except:
-        return False
+        insert_portfolio_log_to_db(
+            trade_date=timestamp,
+            symbol=symbol,
+            security_id=security_id,
+            quantity=qty,
+            buy_price=price,
+            stop_pct=float(stop_pct) if stop_pct is not None else None,
+            target_pct=float(target_pct) if target_pct is not None else None,
+            stop_price=stop_price,
+            target_price=target_price,
+            status=status,
+            order_id=order_id
+        )
+    except Exception as e:
+        print("❌ DB log failed (portfolio_log):", e)
 
-def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", instrument_type="EQUITY"):
-    """Fetch candles with caching and retry mechanism to prevent redundant calls"""
-    date_str = datetime.now().strftime("%Y%m%d")
-    cache_key = f"{date_str}_{security_id}_{count}_{exchange_segment}"
-    if cache_key in cache:
-        return cache[cache_key]
-
-    for attempt in range(3):  # Retry up to 3 times
-        try:    
-            now = datetime.now()
-            from_dt = now.replace(hour=9, minute=15, second=0, microsecond=0)
-            to_dt = now.replace(second=0, microsecond=0)
-            
-            response = dhan.intraday_minute_data(
-                security_id=str(security_id),
-                exchange_segment=exchange_segment,
-                instrument_type=instrument_type,
-                from_date=from_dt.strftime("%Y-%m-%d"),
-                to_date=to_dt.strftime("%Y-%m-%d")
-            )
-
-            # Check if response is valid and extract data
-            if not response or not isinstance(response, dict) or 'data' not in response:
-                print(f"⚠️ Invalid response structure for {security_id}")
-                return []
-                
-            raw_data = response['data']
-            required_keys = ["open", "high", "low", "close", "volume", "timestamp"]
-            if (not raw_data or 
-                any(k not in raw_data for k in required_keys) or 
-                any(not raw_data[k] for k in required_keys) or 
-                len(set(len(raw_data[k]) for k in required_keys if k in raw_data)) > 1):
-                print(f"⚠️ Empty or malformed candle data for {security_id}")
-                return []
-            
-            candles = []
-            try:
-                for i in range(len(raw_data["open"])):
-                    candles.append({
-                        "open": raw_data["open"][i],
-                        "high": raw_data["high"][i],
-                        "low": raw_data["low"][i],
-                        "close": raw_data["close"][i],
-                        "volume": raw_data["volume"][i],
-                        "timestamp": datetime.fromtimestamp(raw_data["timestamp"][i])
-                    })
-            except Exception as e:
-                print(f"❌ Error while parsing candle for {security_id}: {e}")
-                return []
-            
-            if not candles:
-                print(f"⚠️ No valid parsed candles for {security_id}")
-                return []
-
-            # ✅ Candle Timestamp Freshness Check
-            last_candle_time = candles[-1]["timestamp"]
-            if (datetime.now() - last_candle_time) > timedelta(minutes=5):
-                print(f"⚠️ Stale data for {security_id}, ignoring cache")
-                del cache[cache_key]  # Force refresh
-                return fetch_candles(security_id, count, cache, exchange_segment, instrument_type)
-
-            cache[cache_key] = candles
-            return candles     
-                
-            cache[cache_key] = candles
-            return candles
-
-        except Exception as e:
-            if "Rate_Limit" in str(e) and attempt < 2:
-                wait_time = (attempt + 1) * 10
-                print(f"⚠️ Rate limit hit for {security_id}, retrying in {wait_time} seconds...")
-                time.sleep(wait_time)
-                continue
-            print(f"❌ Error fetching candles for {security_id}: {e}")
-            return []
-    return []
-
-def detect_bullish_pattern(candles, symbol=None):
+# ========== Pattern Detection ==========
+def detect_bullish_pattern(candles: list, symbol: str = None) -> tuple:
     """Enhanced pattern detection with multi-pattern scoring and priority system"""
-    skip_chart = False  # ✅ Initialize at the beginning to avoid scope issues
-    if not candles or len(candles) < 5:
-        return False, None, 0.0
+    if not candles:
+        raise ValueError("❌ Empty candles passed to pattern detection")
+    if len(candles) < 5:
+        raise ValueError(
+            f"❌ Insufficient candles ({len(candles)}) for pattern detection on {symbol}"
+        )
 
+    # Get 15-minute trend for chart patterns
+    chart_pattern_trend = get_15min_trend(candles, min_candles=5) if len(candles) >= 75 else None
     
     df = pd.DataFrame(candles)
     o, h, l, c, v = df["open"], df["high"], df["low"], df["close"], df["volume"]
     detected_patterns = []  # Store all detected patterns with scores
     
     # Volume confirmation helper
-    def volume_confirmed(index=-1, multiplier=1.2, lookback=5, pattern_type=None):
+    def volume_confirmed(index: int = -1, multiplier: float = 1.2, lookback: int = 5, pattern_type: str = None) -> tuple:
         if len(df) < lookback + 1:
             return True, 1.0  # Not enough data
         
@@ -282,6 +853,13 @@ def detect_bullish_pattern(candles, symbol=None):
             lookback = 3  # Shorter period for breakouts
         
         vol_avg = v.iloc[-lookback-1:-1].mean()
+        
+        # Fail loudly on invalid volume
+        if vol_avg <= 0:
+            raise ValueError(
+                f"❌ Invalid volume average ({vol_avg}) for {symbol} in {pattern_type} pattern"
+            )
+        
         vol_ratio = v.iloc[index] / vol_avg
         
         # For reversal patterns, allow slightly lower volume
@@ -290,33 +868,47 @@ def detect_bullish_pattern(candles, symbol=None):
             
         return vol_ratio >= multiplier, vol_ratio
     
-    # Body/Range scoring
-    def candle_score(index):
+    # Body/Range scoring with wick rejection
+    def candle_score(index: int, pattern_type: str = None) -> float:
         body = abs(c.iloc[index] - o.iloc[index])
         candle_range = h.iloc[index] - l.iloc[index]
+        if candle_range == 0:
+            return 0.0  # Invalid candle
+        
         body_ratio = body / candle_range if candle_range > 0 else 0
         upper_wick = h.iloc[index] - max(c.iloc[index], o.iloc[index])
         lower_wick = min(c.iloc[index], o.iloc[index]) - l.iloc[index]
-        return min(1.0, body_ratio * 0.7 + (1 - (upper_wick + lower_wick)/candle_range) * 0.3)
+        upper_ratio = upper_wick / candle_range
+        lower_ratio = lower_wick / candle_range
+        
+        # Pattern-specific wick rejection
+        if pattern_type in ["Breakout Marubozu", "Volume Breakout Candle"]:
+            if upper_ratio > 0.15 or lower_ratio > 0.1:  # Max 15% upper wick, 10% lower wick
+                return 0.0
+        
+        # Reversal patterns allow longer lower wicks
+        elif pattern_type in REVERSAL_PATTERNS:
+            if upper_ratio > 0.3:  # Max 30% upper wick
+                return 0.0
+        
+        return min(1.0, body_ratio * 0.7 + (1 - (upper_ratio + lower_ratio)) * 0.3)
 
     # =====================
     # CANDLESTICK PATTERN DETECTION (FIRST PRIORITY)
     # =====================
-    
-    # Initialize Morning Star detection flag
     morning_star_detected = False
-    
-    # 1. Morning Star with index validation and downtrend check
     if len(c) >= 4:  # Need 4 candles to check trend
         # Validate candle indexes exist
-        if len(c) < 4 or any(pd.isna([o.iloc[-4], c.iloc[-4], o.iloc[-3], c.iloc[-3]])):
+        if len(c) < 4 or pd.isna([o.iloc[-4], c.iloc[-4], o.iloc[-3], c.iloc[-3]]).any():
             log_pattern_detection(symbol, "Morning Star", False, "Insufficient data")
         else:
             body1 = o.iloc[-3] - c.iloc[-3]
             body2 = abs(c.iloc[-2] - o.iloc[-2])
-            # Add downtrend validation (price should be declining before pattern)
-            downtrend = c.iloc[-4] > c.iloc[-3]  # Previous trend was down
-    
+            # Strong downtrend: at least 2 of last 3 candles down
+            downtrend = False
+            if len(c) >= 6:
+                down_count = sum([c.iloc[-6] > c.iloc[-5], c.iloc[-5] > c.iloc[-4], c.iloc[-4] > c.iloc[-3]])
+                downtrend = down_count >= 2        
             if (downtrend and
                 c.iloc[-3] < o.iloc[-3] and
                 o.iloc[-2] < c.iloc[-3] and
@@ -325,7 +917,7 @@ def detect_bullish_pattern(candles, symbol=None):
                 o.iloc[-1] > c.iloc[-2] and
                 c.iloc[-1] > (o.iloc[-3] + c.iloc[-3]) / 2):
     
-                # Volume confirmation (only if all prior conditions are met)
+                # Volume confirmation
                 vol_ok, vol_ratio = volume_confirmed(multiplier=1.2, pattern_type="Morning Star")
     
                 if vol_ok:
@@ -333,7 +925,7 @@ def detect_bullish_pattern(candles, symbol=None):
                     detected_patterns.append(("Morning Star", pattern_score))
                     print(f"🌟 Volume Confirmed Morning Star detected (Vol Ratio: {vol_ratio:.2f}x)")
                     log_pattern_detection(symbol, "Morning Star", True)
-                    morning_star_detected = True  # Set detection flag
+                    morning_star_detected = True
                 else:
                     log_pattern_detection(symbol, "Morning Star", False, f"Volume insufficient ({vol_ratio:.2f}x < 1.2x)")
             else:
@@ -341,20 +933,38 @@ def detect_bullish_pattern(candles, symbol=None):
     
     # Skip other patterns if Morning Star detected
     if not morning_star_detected:
-        # 2. Bullish Engulfing
-        if len(c) >= 2:
-            if (c.iloc[-2] < o.iloc[-2] and 
+        # Conflict check: Skip if bearish candle before pattern
+        if len(c) >= 2 and c.iloc[-2] < o.iloc[-2] and (o.iloc[-2] - c.iloc[-2]) > (h.iloc[-2] - l.iloc[-2]) * 0.6:
+            print(f"⚠️ Bearish candle before pattern - skipping {symbol}")
+            return False, None, 0.0
+            
+        # Bullish Engulfing with reversal check
+        if len(c) >= 3:
+            engulfing_condition = (
+                c.iloc[-2] < o.iloc[-2] and 
                 c.iloc[-1] > o.iloc[-1] and
                 c.iloc[-1] > o.iloc[-2] and 
-                o.iloc[-1] < c.iloc[-2]):
+                o.iloc[-1] < c.iloc[-2]
+            )
+            
+            # Check for immediate bearish reversal in next candle
+            next_candle_bearish = (
+                len(c) >= 3 and 
+                o.iloc[-3] > c.iloc[-3] and  # Previous candle was bearish
+                c.iloc[-1] < o.iloc[-1]      # Current candle is bearish
+            )
+            
+            if engulfing_condition and not next_candle_bearish:
                 vol_ok, vol_ratio = volume_confirmed()
                 if vol_ok:
-                    pattern_score = candle_score(-1) * 0.85
+                    pattern_score = candle_score(-1, "Bullish Engulfing") * 0.85
                     detected_patterns.append(("Bullish Engulfing", pattern_score))
                     log_pattern_detection(symbol, "Bullish Engulfing", True)
+            elif engulfing_condition:
+                log_pattern_detection(symbol, "Bullish Engulfing", False, "Immediate bearish reversal")
     
-        # 3. Breakout Marubozu
-        if len(c) >= 2:  # Now requires at least 2 candles
+        # Breakout Marubozu
+        if len(c) >= 2:
             body = abs(c.iloc[-1] - o.iloc[-1])
             candle_range = h.iloc[-1] - l.iloc[-1]
             body_ratio = body / candle_range if candle_range > 0 else 0
@@ -371,7 +981,7 @@ def detect_bullish_pattern(candles, symbol=None):
                     detected_patterns.append(("Breakout Marubozu", pattern_score))
                     log_pattern_detection(symbol, "Breakout Marubozu", True)
     
-        # 4. Bullish Harami
+        # Bullish Harami
         if len(c) >= 2:
             if (c.iloc[-2] < o.iloc[-2] and 
                 c.iloc[-1] > o.iloc[-1] and
@@ -383,7 +993,7 @@ def detect_bullish_pattern(candles, symbol=None):
                     detected_patterns.append(("Bullish Harami", pattern_score))
                     log_pattern_detection(symbol, "Bullish Harami", True)
     
-        # 5. Three White Soldiers
+        # Three White Soldiers
         if len(c) >= 3:
             if (c.iloc[-3] > o.iloc[-3] and 
                 c.iloc[-2] > o.iloc[-2] and 
@@ -396,7 +1006,7 @@ def detect_bullish_pattern(candles, symbol=None):
                     detected_patterns.append(("Three White Soldiers", pattern_score))
                     log_pattern_detection(symbol, "Three White Soldiers", True)
     
-        # 6. Piercing Line
+        # Piercing Line
         if len(c) >= 2:
             if (c.iloc[-2] < o.iloc[-2] and 
                 c.iloc[-1] > o.iloc[-1] and
@@ -408,7 +1018,7 @@ def detect_bullish_pattern(candles, symbol=None):
                     detected_patterns.append(("Piercing Line", pattern_score))
                     log_pattern_detection(symbol, "Piercing Line", True)
     
-        # 7. Inverted Hammer
+        # Inverted Hammer
         if len(c) >= 1:
             body = abs(c.iloc[-1] - o.iloc[-1])
             uw = h.iloc[-1] - max(c.iloc[-1], o.iloc[-1])
@@ -420,21 +1030,30 @@ def detect_bullish_pattern(candles, symbol=None):
                     detected_patterns.append(("Inverted Hammer", pattern_score))
                     log_pattern_detection(symbol, "Inverted Hammer", True)
     
-        # 8. Volume Breakout Candle (dual-mode detection)
-        # Mode 1: Single-candle breakout
+        # Volume Breakout Candle (dual-mode detection) with wick validation
         if len(c) >= 10:
             current_vol = v.iloc[-1]
             avg_vol = v.iloc[-10:-1].mean()
             if current_vol > 2.5 * avg_vol and c.iloc[-1] > o.iloc[-1]:
                 # Check if price breaks recent high
                 recent_high = max(h.iloc[-10:-1])
-                if c.iloc[-1] > recent_high:  # Close above resistance
+                # Wick validation: ensure upper wick is not too large
+                candle_range = h.iloc[-1] - l.iloc[-1]
+                upper_wick = h.iloc[-1] - max(c.iloc[-1], o.iloc[-1])
+                upper_wick_ratio = upper_wick / candle_range if candle_range > 0 else 0
+                
+                if (c.iloc[-1] > recent_high and  # Close above resistance
+                    upper_wick_ratio <= 0.25):    # Max 25% upper wick allowed
                     pattern_score = min(1.0, 0.8 + (current_vol / avg_vol) / 10)
                     detected_patterns.append(("Volume Breakout Candle", pattern_score))
                     log_pattern_detection(symbol, "Volume Breakout Candle", True)
+                else:
+                    reason = "Failed wick validation" if upper_wick_ratio > 0.25 else "Resistance not cleared"
+                    log_pattern_detection(symbol, "Volume Breakout Candle", False, reason)
         
-        # Move volume breakout pattern to chart patterns only
-        if not skip_chart and len(c) >= 20:  # Increased lookback for better resistance
+        # Volume Breakout Pattern with retest, fade rejection and volume confirmation
+        skip_chart = False
+        if not skip_chart and len(c) >= 20:
             # Identify true resistance (swing high + consolidation zone)
             resistance_period = 20
             resistance_candidates = h.iloc[-resistance_period:-5]
@@ -445,13 +1064,36 @@ def detect_bullish_pattern(candles, symbol=None):
                 
                 current_close = c.iloc[-1]
                 current_vol = v.iloc[-1]
-                avg_vol = v.iloc[-15:-1].mean()
+                avg_vol = v.iloc[-15:-1].mean() if len(v) >= 15 else 0
                 
                 # Breakout confirmation with stronger requirements
-                if (current_close > resistance_level * 1.005 and  # 0.5% clearance
+                breakout_condition = (
+                    current_close > resistance_level * 1.005 and  # 0.5% clearance
+                    avg_vol > 0 and  # Ensure we have valid volume data
                     current_vol > max(2.5 * avg_vol, 1.5 * v.iloc[-2]) and  # Strong volume surge
-                    resistance_tests >= 2):  # At least 2 prior tests
-                    
+                    resistance_tests >= 2  # At least 2 prior tests
+                )
+                
+                # Retest validation (check previous candle)
+                retest_condition = False
+                if len(c) >= 2:
+                    prev_close = c.iloc[-2]
+                    prev_low = l.iloc[-2]
+                    # Valid retest: touched resistance then bounced
+                    retest_condition = (
+                        prev_low <= resistance_level * 1.005 and
+                        prev_close > resistance_level * 0.995 and
+                        current_close > prev_close  # Confirming upward momentum
+                    )
+                
+                # Reject breakout fades (current candle shouldn't close near low)
+                candle_range = h.iloc[-1] - l.iloc[-1]
+                no_fade_condition = candle_range > 0 and (current_close - l.iloc[-1]) / candle_range > 0.33
+                
+                # Volume breakout confirmation
+                volume_breakout = current_vol > 1.8 * v.iloc[-2]  # Volume must be 80% higher than previous
+                
+                if breakout_condition and (retest_condition or no_fade_condition) and volume_breakout:
                     pattern_score = min(1.0, 0.9 + (current_vol / avg_vol) / 10)  # Stronger weighting
                     
                     # Remove Volume Breakout Candle if exists
@@ -460,10 +1102,19 @@ def detect_bullish_pattern(candles, symbol=None):
                     detected_patterns.append(("Volume Breakout Pattern", pattern_score))
                     log_pattern_detection(symbol, "Volume Breakout Pattern", True)
                 else:
-                    reason = f"Resistance: {resistance_level:.2f}, Vol: {current_vol/avg_vol:.1f}x, Tests: {resistance_tests}"
-                    log_pattern_detection(symbol, "Volume Breakout Pattern", False, reason)
+                    reasons = []
+                    if not breakout_condition: 
+                        reasons.append(f"Resistance: {resistance_level:.2f}, Vol: {current_vol/avg_vol:.1f}x, Tests: {resistance_tests}")
+                    if not retest_condition and len(c) >= 2: 
+                        reasons.append("No valid retest")
+                    if not no_fade_condition: 
+                        reasons.append("Breakout fade detected")
+                    if not volume_breakout:
+                        reasons.append(f"Volume insufficient ({current_vol/v.iloc[-2]:.1f}x < 1.8x)")
+                        
+                    log_pattern_detection(symbol, "Volume Breakout Pattern", False, " | ".join(reasons))
     
-        # 9. Gap-Down Reversal (with next candle confirmation)
+        # Gap-Down Reversal (with next candle confirmation)
         if len(c) >= 3:
             # Check gap down between candle -2 and candle -1
             gap_down = o.iloc[-2] < c.iloc[-3]
@@ -484,7 +1135,7 @@ def detect_bullish_pattern(candles, symbol=None):
                     detected_patterns.append(("Gap-Down Reversal", pattern_score))
                     log_pattern_detection(symbol, "Gap-Down Reversal", True)
     
-        # 10. Bullish Kicker
+        # Bullish Kicker
         if len(c) >= 2:
             if (c.iloc[-2] < o.iloc[-2] and
                 o.iloc[-1] > c.iloc[-2] and
@@ -495,7 +1146,7 @@ def detect_bullish_pattern(candles, symbol=None):
                     detected_patterns.append(("Bullish Kicker", pattern_score))
                     log_pattern_detection(symbol, "Bullish Kicker", True)
         
-        # 11. Bullish Hammer
+        # Bullish Hammer
         if len(c) >= 1:
             body = abs(c.iloc[-1] - o.iloc[-1])
             lw = min(c.iloc[-1], o.iloc[-1]) - l.iloc[-1]
@@ -513,13 +1164,13 @@ def detect_bullish_pattern(candles, symbol=None):
     skip_chart = False
     strong_candle_found = False
     if SKIP_CHART_IF_CANDLE_FOUND and detected_patterns:
-        # Check if any candlestick pattern meets strength threshold
+        # Only skip if pattern is NOT breakout type
         for pattern_name, _ in detected_patterns:
             weight = PATTERN_WEIGHTS.get(pattern_name, {"weight": 1.0})["weight"]
-            if weight >= CANDLE_STRONG_THRESHOLD:
+            if weight >= CANDLE_STRONG_THRESHOLD and pattern_name not in BREAKOUT_PATTERNS:
                 skip_chart = True
                 strong_candle_found = True
-                print(f"⏩ Strong candle pattern found ({pattern_name}), skipping chart patterns")
+                print(f"⏩ Strong non-breakout pattern found ({pattern_name}), skipping chart patterns")
                 break
 
     # =====================
@@ -528,11 +1179,10 @@ def detect_bullish_pattern(candles, symbol=None):
     if not skip_chart:
         # 1. Cup and Handle pattern
         if not skip_chart and len(c) >= 40:
-            # Dynamic index calculation for variable data length
-            left_rim_idx = max(-len(c), -40)  # Use available data
+            left_rim_idx = max(-len(c), -40)
             left_rim_high = h.iloc[left_rim_idx]
             
-            # Find cup bottom (lowest point in the cup) - FIXED: Use lows (l) instead of highs (h)
+            # Find cup bottom
             cup_slice = l.iloc[-35:-15]
             if not cup_slice.empty:
                 cup_bottom_idx = cup_slice.idxmin()
@@ -541,7 +1191,7 @@ def detect_bullish_pattern(candles, symbol=None):
                 cup_bottom = 0
             cup_bottom = l.iloc[cup_bottom_idx]
             
-            # Find right rim (high point after cup)
+            # Find right rim
             right_rim_high = h.iloc[-15]
             
             # Handle formation (small downward drift)
@@ -553,42 +1203,64 @@ def detect_bullish_pattern(candles, symbol=None):
                 cup_bottom < left_rim_high * 0.85 and
                 max(handle_highs) < right_rim_high and
                 min(handle_lows) > cup_bottom and
-                c.iloc[-1] > right_rim_high):  # Close above resistance
+                c.iloc[-1] > right_rim_high and  # Close above resistance
+                chart_pattern_trend is not False):  # Trend confirmation
                 
-                vol_ok, vol_ratio = volume_confirmed(index=-1, multiplier=1.8)
+                vol_ok, vol_ratio = volume_confirmed(index=-1, multiplier=1.8, pattern_type="Cup and Handle")
+    
                 if vol_ok:
                     pattern_score = min(1.0, 0.8 + (vol_ratio / 5.0))
                     detected_patterns.append(("Cup and Handle", pattern_score))
                     log_pattern_detection(symbol, "Cup and Handle", True)
                 else:
-                    log_pattern_d极ection(symbol, "Cup and Handle", False, f"Volume insufficient ({vol_ratio:.2f} < 1.8x)")
+                    log_pattern_detection(symbol, "Cup and Handle", False, f"Volume insufficient ({vol_ratio:.2f} < 1.8x)")
         
         # 2. Double/Triple Bottom
         if len(c) >= 20:
             # Find significant lows
             lows = l.rolling(5).min().dropna()
             min_idxs = lows.nsmallest(3).index.tolist()
-            min_idxs.sort()
-            
+            min_idxs.sort()            
             if len(min_idxs) >= 2:
-                # Check if lows are approximately equal
+                if min_idxs[0] >= min_idxs[1]:
+                    reason = f"Invalid min_idx range: {min_idxs[0]} to {min_idxs[1]}"
+                    log_pattern_detection(symbol, "Double/Triple Bottom", False, reason)
+                    return False, None, 0.0
+                
+                if min_idxs[1] - min_idxs[0] <= 1:
+                    reason = "Not enough candles between lows to form resistance"
+                    log_pattern_detection(symbol, "Double/Triple Bottom", False, reason)
+                    return False, None, 0.0
+                
                 low1 = lows.iloc[min_idxs[0]]
                 low2 = lows.iloc[min_idxs[1]]
-                low_diff = abs(low1 - low2) / min(low1, low2)
                 
-                # Check breakout above resistance (neckline)
-                resistance = h.iloc[min_idxs[0]:min_idxs[1]].max()
-                if (low_diff < 0.02 and 
-                    c.iloc[-1] > resistance):  # Close above resistance
+                if min(low1, low2) <= 0:
+                    reason = "Invalid low price (<=0) detected"
+                    log_pattern_detection(symbol, "Double/Triple Bottom", False, reason)
+                    return False, None, 0.0
                     
-                    vol_ok, vol_ratio = volume_confirmed(multiplier=1.5)
+                low_diff = abs(low1 - low2) / min(low1, low2)
+        
+                try:
+                    resistance_slice = h.iloc[min_idxs[0]:min_idxs[1]]
+                    if resistance_slice.empty:
+                        raise ValueError(f"Empty resistance slice for {symbol} between indexes {min_idxs[0]} and {min_idxs[1]}")
+                    resistance = resistance_slice.max()
+                except (IndexError, ValueError) as e:
+                    reason = f"Invalid resistance data: {str(e)}"
+                    log_pattern_detection(symbol, "Double/Triple Bottom", False, reason)
+                    return False, None, 0.0
+            
+                if (low_diff < 0.02 and c.iloc[-1] > resistance):  # Close above resistance 
+                    vol_ok, vol_ratio = volume_confirmed(multiplier=1.5, pattern_type="Double/Triple Bottom")
                     pattern_name = "Double Bottom" if len(min_idxs) == 2 else "Triple Bottom"
                     if vol_ok:
                         pattern_score = min(1.0, 0.7 + (c.iloc[-1] - resistance) / resistance * 5)
                         detected_patterns.append((pattern_name, pattern_score))
                         log_pattern_detection(symbol, pattern_name, True)
                     else:
-                        log_pattern_detection(symbol, pattern_name, False, f"Volume insufficient ({vol_ratio:.2f} < 1.5x)")
+                        log_pattern_detection(symbol, pattern_name, False, f"Volume insufficient ({vol_ratio:.2f} < 1.5x)") 
         
         # 3. Ascending Triangle
         if len(c) >= 15:
@@ -604,9 +1276,10 @@ def detect_bullish_pattern(candles, symbol=None):
             if (resistance_range / resistance < 0.02 and
                 slope > 0 and
                 (low_max - low_min) / low_min > 0.03 and
-                c.iloc[-1] > resistance):  # Close above resistance
+                c.iloc[-1] > resistance and  # Close above resistance
+                chart_pattern_trend is not False):  # Trend confirmation
                 
-                vol_ok, vol_ratio = volume_confirmed(multiplier=1.4)
+                vol_ok, vol_ratio = volume_confirmed(multiplier=1.4, pattern_type="Ascending Triangle")
                 if vol_ok:
                     pattern_score = min(1.0, 0.75 + slope * 100)
                     detected_patterns.append(("Ascending Triangle", pattern_score))
@@ -635,7 +1308,7 @@ def detect_bullish_pattern(candles, symbol=None):
                 head_low < left_shoulder * 0.95 and
                 c.iloc[-1] > neckline):  # Close above neckline
                 
-                vol_ok, vol_ratio = volume_confirmed(multiplier=1.6)
+                vol_ok, vol_ratio = volume_confirmed(multiplier=1.6, pattern_type="Inverse Head and Shoulders")
                 if vol_ok:
                     pattern_score = min(1.0, 0.85 + (c.iloc[-1] - neckline) / neckline * 10)
                     detected_patterns.append(("Inverse Head and Shoulders", pattern_score))
@@ -650,8 +1323,14 @@ def detect_bullish_pattern(candles, symbol=None):
             
             # Consolidation range with breakout confirmation
             if range_pct < 0.03 and c.iloc[-1] > resistance:  # Close above resistance
-                # Volume breakout confirmation (1.5x average volume)
-                vol_ok, vol_ratio = volume_confirmed(multiplier=1.5)
+                # Volume vs prior resistance tests
+                resistance_tests = [v for i, candle in enumerate(candles[-20:]) 
+                                   if candle['high'] >= resistance_level * 0.995]
+                test_vol_avg = sum(resistance_tests) / len(resistance_tests) if resistance_tests else 0
+                
+                # Volume confirmation: current volume > 1.5x resistance test average
+                vol_ok = current_vol > test_vol_avg * 1.5 if test_vol_avg > 0 else False
+                vol_ratio = current_vol / test_vol_avg if test_vol_avg > 0 else 0
                 # Price confirmation (closing above resistance)
                 price_ok = c.iloc[-1] > resistance
                 
@@ -720,7 +1399,7 @@ def detect_bullish_pattern(candles, symbol=None):
             if high_slope < 0 and low_slope < 0 and abs(high_slope) > abs(low_slope):
                 # Breakout above upper trendline
                 if c.iloc[-1] > max(highs.iloc[:-1]):  # Close above resistance
-                    vol_ok, vol_ratio = volume_confirmed(multiplier=1.3)
+                    vol_ok, vol_ratio = volume_confirmed(multiplier=1.3, pattern_type="Bullish Wedge")
                     if vol_ok:
                         pattern_score = min(1.0, 0.75 + (abs(high_slope) * 100))
                         detected_patterns.append(("Bullish Wedge (Falling Wedge)", pattern_score))
@@ -749,7 +1428,7 @@ def detect_bullish_pattern(candles, symbol=None):
                         detected_patterns.append(("Rounded Consolidation (Roundboom)", pattern_score))
                         log_pattern_detection(symbol, "Rounded Consolidation (Roundboom)", True)
         
-        # 10. Bullish Flag (New pattern)
+        # 10. Bullish Flag
         if len(c) >= 15:
             # Flagpole: sharp price movement (at least 5% in 3-5 candles)
             flagpole_rise = 0
@@ -781,7 +1460,7 @@ def detect_bullish_pattern(candles, symbol=None):
                             detected_patterns.append(("Bullish Flag", pattern_score))
                             log_pattern_detection(symbol, "Bullish Flag", True)
         
-        # 11. Symmetrical Triangle (New pattern)
+        # 11. Symmetrical Triangle
         if len(c) >= 20:
             # Converging trendlines (at least 10 candles)
             triangle_highs = h.iloc[-15:-1]
@@ -819,10 +1498,10 @@ def detect_bullish_pattern(candles, symbol=None):
             normalized_weight = weight / max_weight
             composite_score = normalized_weight * score
             
-            # Boost candlestick patterns by 20%
-            if name in candle_patterns:
+            # Boost all strong patterns (weight > threshold)
+            if weight >= CANDLE_STRONG_THRESHOLD:
                 composite_score *= 1.20
-                print(f"🚀 Boosting {name} composite score by 20%")
+                print(f"🚀 Boosting strong pattern {name} by 20%")
             
             scored_patterns.append((name, score, composite_score))
         
@@ -833,129 +1512,29 @@ def detect_bullish_pattern(candles, symbol=None):
     
     return False, None, 0.0
 
-def compute_rsi_macd(closes):
-    delta = closes.diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(14).mean().bfill()
-    avg_loss = loss.rolling(14).mean().bfill().replace(0, 0.01)
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    ema12 = closes.ewm(span=12, adjust=False).mean()
-    ema26 = closes.ewm(span=26, adjust=False).mean()
-    macd = ema12 - ema26
-    signal = macd.ewm(span=9, adjust=False).mean()
-    histogram = macd - signal
-    macd_crossover = macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] <= signal.iloc[-2]
-    return rsi.iloc[-1], histogram.iloc[-1], macd_crossover
-
-def is_index_bullish(index_id):
-    """Check bullishness for any index (NIFTY/Sector)"""
-    candles = fetch_candles(
-        index_id, 
-        count=20,
-        exchange_segment="NSE_INDEX",
-        instrument_type="INDEX"
-    )
-    if not candles:
-        return False
-    closes = pd.Series([c["close"] for c in candles])
-    rsi, macd_hist, macd_cross = compute_rsi_macd(closes)
-    detected, _, _ = detect_bullish_pattern(candles)
-    return detected and rsi > 50 and macd_hist > 0 and macd_cross
-
-def check_breakout(candles, period=3):
-    """Confirm 15-min high breakout with closing confirmation"""
-    try:
-        if len(candles) < period + 1:
-            return False
-        current_close = candles[-1]['close']
-        prev_candles = candles[-period-1:-1]
-        if not prev_candles:
-            return False
-        prev_high = max(c['high'] for c in prev_candles)
-        return current_close > prev_high
-    except (IndexError, ValueError, KeyError):
-        return False
-
-def check_gap_up(security_id):
-    """Prevent entries after significant gap-ups with recent price check"""
-    try:
-        quote = dhan.get_quote(security_id)
-        if not quote:
-            return False
-            
-        prev_close = float(quote.get('previousClose', 0))
-        today_open = float(quote.get('open', 0))
-        current_price = float(quote.get('ltp', 0))
-        
-        if prev_close <= 0:
-            return False
-        
-        gap_up = (today_open - prev_close) / prev_close > 0.01
-        
-        # Additional check: if price has pulled back below opening
-        if gap_up and current_price < today_open * 0.99:  # Pulled back 1% from open
-            print(f"⚠️ Gap-up detected but price pulled back: {security_id}")
-            return False
-            
-        return gap_up
-    except:
-        return False
-
-def log_trade(symbol, security_id, action, price, qty, status, stop_pct=None, target_pct=None, stop_price=None, target_price=None, order_id="N/A", timestamp=None):
-    if timestamp is None:
-        timestamp = datetime.now()
-    timestamp_str = timestamp.strftime("%m/%d/%Y %H:%M:%S")
-    
-    # CSV row log
-    log_row = [
-        symbol,
-        timestamp_str,
-        security_id,
-        qty,
-        price,
-        0,  # momentum_5min placeholder
-        target_pct if target_pct is not None else "",
-        stop_pct if stop_pct is not None else "",
-        "",  # live_price
-        "",  # change_pct
-        "",  # last_checked
-        status,  # ✅ Correctly placed here
-        "",  # exit_price
-        order_id,
-        target_price if target_price is not None else "",
-        stop_price if stop_price is not None else ""
-    ]
-
-    # CSV logging
-    with open(PORTFOLIO_LOG, "a") as f:
-        f.write(",".join(map(str, log_row)) + "\n")
-
-    # DB logging
-    try:
-        insert_portfolio_log_to_db(
-            trade_date=timestamp,
-            symbol=symbol,
-            security_id=security_id,
-            quantity=qty,
-            buy_price=price,
-            stop_pct=float(stop_pct) if stop_pct is not None else None,
-            target_pct=float(target_pct) if target_pct is not None else None,
-            stop_price=stop_price,
-            target_price=target_price,
-            status=status,
-            order_id=order_id
-        )
-    except Exception as e:
-        print("❌ DB log failed (portfolio_log):", e)
-
-def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_size_map, capital):
+# ========== Order Management ==========
+def place_order(symbol: str, security_id: int, qty: int, price: float, pattern_name: str, 
+                candles: list, tick_size_map: dict, capital: float, breakout_level: float = None) -> None:
+    """Place buy order with optimized position sizing and risk management"""
     if price <= 0:
         print(f"⚠️ Invalid price for {symbol}: {price}")
         return
         
-    tick_size_value = tick_size_map.get(str(security_id), 0.05)
+    # Store breakout level if applicable
+    is_breakout_trade = pattern_name in BREAKOUT_PATTERNS and breakout_level is not None
+        
+    # Validate tick size exists
+    if str(security_id) not in tick_size_map:
+        # Fallback to price-based tick size
+        if price < 100:
+            tick_size_value = 0.05
+        elif price < 500:
+            tick_size_value = 0.10
+        else:
+            tick_size_value = 0.50
+        print(f"⚠️ Using fallback tick size {tick_size_value} for {security_id}")
+    else:
+        tick_size_value = tick_size_map[str(security_id)]
     tick_size_dec = Decimal(str(tick_size_value))
     
     limit_price = Decimal(str(price)) * Decimal("1.002")
@@ -965,8 +1544,7 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
     # Calculate ADR for realistic TP/SL capping
     adr = calculate_adr(security_id)
     
-    # ========== SL/TP CALCULATION (MOVED UP) ==========
-    # Base parameters
+    # SL/TP calculation
     base_sl_pct = 0.005
     base_tp_pct = 0.01
     
@@ -980,20 +1558,30 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
     
     # Volatility adjustment using ATR
     atr = calculate_atr(candles)
-    entry_price = Decimal(str(limit_price))  # Use limit_price instead of price
+    entry_price = Decimal(str(limit_price))
     atr_multiplier = float(vol_scale) * (float(atr) / float(entry_price)) if atr > 0 else 1.0
     
     # Apply volatility scaling
     tp_pct = max(base_tp_pct, atr_multiplier)
     sl_pct = min(base_sl_pct, atr_multiplier * 0.7)
     
-    # Time decay adjustment
-    market_close = dtime(15, 30)
+    # Enforce minimum SL of 1.5x ATR
+    min_sl_pct = 1.5 * (atr / float(entry_price))
+    if sl_pct < min_sl_pct:
+        sl_pct = min_sl_pct
+        print(f"🔧 Adjusted SL to minimum 1.5x ATR: {sl_pct*100:.2f}%")
+    
+    # Tiered time decay adjustment
     now_time = datetime.now().time()
-    remaining_seconds = (datetime.combine(datetime.today(), market_close) - 
-                        datetime.combine(datetime.today(), now_time)).total_seconds()
-    remaining_hours = max(0.1, remaining_seconds / 3600)
-    time_decay = max(0.5, remaining_hours / 6.5)
+    if now_time < dtime(13, 0):     # Before 1 PM
+        time_decay = 1.0
+    elif now_time < dtime(14, 30):  # 1 PM - 2:30 PM
+        time_decay = 0.9
+    else:                           # After 2:30 PM
+        minutes_past = (now_time.hour - 14) * 60 + (now_time.minute - 30)
+        decay_factor = min(1.0, minutes_past / 60)  # 60 minutes until close
+        time_decay = max(0.5, 0.9 - (0.4 * decay_factor))
+    
     tp_pct *= time_decay
     
     # Ensure minimum 1:2 risk-reward ratio
@@ -1018,15 +1606,36 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
         target += float(tick_size_value)
         print(f"⚠️ Adjusted TP to avoid overlap with SL: ₹{target:.2f}")
     
+    # Calculate remaining market hours (9:30-15:30)
+    now = datetime.now().time()
+    market_open = dtime(9, 30)
+    market_close = dtime(15, 30)
+    if now < market_open:
+        remaining_hours = 6.0
+    elif now >= market_close:
+        remaining_hours = 0.0
+    else:
+        remaining_seconds = (market_close.hour * 3600 + market_close.minute * 60) - \
+                        (now.hour * 3600 + now.minute * 60)
+        remaining_hours = max(0, remaining_seconds / 3600)
+    
     # Time feasibility check
     required_move = (target - limit_price) / limit_price
-    max_allowed_move = 0.015 * (remaining_hours / 1.5)
-    if required_move > max_allowed_move:
+    max_allowed_move = 0.015 * (remaining_hours / 1.5) if remaining_hours > 0 else 0
+    if required_move > max_allowed_move > 0:
         target = limit_price * (1 + max_allowed_move)
         target = float((Decimal(str(target)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
         send_telegram(f"⚠️ Adjusted {symbol} target to ₹{target:.2f} for time constraints")
-    # ========== END SL/TP CALCULATION ==========
     
+    # For breakout patterns: Ensure SL is below breakout level
+    if is_breakout_trade:
+        # Dynamic buffer based on volatility (ATR)
+        buffer = max(0.005, min(0.02, atr / price * 2))  # 0.5%-2% range
+        breakout_stop = breakout_level * (1 - buffer)
+        if stop_loss < breakout_stop:
+            stop_loss = breakout_stop
+            print(f"🔧 Adjusted SL to breakout level (₹{stop_loss:.2f}) for {symbol}")
+
     order = {
         "security_id": str(security_id),
         "exchange_segment": "NSE_EQ",
@@ -1069,67 +1678,7 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
         
         # Enhanced Stop Loss and Target via Forever Order
         try:
-            # Base parameters
-            base_sl_pct = 0.005
-            base_tp_pct = 0.01
-            
-            # Pattern-specific adjustments
-            pattern_conf = PATTERN_WEIGHTS.get(pattern_name, {"weight": 1.0, "vol_scale": 1.0})
-            conf_weight = pattern_conf["weight"]
-            vol_scale = pattern_conf["vol_scale"]
-                
-            base_tp_pct = 0.01 * conf_weight
-            base_sl_pct = 0.005 * (2 - conf_weight/2)  # Inverse to weight
-                
-            # Volatility adjustment using ATR
-            atr = calculate_atr(candles)
-            entry_price = Decimal(str(price))
-            atr_multiplier = float(vol_scale) * (float(atr) / float(entry_price)) if atr > 0 else 1.0
-            
-            # Apply volatility scaling
-            tp_pct = max(base_tp_pct, atr_multiplier)
-            sl_pct = min(base_sl_pct, atr_multiplier * 0.7)
-            
-            # Time decay adjustment for late entries
-            market_close = dtime(15, 30)
-            now_time = datetime.now().time()
-            remaining_seconds = (datetime.combine(datetime.today(), market_close) - 
-                                datetime.combine(datetime.today(), now_time)).total_seconds()
-            remaining_hours = max(0.1, remaining_seconds / 3600)
-            time_decay = max(0.5, remaining_hours / 6.5)  # 6.5 trading hours
-            tp_pct *= time_decay
-            
-            # Ensure minimum 1:2 risk-reward ratio
-            if tp_pct / sl_pct < 2:
-                tp_pct = sl_pct * 2.2  # Add small buffer
-                
-            # Calculate final SL and TP
-            stop_loss = float(entry_price * (Decimal(1) - Decimal(sl_pct)))
-            target = float(entry_price * (Decimal(1) + Decimal(tp_pct)))
-            
-            # Apply ADR capping
-            max_move = adr * 0.3  # Allow up to 30% of ADR
-            target = min(target, price + max_move)
-            stop_loss = max(stop_loss, price - max_move * 0.7)
-            
-            # Round both to tick size
-            stop_loss = float((Decimal(str(stop_loss)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
-            target = float((Decimal(str(target)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
-            
-            # ✅ Fix: Ensure TP ≠ SL to prevent invalid monitoring condition
-            if abs(target - stop_loss) < float(tick_size_value):
-                target += float(tick_size_value)
-                print(f"⚠️ Adjusted TP to avoid overlap with SL: ₹{target:.2f}")
-                       
-            # Time feasibility check - don't set unrealistic targets
-            required_move = (target - price) / price
-            max_allowed_move = 0.015 * (remaining_hours / 1.5)  # Max 1.5% per hour
-            if required_move > max_allowed_move:
-                target = price * (1 + max_allowed_move)
-                target = float((Decimal(str(target)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
-                send_telegram(f"⚠️ Adjusted {symbol} target to ₹{target:.2f} for time constraints")
-
-            # Extended confirmation for strong patterns
+            # Pattern confirmation for strong patterns
             strong_patterns = ["Morning Star", "Bullish Engulfing", "Bullish Kicker", "Breakout Marubozu"]
             if pattern_name in strong_patterns:
                 # Add confirmation check
@@ -1162,16 +1711,25 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
                         # Convert to Decimal for safe arithmetic
                         tp_pct_dec = Decimal(str(tp_pct)) * Decimal(str(boost))
                         target = float(entry_price * (Decimal(1) + tp_pct_dec))
+                        
+                        # Recalculate stop loss to maintain risk-reward ratio
+                        risk = float(entry_price - Decimal(str(stop_loss)))
+                        reward = float(Decimal(str(target)) - entry_price)
+                        if reward / risk < 2.0:  # Maintain min 1:2 risk-reward
+                            sl_pct = (reward * 0.45) / float(entry_price)  # 45% of reward as risk
+                            stop_loss = float(entry_price * (Decimal(1) - Decimal(sl_pct)))
+                            stop_loss = float((Decimal(str(stop_loss)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
+                            print(f"🔁 Adjusted SL to maintain risk-reward: ₹{stop_loss:.2f}")
+                        
                         target = float((Decimal(str(target)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
-                        print(f"🌟 {pattern_name} confirmation - Increased target to ₹{target:.2f}")
+                        print(f"🌟 {pattern_name} confirmation - New target: ₹{target:.2f}, New SL: ₹{stop_loss:.2f}")
                     else:
                         print(f"⚠️ {pattern_name} not confirmed by next candle. Proceeding with original target.")
                 else:
                     print(f"⚠️ Could not fetch next candle for {pattern_name} confirmation. Proceeding.")
-
-            # Small delay to avoid overlap
+        
+            # Place forever order
             time.sleep(1.5)
-
             response = dhan.place_forever(
                 security_id=str(security_id),
                 exchange_segment="NSE_EQ",
@@ -1182,66 +1740,185 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
                 trigger_Price=stop_loss,
                 order_type="SINGLE"
             )
-            
+        
             if response.get('status') == 'success':
                 print(f"🎯 SL/TP set for {symbol}: Target ₹{target:.2f}, Stop ₹{stop_loss:.2f}")
                 send_telegram(
                     f"🎯 {symbol} | {pattern_name}\n"
                     f"ENTRY: ₹{limit_price:.2f} | QTY: {qty}\n"
-                    f"SL: ₹{stop_loss:.2f} ({sl_pct*100:.1f}%)\n"
-                    f"TARGET: ₹{target:.2f} ({tp_pct*100:.1f}%)"
+                    f"SL: ₹{stop_loss:.2f}\n"
+                    f"TARGET: ₹{target:.2f}"
                 )
             else:
                 print(f"⚠️ SL/TP failed for {symbol}: {response}")
-                send_telegram(f"⚠️ SL/TP setup failed for {symbol}: {response}")
-            
+                send_telegram(f"⚠️ SL/TP setup failed for {symbol}. Retrying with lower TP...")
 
+                # Retry with reduced TP
+                target = float((Decimal(str(limit_price * 1.012)) / tick_size_dec).quantize(0, rounding=ROUND_HALF_UP) * tick_size_dec)
+                print(f"🔁 Retrying Forever Order with lower TP: ₹{target:.2f}")
+                response_retry = dhan.place_forever(
+                    security_id=str(security_id),
+                    exchange_segment="NSE_EQ",
+                    transaction_type="SELL",
+                    product_type="CNC",
+                    quantity=qty,
+                    price=target,
+                    trigger_Price=stop_loss,
+                    order_type="SINGLE"
+                )
+
+                if response_retry.get('status') == 'success':
+                    print(f"✅ Retry success: SL/TP set for {symbol} at lower TP ₹{target:.2f}")
+                    send_telegram(
+                        f"✅ RETRY: {symbol} SL/TP set\n"
+                        f"ENTRY: ₹{limit_price:.2f} | SL: ₹{stop_loss:.2f} | TP: ₹{target:.2f}"
+                    )
+                else:
+                    print(f"❌ Retry also failed for SL/TP: {response_retry}")
+                    send_telegram(f"❌ Retry failed: Could not set SL/TP for {symbol}")
+            
         except Exception as e:
             print("⚠️ Failed to place SL/TP:", e)
             send_telegram(f"⚠️ SL/TP setup failed for {symbol}: {e}")
     except Exception as e:
         print("❌ Order Failed:", e)
         send_telegram(f"❌ Order Failed for {symbol}: {e}")
+        
+def monitor_breakout(security_id: int, breakout_level: float, symbol: str, qty: int) -> bool:
+    """Monitor breakout trades for 3 candles after entry"""
+    print(f"🔍 Starting breakout monitor for {symbol} (Level: ₹{breakout_level:.2f})")
+    for i in range(3):  # Check next 3 candles
+        time.sleep(60)  # Wait for next candle
+        
+        # Fetch latest candle with API rate limit compliance
+        candles = fetch_candles(security_id, count=1)
+        time.sleep(1)  # Rate limit protection
+        
+        if not candles:
+            print(f"⚠️ Could not fetch candle for {symbol}, attempt {i+1}/3")
+            continue
+            
+        close_price = candles[-1]['close']
+        
+        # Check if closed below breakout level
+        if close_price < breakout_level:
+            print(f"🔴 Breakout failed for {symbol}! Closing below breakout level (₹{close_price:.2f} < ₹{breakout_level:.2f})")
+            try:
+                # Place market sell order
+                dhan.place_order(
+                    security_id=str(security_id),
+                    exchange_segment="NSE_EQ",
+                    transaction_type="SELL",
+                    order_type="MARKET",
+                    product_type="CNC",
+                    quantity=qty
+                )
+                send_telegram(f"🚨 BREAKOUT FAILURE: Sold {symbol} @ ₹{close_price:.2f} (Below breakout: ₹{breakout_level:.2f})")
+                return True  # Exited position
+            except Exception as e:
+                print(f"❌ Failed to exit {symbol}: {e}")
+                send_telegram(f"❌ BREAKOUT FAILURE EXIT ERROR: {symbol} - {str(e)}")
+    
+    print(f"✅ Breakout confirmed for {symbol}, stopping monitor")
+    return False  # No exit triggered
 
-def main():
+def is_vix_ok(threshold: float = 20.0, hard_limit: float = 22.0) -> bool:
+    """Check VIX level before trading"""
+    try:
+        session = requests.Session()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "*/*",
+            "Referer": "https://www.nseindia.com/market-data/vix",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        session.headers.update(headers)
+
+        # Step 1: Load homepage to set initial cookies
+        home_url = "https://www.nseindia.com"
+        session.get(home_url, timeout=10, verify=True)
+
+        # Step 2: Load market data page (required for session activation)
+        market_url = "https://www.nseindia.com/market-data"
+        session.get(market_url, timeout=10, verify=True)
+
+        # Optional delay to mimic human behavior (helps avoid blocks)
+        time.sleep(2)
+
+        # Step 3: Now try fetching indices
+        api_url = "https://www.nseindia.com/api/allIndices"
+        response = session.get(api_url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        # Search for India VIX
+        vix_index_names = ["India VIX", "INDIA VIX", "VIX", "INDIA-VIX"]
+        india_vix = None
+        for idx in data["data"]:
+            if any(name.upper() in idx["index"].upper() for name in vix_index_names):
+                india_vix = idx
+                break
+
+        if not india_vix:
+            available = ", ".join([d["index"] for d in data["data"][:5]])
+            raise ValueError(f"India VIX not found. Found: {available}...")
+
+        vix_value = float(india_vix["last"])
+
+        if vix_value >= hard_limit:
+            print(f"🛑 VIX {vix_value:.2f} >= {hard_limit} - halting script for the day")
+            send_telegram(f"🛑 VIX {vix_value:.2f} >= {hard_limit} - halting script")
+            sys.exit(0)
+        elif vix_value >= threshold:
+            print(f"⚠️ VIX {vix_value:.2f} >= {threshold} - skipping trade")
+            send_telegram(f"⚠️ VIX {vix_value:.2f} >= {threshold} - skipping trade")
+            return False
+        else:
+            print(f"✅ VIX {vix_value:.2f} < {threshold} - proceeding")
+            return True
+
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ HTTP error in VIX check: {e}")
+        if e.response.status_code == 401:
+            print("💡 Tip: NSE blocked access. Try updating headers or adding delay.")
+    except requests.exceptions.ConnectionError:
+        print("❌ Network error: Could not connect to NSE")
+    except Exception as e:
+        print(f"❌ VIX check failed: {e}")
+
+    # Return True in case of failure IF in test_mode
+    if 'test_mode' in globals() and test_mode:
+        print("🧪 Test mode: Skipping VIX failure")
+        return True
+    else:
+        return False
+
+# ========== Main Execution ==========
+def main() -> None:
     print('📌 Starting enhanced autotrade')
     
     # Precompute market close time with buffer (15:30 - 20 minutes = 15:10)
-    market_close = dtime(15, 30)
-    new_trade_end_time = datetime.combine(datetime.today(), dtime(15, 10))
+    new_trade_end_time = datetime.combine(datetime.today(), dtime(15, 0))  # Extended to 3 PM for small-caps
     
     # Load master CSV once at start
     master_df = pd.read_csv(MASTER_CSV)
     print('📊 Loaded master CSV for index checks')
     
-    # Create tick size map per security ID
-    tick_size_map = dict(zip(
-        master_df['SEM_SMST_SECURITY_ID'].astype(str), 
-        master_df['SEM_TICK_SIZE']
-    ))
+    # Create tick size map with validation
+    if 'SEM_TICK_SIZE' not in master_df.columns:
+        raise KeyError("❌ SEM_TICK_SIZE column missing in master CSV")
     
-    # Sector mapping setup
-    sector_indices = {
-        "BANK": "NIFTY BANK", 
-        "IT": "NIFTY IT",
-        "AUTO": "NIFTY AUTO",
-        "PHARMA": "NIFTY PHARMA",
-        "FMCG": "NIFTY FMCG",
-        "METAL": "NIFTY METAL"
-    }
+    if not master_df['SEM_SMST_SECURITY_ID'].notnull().all():
+        raise ValueError("❌ Security IDs missing in master CSV")
     
-    # Find NIFTY index ID once
-    nifty50_row = master_df[
-        master_df["SM_SYMBOL_NAME"].str.upper().str.contains("NIFTY") & 
-        ~master_df["SM_SYMBOL_NAME"].str.upper().str.contains("ETF")
-    ].head(1)
-    
-    if nifty50_row.empty:
-        print("❌ NIFTY index not found in master")
-        send_telegram("❌ CRITICAL: NIFTY index not found in master data")
-        return
-        
-    nifty_id = nifty50_row.iloc[0]["SEM_SMST_SECURITY_ID"]
+    tick_size_map = {}
+    for _, row in master_df.iterrows():
+        sec_id = str(row['SEM_SMST_SECURITY_ID'])
+        tick_size = row['SEM_TICK_SIZE']
+        if pd.isna(tick_size):
+            tick_size = 0.05  # Default tick size
+        tick_size_map[sec_id] = float(tick_size)
     
     # Continuous execution until successful trade or market close
     order_placed = False
@@ -1252,11 +1929,16 @@ def main():
             send_telegram("⏩ Existing hold detected - no new orders placed")
             return
         
-        # Skip new trades after 15:10
-        if datetime.now() >= new_trade_end_time:
-            print("⏰ New trade window closed (after 15:10)")
+        # Skip new trades after 14:45
+        if not test_mode and datetime.now() >= new_trade_end_time:
+            print("⏰ New trade window closed (after 14:45)")
             send_telegram("⏰ New trade window closed - no orders placed")
             return
+        
+        # Apply VIX check
+        if not is_vix_ok():
+            time.sleep(60)
+            continue
 
         try:
             # Load capital and stock list on each iteration
@@ -1268,17 +1950,25 @@ def main():
             print(f'📄 Loaded dynamic_stock_list.csv with {len(df)} entries')
             
             # Check market sentiment
-            nifty_bullish = is_index_bullish(nifty_id)
-            sector_status = {}
+            print("⏳ Fetching sector sentiment from proxy/Index method...")
+            sector_sentiment_map = get_sector_sentiment_map(print_table=True)
             
-            # Check all sectors once per cycle
-            for sector, index_name in sector_indices.items():
-                sector_row = master_df[master_df["SM_SYMBOL_NAME"] == index_name].head(1)
-                if not sector_row.empty:
-                    sector_id = sector_row.iloc[0]["SEM_SMST_SECURITY_ID"]
-                    sector_status[sector] = is_index_bullish(sector_id)
-                    status = "bullish" if sector_status[sector] else "bearish"
-                    print(f'  📈 {index_name} sector: {status}')
+            nifty_bullish = sector_sentiment_map.get("NIFTY 50", True)  # True if NIFTY 50 not found
+            
+            unique_sectors = df['sector'].dropna().str.strip().str.upper().unique()
+            sector_status = {}
+            for sector in unique_sectors:
+                mapped_sector = sector_indices.get(sector.upper(), None)
+                if not mapped_sector:
+                    print(f'⚠️ Sector mapping not found for {sector}, skipping bullish check')
+                    sector_status[sector] = False
+                    continue
+            
+                # Use proxy result (True if bullish, False otherwise)
+                sector_bullish = sector_sentiment_map.get(mapped_sector, False)
+                sector_status[mapped_sector] = sector_bullish
+                status = "bullish" if sector_bullish else "bearish"
+                print(f'📈 Sector {mapped_sector}: {status} (via Index_Check_Qwen)')                    
             
             if not nifty_bullish:
                 print("📉 Overall market bearish - focusing on bullish sectors")
@@ -1298,16 +1988,26 @@ def main():
                     sector = str(row.get("sector", "UNKNOWN")).strip()
                     if sector == "nan" or not sector:
                         sector = "UNKNOWN"
+                    
+                    # Small-cap filter
+                    if 'market_cap' not in row or pd.isna(row['market_cap']):
+                        raise KeyError(f"❌ Market cap data missing for {symbol} - required for small-cap trading")
+                    if row['market_cap'] < 5000:  # Cr.
+                        print(f'⚠️ Market cap too small ({row["market_cap"]} Cr) - skipping')
+                        continue                   
+                        
                     print(f'➡️ Evaluating {symbol} ({sector} sector)')
-        
-                    # Skip bearish sector in weak market
-                    if not nifty_bullish and not sector_status.get(sector, True):
-                        print(f'  📉 Sector {sector} bearish - skipping in weak market')
+                    
+                    # Enforce sector confirmation for small caps
+                    mapped_sector = sector_indices.get(sector.strip().upper(), None)
+                    
+                    if not nifty_bullish or not mapped_sector or not sector_status.get(mapped_sector, False):
+                        print(f'❌ Sector confirmation failed for {symbol} (sector: {sector}, mapped: {mapped_sector}) - skipping')
                         continue
-        
+                    
                     # Fetch candles with rate limit control
                     try:
-                        candles = fetch_candles(secid, count=40)  # Increased for chart patterns
+                        candles = fetch_candles(secid, count=75)  # Increased for chart patterns
                         time.sleep(1)
                         if not candles or len(candles) < 5:
                             print('⚠️ No candle data available, skipping...')
@@ -1325,10 +2025,48 @@ def main():
                         print(f"⏰ Too early for trading (before 09:30) - skipping {symbol}")
                         continue
         
+                    # Circuit filter (>5% move)
+                    try:
+                        quote = dhan.get_quote(secid)
+                        if not quote:
+                            raise ValueError(f"❌ Could not fetch quote for {symbol}")
+                        
+                        prev_close = float(quote.get('previousClose', 0))
+                        ltp = float(quote.get('ltp', 0))
+                        if prev_close > 0:  # Prevent division by zero
+                            current_move = abs(ltp - prev_close) / prev_close * 100
+                            if current_move > 5:
+                                print(f'⛔ Circuit filter: {symbol} moved {current_move:.2f}% (max 5%) - skipping')
+                                continue
+                    except KeyError as e:
+                        raise KeyError(f"❌ Missing quote data for {symbol}: {str(e)}")
+        
                     # Gap-up filter
                     if check_gap_up(secid):
                         print(f'⏫ Gap-up detected: {symbol}')
                         continue
+                    
+                    # Liquidity check with turnover
+                    try:
+                        # Bid-ask spread
+                        bid_ask_spread = abs(float(quote.get('bestBidPrice', 0)) - float(quote.get('bestAskPrice', 0)))
+                        if ltp <= 0:
+                            raise ValueError(f"❌ Invalid LTP for {symbol}")
+                        
+                        spread_pct = bid_ask_spread / ltp * 100
+                        if spread_pct > 1.0:  # 1% threshold
+                            print(f'⚠️ High bid-ask spread ({spread_pct:.2f}%) for {symbol} - skipping')
+                            continue
+                        
+                        # Turnover check (₹ value)
+                        volume = float(quote.get('totalTradedVolume', 0))
+                        turnover = volume * ltp
+                        # Absolute volume threshold (1 lakh shares)
+                        if volume < 100000 or turnover < 5000000:
+                            print(f'❌ Ultra-low volume: {volume} shares (₹{turnover:,.2f}) - skipping')
+                            continue
+                    except KeyError as e:
+                        raise KeyError(f"❌ Missing quote data for {symbol}: {str(e)}")
         
                     # Bullish pattern detection
                     detected, pattern_name, pattern_score = detect_bullish_pattern(candles, symbol)
@@ -1337,15 +2075,86 @@ def main():
                         print('📉 No bullish pattern detected, skipping...')
                         continue
                     
+                    # Enhanced bearish pattern conflict filter with pattern-specific checks
+                    if detect_bearish_pattern(candles, pattern_name):
+                        print(f'🚫 Conflicting bearish pattern detected near {pattern_name}: {symbol} - skipping...')
+                        continue
+                    
+                    # Support zone confirmation (only for reversal patterns)
+                    if pattern_name in REVERSAL_PATTERNS:
+                        if not is_near_support(candles, buffer=0.015):  # 1.5% buffer
+                            print(f'🚫 Not near support (within 1.5%): {symbol} - skipping...')
+                            continue
+                    
+                    # Modified 15min trend check with reduced requirements
+                    if len(candles) >= 75:  # Minimum 75 candles (5*15min)
+                        if not get_15min_trend(candles, min_candles=5):
+                            print(f'📉 15-minute trend not bullish for {symbol} - skipping...')
+                            continue
+                    else:
+                        print(f'⚠️ Insufficient data for trend check on {symbol} - skipping...')
+                        continue
+                    
                     # Calculate composite score
                     weight = PATTERN_WEIGHTS.get(pattern_name, {"weight": 1.0})["weight"]
                     composite_score = weight * pattern_score
+                    
+                    # Volume analysis
+                    volume_cache = {}
+                    def get_avg_volume(security_id: int, symbol: str) -> float:
+                        """Get 30D avg volume with caching and fallback"""
+                        if security_id in volume_cache:
+                            return volume_cache[security_id]
+                        
+                        try:
+                            # Fetch 45 days data (buffer for weekends/holidays)
+                            hist_data = dhan.historical_daily_data(
+                                security_id=str(security_id),
+                                exchange_segment="NSE_EQ",
+                                instrument_type="EQUITY",
+                                from_date=(datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d"),
+                                to_date=datetime.now().strftime("%Y-%m-%d")
+                            )
+                            
+                            if hist_data and isinstance(hist_data, list):
+                                df_hist = pd.DataFrame(hist_data)
+                                avg_vol = df_hist['volume'].tail(30).mean()  # Last 30 trading days
+                                volume_cache[security_id] = max(avg_vol, 100000)  # Floor at 1L shares
+                            else:
+                                volume_cache[security_id] = 100000  # Fallback minimum
+                        except Exception as e:
+                            print(f"⚠️ Volume data unavailable for {symbol}, using fallback: {e}")
+                            volume_cache[security_id] = 100000
+                        
+                        return volume_cache[security_id]
+                    
+                    # Calculate volume metrics
+                    current_volume = candles[-1]['volume'] if candles else 0
+                    avg_30d_volume = get_avg_volume(secid, symbol)
+                    
+                    # Adaptive spike threshold (lower in high volatility)
+                    market_volatility = calculate_atr(candles[-30:]) if len(candles) >= 30 else 0
+                    spike_multiplier = 3.0 if market_volatility < (price * 0.01) else 2.2  # Dynamic adjustment
+                    
+                    # Volume spike logic
+                    if current_volume > spike_multiplier * avg_30d_volume:
+                        composite_score *= 1.5
+                        print(f'🚀 Volume spike: {current_volume} (Avg30D: {avg_30d_volume:.0f}, {current_volume/avg_30d_volume:.1f}x)')
+                    else:
+                        print(f'📊 Volume: {current_volume} (Avg30D: {avg_30d_volume:.0f})')
+                    
                     print(f'📊 Pattern: {pattern_name}, Score: {pattern_score:.2f}, Composite: {composite_score:.2f}')
                     
-                    # Technical indicators (mandatory for all trade types)
+                    # Technical indicators with RSI divergence check
                     closes = pd.Series([c["close"] for c in candles])
+                    highs = pd.Series([c["high"] for c in candles])
                     rsi, macd_hist, macd_cross = compute_rsi_macd(closes)
-                    print(f'📊 RSI: {rsi:.2f}, MACD Hist: {macd_hist:.4f}, MACD Cross: {macd_cross}')
+                    rsi_divergence = has_rsi_divergence(highs, rsi) if len(closes) >= 14 else False
+                    print(f'📊 RSI: {rsi:.2f}, MACD Hist: {macd_hist:.4f}, MACD Cross: {macd_cross}, Divergence: {rsi_divergence}')
+                    
+                    if rsi_divergence:
+                        print(f'🚫 Bearish RSI divergence detected for {symbol}, skipping...')
+                        continue
                     
                     # Enhanced RSI validation with pattern awareness
                     if any(keyword in pattern_name for keyword in ["Reversal", "Bottom", "Round"]):
@@ -1393,7 +2202,7 @@ def main():
                             print('❌ Morning Star close below 50% of pattern range, skipping...')
                             continue
                     
-                    # ======== NEW: RESISTANCE CHECK ========
+                    # RESISTANCE CHECK
                     # Calculate resistance (max of last 20 candles)
                     resistance_period = 20
                     if len(candles) >= resistance_period:
@@ -1401,13 +2210,24 @@ def main():
                     else:
                         resistance_level = max(candle['high'] for candle in candles)
                     
-                    # Skip if within 0.5% of resistance
-                    RESISTANCE_BUFFER = 0.005  # 0.5%
-                    current_price = closes.iloc[-1]
-                    if current_price >= resistance_level * (1 - RESISTANCE_BUFFER):
-                        print(f'🚫 Near resistance ({resistance_level:.2f}): {symbol} too close to resistance. Skipping...')
+                    # Store breakout level if pattern is breakout type
+                    breakout_level = None
+                    if pattern_name.upper() in {p.upper() for p in BREAKOUT_PATTERNS}:
+                        breakout_level = resistance_level
+                    
+                    # Skip if within 1.2% of resistance without breakout
+                    RESISTANCE_BUFFER = 0.012
+                    current_price = candles[-1]['close']
+                    if (pattern_name not in BREAKOUT_PATTERNS and 
+                        current_price >= resistance_level * (1 - RESISTANCE_BUFFER)):
+                        print(f'🚫 Within 1.2% of resistance ({resistance_level:.2f}) without breakout pattern')
                         continue
-                    # ======== END RESISTANCE CHECK ========
+                    
+                    # For breakout patterns, require 1.5% clearance
+                    if (pattern_name in BREAKOUT_PATTERNS and 
+                        current_price < resistance_level * 1.015):
+                        print(f'🚫 Breakout pattern requires 1.5% clearance above resistance ({resistance_level*1.015:.2f})')
+                        continue
                     
                     # Position sizing with resistance discount factor
                     price = current_price
@@ -1428,17 +2248,25 @@ def main():
                     }
                     
                     # For breakout patterns, require 1% clearance above resistance
-                    if pattern_name in BREAKOUT_PATTERNS:
+                    if pattern_name.upper() in {p.upper() for p in BREAKOUT_PATTERNS}:
                         if price < resistance_level * 1.01:
                             print(f'🚫 Breakout pattern requires 1% clearance above resistance ({resistance_level:.2f})')
                             continue
                     
-                    # Calculate max quantity with resistance discount
-                    max_investment = capital * position_discount
-                    base_qty = int(max_investment // price)
-                    if base_qty == 0:  # Ensure minimum 1 share if affordable
-                        base_qty = 1 if price <= capital else 0
+                    # Calculate max quantity with volatility adjustment
+                    atr = calculate_atr(candles)
+                    risk_per_share = 1.5 * atr  # Risk = 1.5x ATR
+                    max_risk_per_trade = capital * 0.01  # 1% of capital
+                    max_shares = max_risk_per_trade / risk_per_share
                     
+                    # Apply resistance discount
+                    max_investment = min(capital * position_discount, max_shares * price)
+                    base_qty = int(max_investment // price)
+                    if base_qty < 1:
+                        raise ValueError(
+                            f"❌ Unaffordable position: {symbol} price ₹{price:.2f} exceeds allocation ₹{max_investment:.2f}"
+                        )
+                 
                     print(f'📉 Resistance discount: {position_discount*100:.1f}% | Allocation: ₹{max_investment:.2f}')
                     
                     if base_qty > 0:
@@ -1460,7 +2288,8 @@ def main():
                         "candles": candles,
                         "score": pattern_score,
                         "confidence": weight,
-                        "composite_score": composite_score
+                        "composite_score": composite_score,
+                        "breakout_level": breakout_level 
                     })
         
                 except Exception as e:
@@ -1473,8 +2302,28 @@ def main():
                 best = sorted(candidates, key=lambda x: x["composite_score"], reverse=True)[0]
                 print(f"🚀 Best pick: {best['symbol']} with Qty: {best['qty']} and Composite Score: {best['composite_score']:.2f}")
                 
-                place_order(best["symbol"], best["security_id"], best["qty"], best["price"], best["pattern"], best["candles"], tick_size_map, capital)
-                send_telegram(f"✅ Order placed for {best['symbol']} with Qty: {best['qty']}. Monitoring position.")
+                place_order(
+                    best["symbol"], 
+                    best["security_id"], 
+                    best["qty"], 
+                    best["price"], 
+                    best["pattern"], 
+                    best["candles"], 
+                    tick_size_map, 
+                    capital,
+                    breakout_level=best["breakout_level"]
+                )
+                
+                # Start breakout monitor if applicable
+                if best["pattern"] in BREAKOUT_PATTERNS and best["breakout_level"] is not None:
+                    monitor_breakout(
+                        best["security_id"],
+                        best["breakout_level"],
+                        best["symbol"],
+                        best["qty"]
+                    )
+                
+                send_telegram(f"✅ Order placed for {best['symbol']} with Qty: {best['qty']}.")
                 print("✅ Order placed. Exiting script.")
                 reason_msg = f"{best['pattern']} formed. {best['symbol']} ({best['qty']} qty) selected"
                 log_time = datetime.now()
@@ -1501,7 +2350,6 @@ def main():
                 
         except Exception as e:
             print(f"⚠️ Main loop error: {e}")
-            traceback.print_exc()
             time.sleep(10)  # Wait 10 Sec after error before retrying
 
 # Save execution log

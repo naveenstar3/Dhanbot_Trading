@@ -1,7 +1,4 @@
 # ========== PART 1: AUTOTRADE ENTRY SCRIPT ==========
-# This script handles pattern detection, order placement, and SL/TP setup
-# Continues monitoring for breakout patterns after entry
-
 import os
 import sys
 import json
@@ -18,10 +15,9 @@ import math
 import io
 import traceback
 from scipy.stats import linregress  # Added for trend analysis
-from Index_Check_Qwen import get_sector_sentiment_map
 
 log_buffer = io.StringIO()
-test_mode = True
+test_mode = False
 
 class TeeLogger:
     def __init__(self, *streams):
@@ -60,6 +56,330 @@ TG_TOKEN = config["telegram_token"]
 TG_CHAT_ID = config["telegram_chat_id"]
 
 
+# Security IDs for NSE indices (manually curated)
+INDEX_SECURITY_MAP = {
+    "NIFTY 50": 26000,
+    "NIFTY BANK": 26009,
+    "NIFTY AUTO": 26010,
+    "NIFTY IT": 26011,
+    "NIFTY FMCG": 26012,
+    "NIFTY FIN SERVICE": 26013,
+    "NIFTY PHARMA": 26014,
+    "NIFTY REALTY": 26015,
+    "NIFTY ENERGY": 26018,
+    "NIFTY METAL": 26019,
+    "NIFTY OIL & GAS": 26020,
+    "NIFTY CONSUMER DURABLES": 26022,
+    "NIFTY HEALTHCARE": 26023,
+    "NIFTY INFRA": 26024,
+    "NIFTY MEDIA": 26025,
+    "NIFTY PSU BANK": 26026,
+    "NIFTY PRIVATE BANK": 26028,
+    "NIFTY SERVICES SECTOR": 26037,
+    "NIFTY COMMODITIES": 26045
+}
+
+# Multi-proxy stocks for each sector (3 stocks per sector)
+MULTI_PROXY_MAP = {
+    "NIFTY 50": [
+        {"name": "RELIANCE INDUSTRIES LTD", "security_id": 2885},
+        {"name": "HDFC BANK LTD", "security_id": 1333},
+        {"name": "INFOSYS LIMITED", "security_id": 1594}
+    ],
+    "NIFTY BANK": [
+        {"name": "HDFC BANK LTD", "security_id": 1333},
+        {"name": "ICICI BANK LTD", "security_id": 4963},
+        {"name": "STATE BANK OF INDIA", "security_id": 3045}
+    ],
+    "NIFTY AUTO": [
+        {"name": "MARUTI SUZUKI INDIA LTD.", "security_id": 10999},
+        {"name": "TATA MOTORS LTD", "security_id": 3456},
+        {"name": "MAHINDRA & MAHINDRA LTD", "security_id": 2031}
+    ],
+    "NIFTY IT": [
+        {"name": "INFOSYS LIMITED", "security_id": 1594},
+        {"name": "TATA CONSULTANCY SERVICES LTD", "security_id": 11536},
+        {"name": "WIPRO LIMITED", "security_id": 3787}
+    ],
+    "NIFTY FMCG": [
+        {"name": "HINDUSTAN UNILEVER LTD.", "security_id": 1394},
+        {"name": "ITC LIMITED", "security_id": 1660},
+        {"name": "NESTLE INDIA LIMITED", "security_id": 17963}
+    ],
+    "NIFTY FIN SERVICE": [
+        {"name": "BAJAJ FINANCE LIMITED", "security_id": 317},
+        {"name": "HDFC BANK LTD", "security_id": 1333},
+        {"name": "HDFC LIFE INSURANCE COMPANY LTD", "security_id": 467}
+    ],
+    "NIFTY PHARMA": [
+        {"name": "SUN PHARMACEUTICAL IND L", "security_id": 3351},
+        {"name": "DR. REDDYS LABORATORIES LTD", "security_id": 881},
+        {"name": "CIPLA LTD", "security_id": 694}
+    ],
+    "NIFTY REALTY": [
+        {"name": "DLF LIMITED", "security_id": 14732},
+        {"name": "GODREJ PROPERTIES LTD", "security_id": 17875},
+        {"name": "OBEROI REALTY LTD", "security_id": 20242}
+    ],
+    "NIFTY ENERGY": [
+        {"name": "RELIANCE INDUSTRIES LTD", "security_id": 2885},
+        {"name": "NTPC LIMITED", "security_id": 11630},
+        {"name": "POWER GRID CORPORATION OF INDIA LTD", "security_id": 14977}
+    ],
+    "NIFTY METAL": [
+        {"name": "TATA STEEL LIMITED", "security_id": 3499},
+        {"name": "HINDALCO INDUSTRIES LTD", "security_id": 1363},
+        {"name": "VEDANTA LIMITED", "security_id": 3063}
+    ],
+    "NIFTY OIL & GAS": [
+        {"name": "RELIANCE INDUSTRIES LTD", "security_id": 2885},
+        {"name": "OIL AND NATURAL GAS CORP.", "security_id": 2475}, 
+        {"name": "GAIL (INDIA) LIMITED", "security_id": 4717}
+    ],
+    "NIFTY CONSUMER DURABLES": [
+        {"name": "TITAN COMPANY LIMITED", "security_id": 3506},
+        {"name": "VOLTAS LIMITED", "security_id": 3718},
+        {"name": "BLUE STAR LIMITED", "security_id": 8311}
+    ],
+    "NIFTY HEALTHCARE": [
+        {"name": "DIVI S LABORATORIES LTD", "security_id": 10940},
+        {"name": "APOLLO HOSPITALS ENTERPRISE LTD", "security_id": 157}, 
+        {"name": "FORTIS HEALTHCARE LIMITED", "security_id": 14592}
+    ],
+    "NIFTY INFRA": [
+        {"name": "LARSEN & TOUBRO LTD.", "security_id": 11483},
+        {"name": "ADANI PORTS AND SPECIAL ECONOMIC ZONE LTD", "security_id": 15083},
+        {"name": "ULTRATECH CEMENT LIMITED", "security_id": 11532}
+    ],
+    "NIFTY MEDIA": [
+        {"name": "SUN TV NETWORK LIMITED", "security_id": 13404},
+        {"name": "ZEE ENTERTAINMENT ENTERPRISES LTD", "security_id": 3812},
+        {"name": "PVR INOX LTD", "security_id": 13147}
+    ],
+    "NIFTY PSU BANK": [
+        {"name": "STATE BANK OF INDIA", "security_id": 3045},
+        {"name": "PUNJAB NATIONAL BANK", "security_id": 10666},
+        {"name": "BANK OF BARODA", "security_id": 4668}
+    ],
+    "NIFTY PRIVATE BANK": [
+        {"name": "ICICI BANK LTD.", "security_id": 4963},
+        {"name": "AXIS BANK LTD", "security_id": 5900},
+        {"name": "KOTAK MAHINDRA BANK LTD", "security_id": 1922}
+    ],
+    "NIFTY SERVICES SECTOR": [
+        {"name": "CONTAINER CORPORATION OF INDIA LTD", "security_id": 4749},
+        {"name": "INDIAN RAIL TOUR CORP LTD", "security_id": 13611},
+        {"name": "ADANI ENTERPRISES LTD", "security_id": 25}
+    ],
+    "NIFTY COMMODITIES": [
+        {"name": "GRASIM INDUSTRIES LTD", "security_id": 1232},
+        {"name": "JSW STEEL LIMITED", "security_id": 11723},
+        {"name": "ADANI ENTERPRISES LTD", "security_id": 25}
+    ]
+}
+
+def fetch_intraday_candles(security_id, symbol_name, is_index=False):
+    """Fetch historical candles for stocks or indices"""
+    if not security_id:
+        print(f"⚠️ No security_id provided for {symbol_name}")
+        return []
+    
+    exchange_segment = "NSE_INDEX" if is_index else "NSE_EQ"
+    instrument_type = "INDEX" if is_index else "EQUITY"
+    from_dt = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    to_dt = datetime.now().strftime("%Y-%m-%d")
+    
+    print(f"📊 Fetching {'index' if is_index else 'stock'} data: "
+          f"{symbol_name} [ID: {security_id}] ({from_dt} to {to_dt})")
+    
+    try:
+        candles = dhan.historical_daily_data(
+            security_id=str(security_id),
+            exchange_segment=exchange_segment,
+            instrument_type=instrument_type,
+            from_date=from_dt,
+            to_date=to_dt
+        )
+    except Exception as e:
+        print(f"🚨 API Error for {symbol_name}: {str(e)}")
+        return []
+    
+    if not candles or not isinstance(candles, dict) or 'data' not in candles:
+        print(f"⚠️ No data returned for {symbol_name}")
+        return []
+    
+    data = candles['data']
+    if not all(key in data for key in ('open', 'high', 'low', 'close', 'volume', 'timestamp')):
+        print(f"⚠️ Incomplete data structure for {symbol_name}")
+        return []
+    
+    num_candles = len(data['close'])
+    merged_candles = [
+        {
+            "timestamp": data["timestamp"][i],
+            "open": data["open"][i],
+            "high": data["high"][i],
+            "low": data["low"][i],
+            "close": data["close"][i],
+            "volume": data["volume"][i],
+        }
+        for i in range(num_candles)
+    ]
+    
+    print(f"✅ Retrieved {len(merged_candles)} candles for {symbol_name}")
+    return merged_candles
+
+def is_bullish(candles, days=5):
+    """Determine bullish trend based on closing prices"""
+    if not candles or len(candles) < days:
+        return False
+    
+    # Use the last 'days' trading days
+    recent_closes = [candle["close"] for candle in candles[-days:]]
+    
+    # Simple trend: current close > previous close (momentum)
+    if recent_closes[-1] > recent_closes[-2]:
+        return True
+    
+    # Medium-term: current close > average of last 'days' closes
+    avg_close = sum(recent_closes) / len(recent_closes)
+    return recent_closes[-1] > avg_close
+
+def analyze_index(sector, security_id):
+    """Analyze sector using actual index data"""
+    candles = fetch_intraday_candles(security_id, sector, is_index=True)
+    if not candles:
+        print(f"⚠️ Could not fetch index data for {sector}")
+        return None
+    
+    return is_bullish(candles)
+
+def analyze_proxies(sector, proxies):
+    """Analyze sector using multiple proxy stocks"""
+    if not proxies:
+        print(f"⚠️ No proxies defined for {sector}")
+        return None
+    
+    bullish_count = 0
+    valid_proxies = 0
+    
+    for proxy in proxies:
+        candles = fetch_intraday_candles(proxy['security_id'], proxy['name'])
+        time.sleep(1.2)  # Rate limit protection
+        
+        if not candles or len(candles) < 5:
+            continue
+            
+        valid_proxies += 1
+        if is_bullish(candles):
+            bullish_count += 1
+    
+    if valid_proxies == 0:
+        print(f"⚠️ No valid proxies for {sector}")
+        return None
+    
+    return bullish_count / valid_proxies >= 0.6  # 60% threshold
+
+# Main analysis logic
+def get_sector_sentiment_map(print_table=False):
+    """
+    Returns: dict { sector_name (str) : True (bullish) / False (bearish/unknown) }
+    Uses file cache for current day to avoid repeated index/proxy fetches.
+    Cache file: sector_sentiment_cache.json (refreshes daily after first run)
+    """
+    CACHE_PATH = "D:/Downloads/Dhanbot/dhan_autotrader/sector_sentiment_cache.json"
+    today = datetime.now().strftime("%Y-%m-%d")
+    cache = None
+
+    # Try to load from cache
+    if os.path.exists(CACHE_PATH):
+        try:
+            with open(CACHE_PATH, "r") as f:
+                cache = json.load(f)
+            if cache.get("date") == today and "sentiment_map" in cache:
+                print(f"🟢 Loaded sector sentiment from cache ({CACHE_PATH})")
+                if print_table and "summary_table" in cache:
+                    print("\n" + "="*50)
+                    print("SECTOR TREND SUMMARY TABLE (CACHED)")
+                    print("="*50)
+                    print(cache["summary_table"])
+                    print("="*50)
+                    print("ANALYSIS COMPLETE (CACHED)")
+                    print("="*50)
+                return cache["sentiment_map"]
+        except Exception as e:
+            print(f"⚠️ Failed to load sector sentiment cache: {e} (regenerating)")
+
+    # No valid cache, run full analysis
+    sector_results = []
+    sentiment_map = {}
+
+    for sector in INDEX_SECURITY_MAP.keys():
+        print(f"\n🔍 Analyzing {sector}")
+
+        # Try index first
+        index_id = INDEX_SECURITY_MAP[sector]
+        result = analyze_index(sector, index_id)
+        used_proxy = False
+
+        # Fallback to proxies if index analysis fails
+        if result is None:
+            print(f"🔄 Falling back to proxy analysis for {sector}")
+            proxies = MULTI_PROXY_MAP.get(sector, [])
+            result = analyze_proxies(sector, proxies)
+            used_proxy = True
+
+        # Final determination
+        if result is None:
+            trend = "UNKNOWN"
+            status = "⛔"
+            sentiment_map[sector] = False  # Treat UNKNOWN as not bullish
+        elif result:
+            trend = "BULLISH"
+            status = "✅"
+            sentiment_map[sector] = True
+        else:
+            trend = "BEARISH"
+            status = "❌"
+            sentiment_map[sector] = False
+
+        sector_results.append({
+            "SECTOR": sector,
+            "TREND": trend,
+            "STATUS": status,
+            "METHOD": "PROXY" if used_proxy else "INDEX"
+        })
+
+        print(f"📌 {sector} Trend: {trend} {status} (by {'PROXY' if used_proxy else 'INDEX'})")
+
+    # Print summary table if requested
+    summary_table = ""
+    if print_table:
+        print("\n" + "="*50)
+        print("SECTOR TREND SUMMARY TABLE")
+        print("="*50)
+        results_df = pd.DataFrame(sector_results)
+        summary_table = results_df.to_string(index=False)
+        print(summary_table)
+        print("="*50)
+        print("ANALYSIS COMPLETE")
+        print("="*50)
+
+    # Save to cache for rest of the day
+    try:
+        with open(CACHE_PATH, "w") as f:
+            json.dump({
+                "date": today,
+                "sentiment_map": sentiment_map,
+                "summary_table": summary_table
+            }, f)
+        print(f"🟢 Sector sentiment saved to cache: {CACHE_PATH}")
+    except Exception as e:
+        print(f"⚠️ Could not write sector sentiment cache: {e}")
+
+    return sentiment_map
+
+
 # ✅ Sector-to-NIFTY Index Mapping + Dhan Security IDs
 sector_index_ids = {
     "NIFTY AUTO": "13604",
@@ -77,25 +397,33 @@ sector_index_ids = {
 
 # ✅ Map raw sector names to above NIFTY sectors
 sector_indices = {
-    "AUTO ANCILLARIES": "NIFTY AUTO",
-    "NIFTY AUTO": "NIFTY AUTO",
-    "BANKING": "NIFTY BANK",
+    "BANK": "NIFTY BANK",
     "NIFTY BANK": "NIFTY BANK",
+    "BANKING": "NIFTY BANK",
     "FINANCIAL SERVICES": "NIFTY FIN SERVICE",
     "NIFTY FIN SERVICE": "NIFTY FIN SERVICE",
-    "POWER": "NIFTY ENERGY",
-    "NIFTY ENERGY": "NIFTY ENERGY",
+    "IT": "NIFTY IT",
+    "NIFTY IT": "NIFTY IT",
+    "IT SERVICES": "NIFTY IT",
+    "AUTO": "NIFTY AUTO",
+    "NIFTY AUTO": "NIFTY AUTO",
+    "AUTO ANCILLARIES": "NIFTY AUTO",
+    "PHARMA": "NIFTY PHARMA",
+    "PHARMACEUTICALS": "NIFTY PHARMA",
     "FMCG": "NIFTY FMCG",
     "NIFTY FMCG": "NIFTY FMCG",
-    "IT SERVICES": "NIFTY IT",
-    "NIFTY IT": "NIFTY IT",
+    "METAL": "NIFTY METAL",
     "NIFTY METAL": "NIFTY METAL",
-    "PHARMACEUTICALS": "NIFTY PHARMA",
-    "AGROCHEMICALS": "NIFTY COMMODITIES",
-    "LOGISTICS": "NIFTY SERVICES SECTOR",
+    "ENERGY": "NIFTY ENERGY",
+    "NIFTY ENERGY": "NIFTY ENERGY",
+    "POWER": "NIFTY ENERGY",
+    "INFRASTRUCTURE": "NIFTY INFRA",
+    "NIFTY INFRA": "NIFTY INFRA",
     "INSURANCE": "NIFTY FIN SERVICE",
-    "INFRASTRUCTURE": "NIFTY INFRA"
+    "AGROCHEMICALS": "NIFTY COMMODITIES",
+    "LOGISTICS": "NIFTY SERVICES SECTOR"
 }
+
 
 # ========== Pattern Confidence Weights ==========
 PATTERN_WEIGHTS = {
@@ -373,6 +701,10 @@ def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", in
                     f"❌ Invalid candle timestamp type: "
                     f"Expected datetime, got {type(last_candle_time)}"
                 )
+            
+            # Convert last_candle_time to UTC (timezone-aware)
+            if last_candle_time.tzinfo is None or last_candle_time.tzinfo.utcoffset(last_candle_time) is None:
+                last_candle_time = last_candle_time.replace(tzinfo=pytz.UTC)
             
             now = datetime.now(pytz.utc)
             if (now - last_candle_time) > timedelta(minutes=2) or now.date() > last_candle_time.date():
@@ -1159,23 +1491,31 @@ def check_breakout(candles, period=3):
 def check_gap_up(security_id):
     """Prevent entries after significant gap-ups with recent price check"""
     try:
-        quote = dhan.get_quote(security_id)
+        quote_data = dhan.ohlc_data(securities={"NSE_EQ": [int(security_id)]})
+        quote = None
+        if "NSE_EQ" in quote_data and str(security_id) in quote_data["NSE_EQ"]:
+            quote = quote_data["NSE_EQ"][str(security_id)]
+        elif "NSE_EQ" in quote_data and int(security_id) in quote_data["NSE_EQ"]:
+            quote = quote_data["NSE_EQ"][int(security_id)]
         if not quote:
             return False
-            
+
         prev_close = float(quote.get('previousClose', 0))
         today_open = float(quote.get('open', 0))
-        current_price = float(quote.get('ltp', 0))
-        
+        current_price = float(quote.get('last_price', 0))
+
         if prev_close <= 0:
             return False
-        
+
         gap_up = (today_open - prev_close) / prev_close > 0.01
-        
+
         # Block all gap-ups >1% regardless of pullback
         if gap_up:
             print(f"❌ Gap-up detected: {security_id} (Open: {today_open:.2f} > Prev Close: {prev_close:.2f})")
             return True
+        return False
+    except Exception as e:
+        print(f"❌ Error in check_gap_up for {security_id}: {e}")
         return False
             
         return gap_up
@@ -1729,34 +2069,6 @@ def main():
             tick_size = 0.05  # Default tick size
         tick_size_map[sec_id] = float(tick_size)
     
-    # Sector mapping setup
-    sector_indices = {
-        "BANK": "NIFTY BANK",
-        "NIFTY BANK": "NIFTY BANK",
-        "BANKING": "NIFTY BANK",
-        "FINANCIAL SERVICES": "NIFTY FIN SERVICE",
-        "NIFTY FIN SERVICE": "NIFTY FIN SERVICE",
-        "IT": "NIFTY IT",
-        "NIFTY IT": "NIFTY IT",
-        "AUTO": "NIFTY AUTO",
-        "NIFTY AUTO": "NIFTY AUTO",
-        "AUTO ANCILLARIES": "NIFTY AUTO",
-        "PHARMA": "NIFTY PHARMA",
-        "FMCG": "NIFTY FMCG",
-        "METAL": "NIFTY METAL",
-        "NIFTY METAL": "NIFTY METAL",
-        "ENERGY": "NIFTY ENERGY",
-        "NIFTY ENERGY": "NIFTY ENERGY",
-        "POWER": "NIFTY ENERGY",
-        "INFRASTRUCTURE": "NIFTY INFRA",
-        "NIFTY INFRA": "NIFTY INFRA",
-        "INSURANCE": "NIFTY FIN SERVICE",
-        "AGROCHEMICALS": "NIFTY COMMODITIES",
-        "LOGISTICS": "NIFTY SERVICES SECTOR",
-        "IT SERVICES": "NIFTY IT"
-    }
-
-    
     # Find NIFTY index ID once
     nifty50_row = master_df[
         master_df["SM_SYMBOL_NAME"].str.upper().str.contains("NIFTY") & 
@@ -1787,6 +2099,36 @@ def main():
         
         # VIX check function
         def is_vix_ok(threshold=20.0, hard_limit=22.0):
+            """
+            One-shot VIX fetch per day with file-based cache to avoid NSE block.
+            Returns True if VIX < threshold, False if VIX >= threshold/hard_limit.
+            """
+            VIX_CACHE_PATH = "D:/Downloads/Dhanbot/dhan_autotrader/vix_cache.json"
+            today = datetime.now().strftime("%Y-%m-%d")
+        
+            # Read cache if exists and not stale
+            if os.path.exists(VIX_CACHE_PATH):
+                try:
+                    with open(VIX_CACHE_PATH, "r") as f:
+                        cache = json.load(f)
+                    if cache.get("date") == today and "vix" in cache:
+                        vix_value = float(cache["vix"])
+                        print(f"🟢 Loaded cached VIX: {vix_value:.2f} (from {today})")
+                        if vix_value >= hard_limit:
+                            print(f"🛑 VIX {vix_value:.2f} >= {hard_limit} - halting script for the day")
+                            send_telegram(f"🛑 VIX {vix_value:.2f} >= {hard_limit} - halting script")
+                            sys.exit(0)
+                        elif vix_value >= threshold:
+                            print(f"⚠️ VIX {vix_value:.2f} >= {threshold} - skipping trade")
+                            send_telegram(f"⚠️ VIX {vix_value:.2f} >= {threshold} - skipping trade")
+                            return False
+                        else:
+                            print(f"✅ VIX {vix_value:.2f} < {threshold} - proceeding")
+                            return True
+                except Exception as e:
+                    print(f"⚠️ Failed to load VIX cache: {e} (refetching)")
+        
+            # If cache not found or outdated, fetch from NSE
             try:
                 session = requests.Session()
                 headers = {
@@ -1797,37 +2139,28 @@ def main():
                     "X-Requested-With": "XMLHttpRequest"
                 }
                 session.headers.update(headers)
-        
-                # Step 1: Load homepage to set initial cookies
-                home_url = "https://www.nseindia.com"
-                session.get(home_url, timeout=10, verify=True)
-        
-                # Step 2: Load market data page (required for session activation)
-                market_url = "https://www.nseindia.com/market-data"
-                session.get(market_url, timeout=10, verify=True)
-        
-                # Optional delay to mimic human behavior (helps avoid blocks)
+                session.get("https://www.nseindia.com", timeout=10, verify=True)
+                session.get("https://www.nseindia.com/market-data", timeout=10, verify=True)
                 time.sleep(2)
-        
-                # Step 3: Now try fetching indices
-                api_url = "https://www.nseindia.com/api/allIndices"
-                response = session.get(api_url, timeout=10)
+                response = session.get("https://www.nseindia.com/api/allIndices", timeout=10)
                 response.raise_for_status()
                 data = response.json()
-        
-                # Search for India VIX
                 vix_index_names = ["India VIX", "INDIA VIX", "VIX", "INDIA-VIX"]
                 india_vix = None
                 for idx in data["data"]:
                     if any(name.upper() in idx["index"].upper() for name in vix_index_names):
                         india_vix = idx
                         break
-        
                 if not india_vix:
                     available = ", ".join([d["index"] for d in data["data"][:5]])
                     raise ValueError(f"India VIX not found. Found: {available}...")
-        
                 vix_value = float(india_vix["last"])
+        
+                # Write to cache for today
+                with open(VIX_CACHE_PATH, "w") as f:
+                    json.dump({"date": today, "vix": vix_value}, f)
+        
+                print(f"🟢 VIX value {vix_value:.2f} saved to cache for {today}")
         
                 if vix_value >= hard_limit:
                     print(f"🛑 VIX {vix_value:.2f} >= {hard_limit} - halting script for the day")
@@ -1857,6 +2190,7 @@ def main():
                 return True
             else:
                 return False
+        
 
         # Apply VIX check
         if not is_vix_ok():
@@ -1872,7 +2206,7 @@ def main():
             df["security_id"] = df["security_id"].astype(int).astype(str)
             print(f'📄 Loaded dynamic_stock_list.csv with {len(df)} entries')
             
-            # Check market sentiment
+            # Check market sentiment ONCE ONLY
             if 'sector_sentiment_map' not in globals():
                 print("⏳ Fetching sector sentiment from proxy/Index method...")
                 sector_sentiment_map = get_sector_sentiment_map(print_table=True)
@@ -1881,11 +2215,6 @@ def main():
             
             unique_sectors = df['sector'].dropna().str.strip().str.upper().unique()
             
-            # 🧠 Use sector sentiment map from Index_Check_Qwen
-            if 'sector_sentiment_map' not in globals():
-                print("⏳ Fetching sector sentiment from proxy/Index method...")
-                sector_sentiment_map = get_sector_sentiment_map(print_table=True)
-            
             sector_status = {}
             for sector in unique_sectors:
                 mapped_sector = sector_indices.get(sector.upper(), None)
@@ -1893,7 +2222,7 @@ def main():
                     print(f'⚠️ Sector mapping not found for {sector}, skipping bullish check')
                     sector_status[sector] = False
                     continue
-            
+                   
                 # Use proxy result (True if bullish, False otherwise)
                 sector_bullish = sector_sentiment_map.get(mapped_sector, False)
                 sector_status[mapped_sector] = sector_bullish
@@ -1954,46 +2283,77 @@ def main():
                         print(f"⏰ Too early for trading (before 09:30) - skipping {symbol}")
                         continue
         
-                    # Circuit filter (>5% move)
-                    prev_close = float(quote.get('previousClose', 0))
-                    ltp = float(quote.get('ltp', 0))
-                    if prev_close > 0:  # Prevent division by zero
-                        current_move = abs(ltp - prev_close) / prev_close * 100
-                        if current_move > 5:
-                            print(f'⛔ Circuit filter: {symbol} moved {current_move:.2f}% (max 5%) - skipping')
-                            continue
-                    
-                    # Gap-up filter
-                    if check_gap_up(secid):
-                        print(f'⏫ Gap-up detected: {symbol}')
-                        continue
-                    
-                    # Liquidity check with turnover
+                    # Circuit filter (>5% move) -- FIXED: DhanHQ SDK-compliant ohlc_data
                     try:
-                        quote = dhan.get_quote(secid)
+                        quote_data = dhan.ohlc_data(securities={"NSE_EQ": [int(secid)]})
+                        print(f"🪛 [DEBUG] ohlc_data response for {symbol} ({secid}): {quote_data}")  # DEBUG LINE
+                        quote = None
+                        
+                        # FIX: Proper key path navigation for nested data blocks!
+                        try:
+                            # Step into nested data
+                            nse_eq_block = (quote_data.get("data", {}) or {}).get("data", {}).get("NSE_EQ", {})
+                            # Defensive handling for both str and int keys
+                            if str(secid) in nse_eq_block:
+                                quote = nse_eq_block[str(secid)]
+                            elif int(secid) in nse_eq_block:
+                                quote = nse_eq_block[int(secid)]
+                            elif len(nse_eq_block) == 1:
+                                quote = list(nse_eq_block.values())[0]
+                                print(f"🪛 [DEBUG] Used fallback key for quote extraction: {list(nse_eq_block.keys())[0]}")
+                        except Exception as e:
+                            print(f"❌ Exception in quote extraction for {symbol}: {e}")
+                        
                         if not quote:
-                            raise ValueError(f"❌ Could not fetch quote for {symbol}")
+                            print(f"❌ Could not fetch quote for {symbol} - skipping [DEBUG: NSE_EQ keys: {list((quote_data.get('data', {}) or {}).get('data', {}).get('NSE_EQ', {}).keys())}]")
+                            continue
+
+                        # Circuit filter (>5% move)
+                        prev_close = float(quote.get('previousClose', 0))
+                        # FIX: Dhan API uses 'last_price' not 'ltp'
+                        ltp = float(quote.get('last_price', 0))  # <-- CORRECTED
+                        if prev_close > 0:  # Prevent division by zero
+                            current_move = abs(ltp - prev_close) / prev_close * 100
+                            if current_move > 5:
+                                print(f'⛔ Circuit filter: {symbol} moved {current_move:.2f}% (max 5%) - skipping')
+                                continue
+                        
+                        # Gap-up filter (must pass the current LTP in quote)
+                        if check_gap_up(secid):
+                            print(f'⏫ Gap-up detected: {symbol}')
+                            continue
                         
                         # Bid-ask spread
                         bid_ask_spread = abs(float(quote.get('bestBidPrice', 0)) - float(quote.get('bestAskPrice', 0)))
-                        ltp = float(quote.get('ltp', 0))
                         if ltp <= 0:
-                            raise ValueError(f"❌ Invalid LTP for {symbol}")
-                        
+                            print(f"❌ Invalid LTP for {symbol} - skipping")
+                            continue
+
                         spread_pct = bid_ask_spread / ltp * 100
                         if spread_pct > 1.0:  # 1% threshold
                             print(f'⚠️ High bid-ask spread ({spread_pct:.2f}%) for {symbol} - skipping')
                             continue
-                        
+
                         # Turnover check (₹ value)
-                        volume = float(quote.get('totalTradedVolume', 0))
-                        turnover = volume * ltp
-                        # Absolute volume threshold (1 lakh shares)
-                        if volume < 100000 or turnover < 5000000:
-                            print(f'❌ Ultra-low volume: {volume} shares (₹{turnover:,.2f}) - skipping')
+                        recent_volumes = [c["volume"] for c in candles[-5:]] if len(candles) >= 5 else [candles[-1]["volume"]]
+                        avg_recent_volume = sum(recent_volumes) / len(recent_volumes)
+                        turnover = avg_recent_volume * ltp
+                        
+                        # 🚩 Strict liquidity: 20,000 shares/5-min candle OR ₹20L/candle (tune as needed)
+                        if avg_recent_volume < 10000 or turnover < 500000:
+                            print(
+                            f'❌ Ultra-low avg intraday volume: {avg_recent_volume:.0f} shares (required: 10,000), '
+                            f'Turnover: ₹{turnover:,.2f} (required: ₹5,00,000) - skipping'
+                            )
                             continue
+                        
                     except KeyError as e:
-                        raise KeyError(f"❌ Missing quote data for {symbol}: {str(e)}")
+                        print(f"❌ Missing quote data for {symbol}: {str(e)}")
+                        continue
+                    except Exception as e:
+                        print(f"❌ Quote fetch or liquidity check failed for {symbol}: {e}")
+                        continue
+
         
                     # Bullish pattern detection
                     detected, pattern_name, pattern_score = detect_bullish_pattern(candles, symbol)
@@ -2192,15 +2552,7 @@ def main():
                     # Apply resistance discount to position size
                     resistance_distance = 1 - (price / resistance_level)
                     position_discount = max(0.3, min(1.0, resistance_distance * 2))  # Scale 0.5% distance -> 100% allocation
-                    
-                    # Enhanced resistance check - require confirmation for breakout patterns
-                    BREAKOUT_PATTERNS = {
-                        "Volume Breakout Pattern", 
-                        "Bullish Rectangle",
-                        "Ascending Triangle",
-                        "Cup and Handle"
-                    }
-                    
+                   
                     # For breakout patterns, require 1% clearance above resistance
                     if pattern_name.upper() in {p.upper() for p in BREAKOUT_PATTERNS}:
                         if price < resistance_level * 1.01:

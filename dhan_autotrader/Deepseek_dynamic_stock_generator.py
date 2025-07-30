@@ -16,6 +16,7 @@ import io
 import random
 from dhan_api import get_live_price
 import logging
+from dhanhq import DhanContext, dhanhq
 
 # ======== CONSTANTS ========
 RSI_MIN = 45
@@ -23,8 +24,8 @@ RSI_MAX = 70
 GAP_UP_THRESHOLD = 0.01  # 1% gap-up threshold
 MIN_VOLUME = 300000
 MIN_ATR = 1.2
-SMALLCAP_MIN_VOLUME = 500000
-SMALLCAP_MIN_ATR = 2.0
+SMALLCAP_MIN_VOLUME = 50000
+SMALLCAP_MIN_ATR = 2
 SMALLCAP_MAX_RSI = 70
 
 log_buffer = io.StringIO()
@@ -117,16 +118,33 @@ if not nifty100_symbols:
 pd.DataFrame(nifty100_symbols, columns=["symbol"]).to_csv(NIFTY100_CACHE, index=False)
 
 def build_sector_map(nifty100_symbols):
+    # Comprehensive sectoral indices as of 2025
     sector_index_map = {
         "NIFTY BANK": "NIFTY%20BANK",
-        "NIFTY IT": "NIFTY%20IT",
-        "NIFTY FMCG": "NIFTY%20FMCG",
-        "NIFTY FIN SERVICE": "NIFTY%20FIN%20SERVICE",
         "NIFTY AUTO": "NIFTY%20AUTO",
-        "NIFTY PHARMA": "NIFTY%20PHARMA",
-        "NIFTY REALTY": "NIFTY%20REALTY",
+        "NIFTY FINANCIAL SERVICES": "NIFTY%20FINANCIAL%20SERVICES",
+        "NIFTY FINANCIAL SERVICES 25/50": "NIFTY%20FINANCIAL%20SERVICES%2025%2F50",
+        "NIFTY FMCG": "NIFTY%20FMCG",
+        "NIFTY IT": "NIFTY%20IT",
+        "NIFTY MEDIA": "NIFTY%20MEDIA",
         "NIFTY METAL": "NIFTY%20METAL",
-        "NIFTY ENERGY": "NIFTY%20ENERGY"
+        "NIFTY PHARMA": "NIFTY%20PHARMA",
+        "NIFTY PSU BANK": "NIFTY%20PSU%20BANK",
+        "NIFTY PRIVATE BANK": "NIFTY%20PRIVATE%20BANK",
+        "NIFTY REALTY": "NIFTY%20REALTY",
+        "NIFTY HEALTHCARE INDEX": "NIFTY%20HEALTHCARE%20INDEX",
+        "NIFTY ENERGY": "NIFTY%20ENERGY",
+        "NIFTY OIL & GAS": "NIFTY%20OIL%20%26%20GAS",
+        "NIFTY CONSUMER DURABLES": "NIFTY%20CONSUMER%20DURABLES",
+        "NIFTY CONSUMER SERVICES": "NIFTY%20CONSUMER%20SERVICES",
+        "NIFTY INFRASTRUCTURE": "NIFTY%20INFRASTRUCTURE",
+        "NIFTY SERVICES SECTOR": "NIFTY%20SERVICES%20SECTOR",
+        "NIFTY COMMODITIES": "NIFTY%20COMMODITIES",
+        "NIFTY CPSE": "NIFTY%20CPSE",
+        "NIFTY PSE": "NIFTY%20PSE",
+        "NIFTY MNC": "NIFTY%20MNC",
+        "NIFTY MICROCAP250": "NIFTY%20MICROCAP250"
+        # Add more sector mappings as needed if NSE adds more indices
     }
 
     symbol_sector_map = {}
@@ -147,9 +165,30 @@ def build_sector_map(nifty100_symbols):
 
 def get_sector_strength():
     sector_indices = [
-        "NIFTY BANK", "NIFTY IT", "NIFTY FMCG", "NIFTY FIN SERVICE", "NIFTY AUTO",
-        "NIFTY PHARMA", "NIFTY REALTY", "NIFTY METAL", "NIFTY ENERGY", "NIFTY CONSUMER DURABLES",
-        "NIFTY OIL & GAS", "NIFTY MEDIA", "NIFTY HEALTHCARE INDEX"
+        "NIFTY BANK",
+        "NIFTY AUTO",
+        "NIFTY FINANCIAL SERVICES",
+        "NIFTY FINANCIAL SERVICES 25/50",
+        "NIFTY FMCG",
+        "NIFTY IT",
+        "NIFTY MEDIA",
+        "NIFTY METAL",
+        "NIFTY PHARMA",
+        "NIFTY PSU BANK",
+        "NIFTY PRIVATE BANK",
+        "NIFTY REALTY",
+        "NIFTY HEALTHCARE INDEX",
+        "NIFTY ENERGY",
+        "NIFTY OIL & GAS",
+        "NIFTY CONSUMER DURABLES",
+        "NIFTY CONSUMER SERVICES",
+        "NIFTY INFRASTRUCTURE",
+        "NIFTY SERVICES SECTOR",
+        "NIFTY COMMODITIES",
+        "NIFTY CPSE",
+        "NIFTY PSE",
+        "NIFTY MNC",
+        "NIFTY MICROCAP250"
     ]
     sector_gains = {}
     market_condition = "bullish"
@@ -262,19 +301,32 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
         
         # Fetch yesterday's close and open price
         try:
-            quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}"
-            quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
+            dhan_context = DhanContext(CLIENT_ID, ACCESS_TOKEN)
+            dhan = dhanhq(dhan_context)
             
-            # Handle rate limiting
-            if quote_resp.status_code == 429:
-                wait_time = 5 + random.uniform(0, 2)
-                print(f"⏳ Rate limited on quote API. Waiting {wait_time:.1f}s...")
-                time.sleep(wait_time)
-                quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
+            try:
+                # Use Dhan SDK to get quote (returns dict, no market cap field)
+                quote_data = dhan.ohlc_data(securities={"NSE_EQ": [int(secid)]})
+                print(f"🟡 {symbol} Dhan SDK Quote Response: {quote_data}")
             
-            quote_data = quote_resp.json()
-            prev_close = float(quote_data.get("previousClose", 0))
-            open_price = float(quote_data.get("openPrice", 0))
+                prev_close = float(quote_data.get(str(secid), {}).get("previous_close", 0))
+                open_price = float(quote_data.get(str(secid), {}).get("open", 0))
+            
+                # Market cap not provided by Dhan - try NSE public API as fallback
+                nse_url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
+                nse_headers = {"User-Agent": "Mozilla/5.0"}
+                nse_resp = requests.get(nse_url, headers=nse_headers, timeout=5)
+                if nse_resp.status_code == 200:
+                    nse_data = nse_resp.json()
+                    market_cap = float(nse_data.get("marketCap", 0) or nse_data.get("market_cap", 0) or 0)
+                    print(f"🟢 {symbol} NSE Market Cap parsed: {market_cap}")
+                else:
+                    market_cap = 0
+                    print(f"⚠️ NSE Market Cap fetch failed for {symbol} (status: {nse_resp.status_code})")
+            
+            except Exception as e:
+                print(f"⚠️ Error fetching quote/market cap for {symbol}: {e}")
+                continue         
     
             # Smart Gap-Up Rejection Logic (1% threshold)
             if prev_close > 0 and open_price > prev_close * (1 + GAP_UP_THRESHOLD):
@@ -522,7 +574,8 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
             "sector": sector,
             "sector_strength": sector_strengths.get(sector, 0),
             "stock_origin": "Nifty100",
-            "priority_score": round(atr * avg_volume, 2)  # Added priority score
+            "priority_score": round(atr * avg_volume, 2),  # Added priority score
+            "market_cap": market_cap,
         })
         print(f"✅ SELECTED: ₹{ltp:,.2f} | Vol: {avg_volume:,.0f} | Range: ₹{atr:.2f} | RSI: {rsi_value:.2f}")
 
@@ -535,113 +588,178 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
 print("\n🚀 Starting Small Cap scan...")
 smallcap_results = []
 
-# Filter only EQ/NSE_EQ & skip SME/PSU/ETF/REIT
+# Filter only EQ/E & skip SME/PSU/ETF/REIT
 symbol_col = "SEM_TRADING_SYMBOL"
 series_col = "SEM_SERIES"
 segment_col = "SEM_SEGMENT"
 security_id_col = "SEM_SMST_SECURITY_ID"
 
+# Clean and standardize columns
+master_df[series_col] = master_df[series_col].astype(str).str.strip().str.upper()
+master_df[segment_col] = master_df[segment_col].astype(str).str.strip().str.upper()
+
 smallcap_df = master_df[
     (master_df[series_col] == "EQ") &
-    (master_df[segment_col] == "NSE_EQ") &
+    (master_df[segment_col] == "E") &
     (~master_df[symbol_col].str.contains("SME|PSU|ETF|REIT", case=False, na=False))
 ]
 
-for _, row in smallcap_df.iterrows():
-    try:
-        sym = row[symbol_col]
-        sec_id = str(row[security_id_col])
-        sector = "UNKNOWN"
+print(f"Smallcap stocks to scan: {len(smallcap_df)}")
 
-        print(f"🔍 Scanning SMALLCAP: {sym}")
-
-        # Fetch intraday 1-min data
-        today = datetime.date.today().strftime("%Y-%m-%d")
-        payload = {
-            "securityId": sec_id,
-            "exchangeSegment": "NSE_EQ",
-            "instrument": "EQUITY",
-            "expiryCode": 0,
-            "fromDate": today,
-            "toDate": today
-        }
-        
-        response = requests.post(
-            "https://api.dhan.co/v2/charts/intraday", 
-            headers=HEADERS, 
-            json=payload,
-            timeout=10
-        )
-        
-        if response.status_code != 200:
-            print(f"⛔ Failed to fetch data for {sym}: {response.status_code}")
-            continue
+if len(smallcap_df) == 0:
+    print("⚠️ No smallcap stocks left after filter! Check filters or dhan_master.csv content.")
+else:
+    total_stocks = len(smallcap_df)
+    for i, (_, row) in enumerate(smallcap_df.iterrows(), start=1):
+        try:
+            sym = row[symbol_col]
+            sec_id = str(row[security_id_col])
+            # Try to assign correct sector from master_df (using base_symbol map)
+            base_symbol = sym.replace("-EQ", "").strip().upper()
+            sector = master_df.loc[master_df[symbol_col].str.upper() == base_symbol, "sector"].values
+            if len(sector) > 0 and pd.notna(sector[0]) and sector[0] != "":
+                sector = sector[0]
+            else:
+                sector = "UNKNOWN"
             
-        data = response.json()
-        df = pd.DataFrame(data["data"])
-        if df.empty or len(df) < 20:
-            print(f"⛔ {sym}: Insufficient data")
-            continue
 
-        df["datetime"] = pd.to_datetime(df["timestamp"], unit="s", utc=True).tz_convert("Asia/Kolkata")
-        df.set_index("datetime", inplace=True)
-        df = df.astype(float).sort_index()
+            print(f"\n🔍 Checking {sym} (Security ID: {sec_id}) [{i}/{total_stocks}]")
 
-        # Apply all filters
-        ltp = df["close"].iloc[-1]
-        if ltp > CAPITAL:
-            print(f"⛔ Price too high: ₹{ltp:.2f} > ₹{CAPITAL:,.2f}")
-            continue
+            # Fetch intraday 1-min data
+            today = datetime.now().strftime("%Y-%m-%d")
+            try:
+                candles = dhan.intraday_minute_data(
+                    security_id=sec_id,
+                    exchange_segment=dhan.NSE,
+                    instrument_type="EQUITY",
+                    from_date=today,
+                    to_date=today
+                )
+                # Robust data validation
+                if not candles or "data" not in candles or not candles["data"]:
+                    print(f"⛔ {sym}: No intraday data returned or API throttled (empty or missing 'data')")
+                    continue
+                df = pd.DataFrame(candles["data"])
+                if df.empty or len(df) < 20:
+                    print(f"⛔ {sym}: Insufficient data ({len(df)} rows)")
+                    continue
+            except Exception as e:
+                print(f"⛔ {sym}: Failed to fetch intraday data: {e}")
+                continue
 
-        rsi = RSIIndicator(df["close"], window=14).rsi().iloc[-1]
-        if rsi > SMALLCAP_MAX_RSI:
-            print(f"⛔ RSI too high: {rsi:.2f} > {SMALLCAP_MAX_RSI}")
-            continue
+            # Handle time column variations
+            if "startTime" in df.columns:
+                time_col = "startTime"
+            elif "timestamp" in df.columns:
+                time_col = "timestamp"
+            else:
+                print(f"⛔ {sym}: No valid time column ('startTime' or 'timestamp') in data: {df.columns.tolist()}")
+                continue
+            
+            # Process and validate timestamps
+            df["datetime"] = pd.to_datetime(df[time_col], unit="s", errors="coerce")
+            if df["datetime"].isnull().any():
+                print(f"⛔ {sym}: Invalid timestamp conversion")
+                continue
+                
+            df.set_index("datetime", inplace=True)
+            try:
+                df = df.astype(float).sort_index()
+            except Exception as e:
+                print(f"⛔ {sym}: Data type conversion failed: {e}")
+                continue
 
-        atr = AverageTrueRange(df["high"], df["low"], df["close"], window=14).average_true_range().iloc[-1]
-        if atr < SMALLCAP_MIN_ATR:
-            print(f"⛔ Low volatility: ₹{atr:.2f} < ₹{SMALLCAP_MIN_ATR:.2f}")
-            continue
+            # LTP affordability check
+            ltp = df["close"].iloc[-1]
+            if ltp > CAPITAL:
+                print(f"⛔ {sym}: LTP ₹{ltp:.2f} > capital ₹{CAPITAL:.2f} — Skipped")
+                continue
+            else:
+                print(f"✅ {sym}: LTP ₹{ltp:.2f} < capital ₹{CAPITAL:.2f}")
 
-        avg_vol = df["volume"].tail(5).mean()
-        if avg_vol < SMALLCAP_MIN_VOLUME:
-            print(f"⛔ Low volume: {avg_vol:,.0f} < {SMALLCAP_MIN_VOLUME:,.0f}")
-            continue
+            # RSI check
+            rsi = RSIIndicator(df["close"], window=14).rsi().iloc[-1]
+            if np.isnan(rsi):
+                print(f"⛔ {sym}: RSI calculation failed (NaN)")
+                continue
+            if rsi > SMALLCAP_MAX_RSI:
+                print(f"⛔ {sym}: RSI {rsi:.2f} > {SMALLCAP_MAX_RSI} — Skipped")
+                continue
+            else:
+                print(f"✅ {sym}: RSI {rsi:.2f} ≤ {SMALLCAP_MAX_RSI}")
 
-        if df["close"].iloc[-1] < df["close"].iloc[-5]:
-            print(f"⛔ Negative momentum")
-            continue
+            # ATR check
+            atr = AverageTrueRange(df["high"], df["low"], df["close"], window=14).average_true_range().iloc[-1]
+            if np.isnan(atr):
+                print(f"⛔ {sym}: ATR calculation failed (NaN)")
+                continue
+            if atr < SMALLCAP_MIN_ATR:
+                print(f"⛔ {sym}: ATR {atr:.2f} < {SMALLCAP_MIN_ATR:.2f} — Skipped")
+                continue
+            else:
+                print(f"✅ {sym}: ATR {atr:.2f} ≥ {SMALLCAP_MIN_ATR:.2f}")
 
-        sma_20 = SMAIndicator(df["close"], window=20).sma_indicator().iloc[-1]
+            # Volume check
+            avg_vol = df["volume"].tail(5).mean()
+            if np.isnan(avg_vol):
+                print(f"⛔ {sym}: Volume calculation failed (NaN)")
+                continue
+            if avg_vol < SMALLCAP_MIN_VOLUME:
+                print(f"⛔ {sym}: Avg Vol {avg_vol:,.0f} < {SMALLCAP_MIN_VOLUME:,.0f} — Skipped")
+                continue
+            else:
+                print(f"✅ {sym}: Avg Vol {avg_vol:,.0f} ≥ {SMALLCAP_MIN_VOLUME:,.0f}")
 
-        qty = int(CAPITAL // ltp)
-        capital_used = round(qty * ltp, 2)
-        potential_profit = round(atr * qty, 2)
-        priority_score = round(avg_vol * atr, 2)
+            # Momentum check (from smallcap script)
+            if df["close"].iloc[-1] < df["close"].iloc[-5]:
+                print(f"⛔ {sym}: Negative momentum (Last close {df['close'].iloc[-1]:.2f} < {df['close'].iloc[-5]:.2f}) — Skipped")
+                continue
+            else:
+                print(f"✅ {sym}: Momentum positive")
 
-        smallcap_results.append({
-            "symbol": sym,
-            "security_id": sec_id,
-            "ltp": round(ltp, 2),
-            "quantity": qty,
-            "capital_used": capital_used,
-            "avg_volume": int(avg_vol),
-            "avg_range": round(atr, 2),
-            "potential_profit": potential_profit,
-            "sma_20": round(sma_20, 2),
-            "rsi": round(rsi, 2),
-            "macd": 0,  # Not calculated for smallcaps
-            "macd_hist": 0,
-            "macd_crossover": 0,
-            "sector": sector,
-            "sector_strength": 0,  # Not available for smallcaps
-            "stock_origin": "SmallCap",
-            "priority_score": priority_score
-        })
-        print(f"✅ SELECTED: ₹{ltp:.2f} | Vol: {avg_vol:,.0f} | Range: ₹{atr:.2f} | RSI: {rsi:.2f}")
+            # SMA calculation
+            sma_20 = SMAIndicator(df["close"], window=20).sma_indicator().iloc[-1]
+            if np.isnan(sma_20):
+                print(f"⛔ {sym}: SMA20 calculation failed (NaN)")
+                continue
+            else:
+                print(f"✅ {sym}: SMA20 computed ({sma_20:.2f})")
 
-    except Exception as e:
-        print(f"❌ {sym} failed: {e}")
+            # Position sizing
+            qty = int(CAPITAL // ltp)
+            capital_used = round(qty * ltp, 2)
+            potential_profit = round(atr * qty, 2)
+            priority_score = round(avg_vol * atr, 2)
+            market_cap = row.get("market_cap", 5000)
+            if pd.isna(market_cap) or market_cap in (None, 0, ""):
+                market_cap = 5000
+
+            smallcap_results.append({
+                "symbol": sym,
+                "security_id": sec_id,
+                "ltp": round(ltp, 2),
+                "quantity": qty,
+                "capital_used": capital_used,
+                "avg_volume": int(avg_vol),
+                "avg_range": round(atr, 2),
+                "potential_profit": potential_profit,
+                "sma_20": round(sma_20, 2),
+                "rsi": round(rsi, 2),
+                "macd": 0,  # Not calculated for smallcaps
+                "macd_hist": 0,
+                "macd_crossover": 0,
+                "sector": sector,
+                "sector_strength": 0,  # Not available for smallcaps
+                "stock_origin": "SmallCap",
+                "priority_score": priority_score,
+                "market_cap": 0   # Set as 0, or fetch if needed
+            })
+            print(f"✅ {sym}: PASSED ALL FILTERS and added to final list")
+
+        except Exception as e:
+            print(f"❌ {sym} failed: {e}")
+        finally:
+            time.sleep(0.1)  # Rate limit protection
 
 # ======== COMBINE RESULTS ========
 print("\n🚀 Combining scan results...")
@@ -666,33 +784,34 @@ if all_results:
         secid = str(row["SEM_SMST_SECURITY_ID"])
         sector = row.get("sector", "")
         
-        # Skip if already selected
         if symbol in results_df["symbol"].values:
+            print(f"❌ {symbol} rejected: Already in results_df")
             continue
     
         try:
             quote_url = f"https://api.dhan.co/quotes/isin?security_id={secid}"
             quote_resp = requests.get(quote_url, headers=HEADERS, timeout=5)
             if quote_resp.status_code != 200:
+                print(f"❌ {symbol} rejected: Quote fetch failed, status {quote_resp.status_code}")
                 continue
             data = quote_resp.json()
             open_price = float(data.get("openPrice", 0))
             ltp = float(data.get("lastTradedPrice", 0))
             if open_price <= 0 or ltp <= 0:
+                print(f"❌ {symbol} rejected: open_price ({open_price}) or ltp ({ltp}) <= 0")
                 continue
     
-            # Calculate percentage move
             if market_condition == "bullish":
                 pct_move = ((ltp - open_price) / open_price) * 100
-                min_move = 2.0  # Minimum 2% gain for bullish
+                min_move = 2.0
             else:
                 pct_move = ((open_price - ltp) / open_price) * 100
-                min_move = 1.5  # Minimum 1.5% drop for bearish
+                min_move = 1.5
             
             if abs(pct_move) < min_move:
+                print(f"❌ {symbol} rejected: pct_move={pct_move:.2f}% < min_move={min_move:.2f}%")
                 continue
     
-            # Get RSI
             from_date = (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d 09:15:00')
             to_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d 15:30:00')
             payload = {
@@ -706,26 +825,34 @@ if all_results:
             }
             response = requests.post("https://api.dhan.co/v2/charts/intraday", headers=HEADERS, json=payload, timeout=10)
             if response.status_code != 200:
+                print(f"❌ {symbol} rejected: Dhan intraday fetch failed, status {response.status_code}")
                 continue
             hist = response.json()
-            closes = pd.Series(hist["close"])
+            closes = pd.Series(hist.get("close", []))
             if closes.empty or len(closes) < 14:
+                print(f"❌ {symbol} rejected: Not enough closes data ({len(closes)} < 14)")
                 continue
             rsi_val = calculate_rsi(closes)
     
-            # Adjust RSI check for market condition
             if market_condition == "bullish":
-                if rsi_val >= 70:  # Overbought
+                if rsi_val >= 70:
+                    print(f"❌ {symbol} rejected: RSI {rsi_val:.2f} ≥ 70 (Overbought)")
                     continue
             else:
-                if rsi_val <= 30:  # Oversold
+                if rsi_val <= 30:
+                    print(f"❌ {symbol} rejected: RSI {rsi_val:.2f} ≤ 30 (Oversold)")
                     continue
     
             quantity = int(CAPITAL // ltp)
             if quantity <= 0:
+                print(f"❌ {symbol} rejected: Unaffordable (qty={quantity})")
                 continue
     
             capital_used = quantity * ltp
+            print(f"🟡 {symbol} Trending Quote API Response: {data}")
+            market_cap = float(data.get("marketCap", 0) or data.get("market_cap", 0) or 0)
+            print(f"🟢 {symbol} Trending Market Cap parsed: {market_cap}")
+            
             trending_additions.append({
                 "symbol": symbol,
                 "security_id": secid,
@@ -742,13 +869,15 @@ if all_results:
                 "macd_crossover": 0,
                 "sector": sector,
                 "sector_strength": sector_strengths.get(sector, 0),
-                "priority_score": abs(pct_move) * 100,  # Sort by momentum strength
-                "stock_origin": "Nifty100"
+                "priority_score": abs(pct_move) * 100,
+                "stock_origin": "Nifty100",
+                "market_cap": market_cap
             })
     
         except Exception as e:
             print(f"⚠️ Trending check failed for {symbol}: {str(e)[:60]}")
             continue
+    
     
     # Merge into existing result set
     if trending_additions:

@@ -6,5 +6,11 @@ date,Script_Name,total_scanned,affordable,technical_passed,volume_passed,sentime
 07/24/2025 09:37,dynamic_stock_generator.py,102,22,85,90,0,137,26,22,
 07/24/2025 09:46,dynamic_stock_generator.py,102,22,85,90,0,137,26,22,
 07/24/2025 10:10,dynamic_stock_generator.py,22,4,16,17,0,5,20,4,bullish
-07/25/2025 09:38,dynamic_stock_generator.py,102,17,85,89,0,91,19,17
-07/29/2025 09:38,dynamic_stock_generator.py,102,17,82,88,0,87,18,17
+07/25/2025 09:38,dynamic_stock_generator.py,102,17,85,89,0,91,19,17,
+07/29/2025 09:38,dynamic_stock_generator.py,102,17,82,88,0,87,18,17,
+07/30/2025 12:08,consolidated_dynamic_stock_generator.py,55,20,46,50,0,20,56,20,bullish
+07/30/2025 12:27,consolidated_dynamic_stock_generator.py,63,23,54,58,0,23,65,23,bullish
+07/30/2025 13:45,consolidated_dynamic_stock_generator.py,2082,21,44,47,0,21,54,21,bullish
+07/30/2025 14:37,consolidated_dynamic_stock_generator.py,2062,14,27,28,0,14,38,14,bullish
+07/30/2025 15:09,consolidated_dynamic_stock_generator.py,2105,27,61,64,0,30,72,27,bullish
+07/30/2025 15:29,consolidated_dynamic_stock_generator.py,2105,27,61,64,0,30,72,27,bullish
