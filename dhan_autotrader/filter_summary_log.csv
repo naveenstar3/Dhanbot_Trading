@@ -14,3 +14,8 @@ date,Script_Name,total_scanned,affordable,technical_passed,volume_passed,sentime
 07/30/2025 14:37,consolidated_dynamic_stock_generator.py,2062,14,27,28,0,14,38,14,bullish
 07/30/2025 15:09,consolidated_dynamic_stock_generator.py,2105,27,61,64,0,30,72,27,bullish
 07/30/2025 15:29,consolidated_dynamic_stock_generator.py,2105,27,61,64,0,30,72,27,bullish
+07/31/2025 09:30,consolidated_dynamic_stock_generator.py,2036,1,5,5,0,1,4,1,bearish
+07/31/2025 09:41,dynamic_stock_generator.py,100,15,84,86,0,97,19,15,
+07/31/2025 10:13,dynamic_stock_generator.py,100,15,84,86,0,97,19,15,
+07/31/2025 10:43,dynamic_stock_generator.py,100,15,84,86,0,97,19,15,
+07/31/2025 11:15,consolidated_dynamic_stock_generator.py,2047,2,12,12,0,6,12,2,bearish

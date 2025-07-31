@@ -136,30 +136,6 @@ def build_sector_map(nifty100_symbols):
     
     return symbol_sector_map
 
-def get_market_cap(symbol):
-    """Fetch market capitalization for a given symbol from NSE API."""
-    try:
-        url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json"
-        }
-        resp = requests.get(url, headers=headers, timeout=7)
-        if resp.status_code == 200:
-            data = resp.json()
-            # First try: Direct marketCap field
-            if 'priceInfo' in data and 'marketCap' in data['priceInfo']:
-                return data['priceInfo']['marketCap']
-            # Fallback: Calculate from issued shares
-            if 'securityInfo' in data and 'issuedSize' in data['securityInfo']:
-                issued_size = data['securityInfo']['issuedSize']
-                last_price = data['priceInfo']['lastPrice']
-                return issued_size * last_price
-    except Exception as e:
-        print(f"⚠️ Market cap fetch failed for {symbol}: {str(e)[:70]}")
-    # Final fallback value if all methods fail
-    return 5000
-
 def get_sector_strength():
     sector_indices = [
         "NIFTY BANK", "NIFTY IT", "NIFTY FMCG", "NIFTY FIN SERVICE", "NIFTY AUTO",
@@ -491,8 +467,6 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
         capital_used = quantity * ltp
         
         final_selected += 1
-        # Fetch market cap for the symbol
-        market_cap = get_market_cap(symbol)
         results.append({
             "symbol": symbol,
             "security_id": secid,
@@ -502,10 +476,9 @@ for count, (_, row) in enumerate(nifty100_df.iterrows(), start=1):
             "avg_volume": int(avg_volume),
             "avg_range": round(atr, 2),
             "potential_profit": round(quantity * atr, 2),
-            "sma_20": sma_20,
-            "rsi": rsi_value,
-            "stock_origin": "Dynamic",
-            "market_cap": market_cap   # NEW FIELD: market capitalization
+            "sma_20": sma_20,          # NEW FIELD
+            "rsi": rsi_value,           # NEW FIELD (corrected from rsi to rsi_value)
+            "stock_origin": "Dynamic"
         })
         print(f"✅ SELECTED: ₹{ltp:,.2f} | Vol: {avg_volume:,.0f} | Range: ₹{atr:.2f}")
 
@@ -523,43 +496,10 @@ if results:
     results_df = results_df.sort_values("priority_score", ascending=False)
     # 🔗 Merge sector info from master_df before saving
     sector_map = master_df.set_index("base_symbol")["sector"].to_dict()
-    results_df["sector"] = results_df["symbol"].map(sector_map)
-    
-    # --- Hybrid Dynamic Sector Fallback (NSE Quote API only for blanks) ---
-    
-    def fetch_sector_nse(symbol):
-        """Fetch sector info from NSE quote API for a given symbol."""
-        try:
-            url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
-            headers = {
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json"
-            }
-            resp = requests.get(url, headers=headers, timeout=7)
-            if resp.status_code == 200:
-                data = resp.json()
-                # Use "industry" field if present, else try "sector"
-                sector = data.get("industry", "") or data.get("sector", "")
-                # Additional fallback: Use index name if standard sector missing
-                if not sector:
-                    sector = data.get("metadata", {}).get("index", "NIFTY100")
-                return sector
-        except Exception as e:
-            print(f"Could not fetch sector for {symbol}: {e}")
-        # Critical fallback to ensure no blank/UNKNOWN values
-        return "NIFTY100"   # Generic fallback value
-    
-    for idx, row in results_df[results_df['sector'].isnull() | (results_df['sector'] == "")].iterrows():
-        symbol = row['symbol']
-        sector = fetch_sector_nse(symbol)
-        if sector:
-            results_df.at[idx, 'sector'] = sector
-        time.sleep(1.1)  # polite delay to avoid rate-limiting
-    
-    results_df.to_csv(OUTPUT_CSV, index=False)
+    results_df["sector"] = results_df["symbol"].map(sector_map)   
+    results_df.to_csv(OUTPUT_CSV, index=False)   
     log_to_postgres(datetime.now(), "Test_dynamic_stock_generator.py", "SUCCESS", f"{len(results_df)} stocks saved to dynamic_stock_list and DB.")
     log_dynamic_stock_list(results_df)
-    
     # ====== 📈 Trending Nifty 100 Boost (Top Gainers from Nifty100) ======
     print("\n🚀 Adding trending Nifty 100 gainers to boost trade pool...")
     
@@ -624,7 +564,6 @@ if results:
                 continue
     
             capital_used = quantity * ltp
-            market_cap = get_market_cap(symbol)
             trending_additions.append({
                 "symbol": symbol,
                 "security_id": secid,
@@ -633,13 +572,12 @@ if results:
                 "capital_used": capital_used,
                 "avg_volume": 0,
                 "avg_range": 0,
-                "potential_profit": round(quantity * 2, 2),
+                "potential_profit": round(quantity * 2, 2),  # Est. ₹2 profit
                 "sma_20": None,
                 "rsi": rsi_val,
                 "sector": row.get("sector", None),
-                "priority_score": pct_gain * 1000,
-                "stock_origin": "Trending",
-                "market_cap": market_cap   # NEW FIELD
+                "priority_score": pct_gain * 1000,  # Just for sorting
+                "stock_origin": "Trending"
             })
     
         except Exception as e:

@@ -2213,7 +2213,7 @@ def main():
             
             nifty_bullish = sector_sentiment_map.get("NIFTY 50", True)  # True if NIFTY 50 not found (fails open)
             
-            unique_sectors = df['sector'].dropna().str.strip().str.upper().unique()
+            unique_sectors = df['sector'].dropna().astype(str).str.strip().str.upper().unique()
             
             sector_status = {}
             for sector in unique_sectors:
@@ -2339,13 +2339,23 @@ def main():
                         avg_recent_volume = sum(recent_volumes) / len(recent_volumes)
                         turnover = avg_recent_volume * ltp
                         
-                        # 🚩 Strict liquidity: 20,000 shares/5-min candle OR ₹20L/candle (tune as needed)
-                        if avg_recent_volume < 10000 or turnover < 500000:
-                            print(
-                            f'❌ Ultra-low avg intraday volume: {avg_recent_volume:.0f} shares (required: 10,000), '
-                            f'Turnover: ₹{turnover:,.2f} (required: ₹5,00,000) - skipping'
-                            )
+                        # 🕒 Time-aware dynamic volume threshold
+                        now = datetime.now().time()
+                        if now < dtime(10, 0):
+                            min_volume = 5000
+                        elif now < dtime(11, 0):
+                            min_volume = 8000
+                        else:
+                            min_volume = 10000
+                        
+                        if avg_recent_volume < min_volume:
+                            print(f'❌ Avg volume too low: {avg_recent_volume:.0f} < {min_volume} - skipping {symbol}')
                             continue
+                        
+                        if turnover < 500000:
+                            print(f'❌ Turnover too low: ₹{turnover:,.2f} < ₹5,00,000 - skipping {symbol}')
+                            continue
+                        
                         
                     except KeyError as e:
                         print(f"❌ Missing quote data for {symbol}: {str(e)}")
