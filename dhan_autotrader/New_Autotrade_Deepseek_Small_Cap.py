@@ -168,8 +168,8 @@ MULTI_PROXY_MAP = {
     ],
     "NIFTY SERVICES SECTOR": [
         {"name": "CONTAINER CORPORATION OF INDIA LTD", "security_id": 4749},
-        {"name": "INDIAN RAIL TOUR CORP LTD", "security_id": 13611},
-        {"name": "ADANI ENTERPRISES LTD", "security_id": 25}
+        {"name": "IRCTC LTD", "security_id": 13611},
+        {"name": "BHARTI AIRTEL LIMITED", "security_id": 10604}
     ],
     "NIFTY COMMODITIES": [
         {"name": "GRASIM INDUSTRIES LTD", "security_id": 1232},
@@ -421,7 +421,9 @@ sector_indices = {
     "NIFTY INFRA": "NIFTY INFRA",
     "INSURANCE": "NIFTY FIN SERVICE",
     "AGROCHEMICALS": "NIFTY COMMODITIES",
-    "LOGISTICS": "NIFTY SERVICES SECTOR"
+    "LOGISTICS": "NIFTY SERVICES SECTOR",
+    "MEDIA": "NIFTY MEDIA",
+    "NIFTY MEDIA": "NIFTY MEDIA"
 }
 
 
@@ -2260,9 +2262,15 @@ def main():
                     # Enforce sector confirmation for small caps
                     mapped_sector = sector_indices.get(sector.strip().upper(), None)
                     
-                    if not nifty_bullish or not mapped_sector or not sector_status.get(mapped_sector, False):
-                        print(f'  ❌ Sector confirmation failed for {symbol} (sector: {sector}, mapped: {mapped_sector}) - skipping')
-                        continue
+                    if not nifty_bullish:
+                        if not mapped_sector:
+                            print(f'  ⚠️ Sector not mapped for {symbol} ({sector}) - skipping')
+                            continue
+                        if not sector_status.get(mapped_sector, False):
+                            if row.get('stock_origin', '') != 'Small Cap':  # Extra chance for small caps
+                                print(f'  ❌ Sector bearish for {symbol} ({mapped_sector}) - skipping')
+                                continue
+                            print(f'  ⚠️ Allowing Small Cap {symbol} despite bearish sector')
                     # Fetch candles with rate limit control
                     try:
                         candles = fetch_candles(secid, count=75)  # Increased for chart patterns
@@ -2277,10 +2285,21 @@ def main():
                             continue
                         raise
         
-                    # Block trades before 09:30
+                    # DYNAMIC TIME FILTER: SmallCaps get earlier entry window with strategic time-based exits
                     current_time = datetime.now().time()
-                    if current_time < dtime(9, 30):
-                        print(f"⏰ Too early for trading (before 09:30) - skipping {symbol}")
+                    
+                    # SmallCaps get earlier entry (9:15) but must exit earlier (3:00 PM) to avoid volatility
+                    if row.get('stock_origin', '') == 'Small Cap':
+                        entry_time = dtime(9, 15)
+                        # SmallCaps exit window closes earlier to avoid closing volatility
+                        if current_time > dtime(14, 45):
+                            print(f"⏰ SmallCap exit window closed (after 14:45) - skipping {symbol}")
+                            continue
+                    else:
+                        entry_time = dtime(9, 30)
+                    
+                    if current_time < entry_time:
+                        print(f"⏰ Too early for trading (before {entry_time.strftime('%H:%M')}) - skipping {symbol}")
                         continue
         
                     # Circuit filter (>5% move) -- FIXED: DhanHQ SDK-compliant ohlc_data
@@ -2339,21 +2358,48 @@ def main():
                         avg_recent_volume = sum(recent_volumes) / len(recent_volumes)
                         turnover = avg_recent_volume * ltp
                         
-                        # 🕒 Time-aware dynamic volume threshold
+                        # 🕒 Dynamic volume thresholds based on stock origin and time
                         now = datetime.now().time()
-                        if now < dtime(10, 0):
-                            min_volume = 5000
-                        elif now < dtime(11, 0):
-                            min_volume = 8000
+                        stock_type = str(row.get('stock_origin', 'Small Cap')).strip()
+                        
+                        # Base thresholds by stock type (using stock_origin values)
+                        volume_thresholds = {
+                            'Large Cap': {'early': 8000, 'mid': 12000, 'late': 15000},
+                            'Mid Cap': {'early': 5000, 'mid': 8000, 'late': 10000},
+                            'Small Cap': {'early': 2000, 'mid': 3000, 'late': 4000},
+                            'UNKNOWN': {'early': 3000, 'mid': 5000, 'late': 7000}  # Default for unexpected values
+                        }
+                        
+                        # Get appropriate thresholds (default to Small Cap if unknown type)
+                        thresholds = volume_thresholds.get(stock_type, volume_thresholds['Small Cap'])
+                        
+                        # Apply volatility scaling (higher thresholds in high volatility)
+                        market_volatility = calculate_atr(candles[-30:]) if len(candles) >= 30 else 0
+                        volatility_factor = 1.0
+                        if ltp > 0 and market_volatility > (ltp * 0.015): # >1.5% ATR
+                            volatility_factor = 1.3
+                        
+                        # Select threshold based on time
+                        if now < dtime(10, 30):
+                            min_volume = thresholds['early'] * volatility_factor
+                        elif now < dtime(13, 30):
+                            min_volume = thresholds['mid'] * volatility_factor
                         else:
-                            min_volume = 10000
+                            min_volume = thresholds['late'] * volatility_factor
+                        
+                        # Dynamic turnover requirement (scaled by stock type)
+                        min_turnover = {
+                            'Large Cap': 1000000,
+                            'Mid Cap': 750000,
+                            'Small Cap': 500000
+                        }.get(stock_type, 500000)  # Default to Small Cap threshold
                         
                         if avg_recent_volume < min_volume:
-                            print(f'❌ Avg volume too low: {avg_recent_volume:.0f} < {min_volume} - skipping {symbol}')
+                            print(f'❌ Avg volume too low: {avg_recent_volume:.0f} < {min_volume:.0f} ({stock_type}) - skipping {symbol}')
                             continue
                         
-                        if turnover < 500000:
-                            print(f'❌ Turnover too low: ₹{turnover:,.2f} < ₹5,00,000 - skipping {symbol}')
+                        if turnover < min_turnover:
+                            print(f'❌ Turnover too low: ₹{turnover:,.2f} < ₹{min_turnover:,.0f} ({stock_type}) - skipping {symbol}')
                             continue
                         
                         
@@ -2661,9 +2707,9 @@ def main():
                 except Exception as e:
                     print(f"⚠️ Failed to log bot_execution reason: {e}")
             else:
-                print("❌ No valid trades found this iteration. Retrying in 1 minutes...")
-                send_telegram("🔄 No valid trades found. Rescanning in 1 minutes...")
-                time.sleep(60)  # Wait 60 sec before next scan
+                print("❌ No valid trades found this iteration. Retrying in 2 minutes...")
+                send_telegram("🔄 No valid trades found. Rescanning in 2 minutes...")
+                time.sleep(120)  # Wait 60 sec before next scan
                 
         except Exception as e:
             print(f"⚠️ Main loop error: {e}")
