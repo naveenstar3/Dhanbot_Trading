@@ -613,8 +613,9 @@ def has_hold():
     except:
         return False
 
-def fetch_candles(security_id, count=20, cache={}, exchange_segment="NSE_EQ", instrument_type="EQUITY"):
-    """Fetch candles with caching and retry mechanism to prevent redundant calls"""
+def fetch_candles(security_id, count=20, cache=None, exchange_segment="NSE_EQ", instrument_type="EQUITY"):
+    if cache is None:
+        cache = {}
     date_str = datetime.now().strftime("%Y%m%d")
     cache_key = f"{date_str}_{security_id}_{count}_{exchange_segment}"
     if cache_key in cache:
@@ -1790,7 +1791,14 @@ def place_order(symbol, security_id, qty, price, pattern_name, candles, tick_siz
     if is_breakout_trade:
         # Dynamic buffer based on volatility (ATR)
         atr = calculate_atr(candles)
-        buffer = max(0.005, min(0.02, atr / price * 2))  # 0.5%-2% range
+        # 'price' is undefined here; use the entry price (limit_price) as reference
+        buffer = max(
+            0.005,
+            min(
+                0.02,
+                (atr / float(limit_price)) * 2
+            )
+        )  # 0.5%-2% range
         breakout_stop = breakout_level * (1 - buffer)
         if stop_loss < breakout_stop:
             stop_loss = breakout_stop
@@ -2354,7 +2362,13 @@ def main():
                             continue
 
                         # Turnover check (₹ value)
-                        recent_volumes = [c["volume"] for c in candles[-5:]] if len(candles) >= 5 else [candles[-1]["volume"]]
+                        recent_volumes = [c.get("volume") for c in candles[-5:]] if len(candles) >= 5 else [candles[-1].get("volume")]
+                        # Fail loudly if any volume entry is missing or non‑positive
+                        if any(v is None or v <= 0 for v in recent_volumes):
+                            raise ValueError(
+                                f"❌ Invalid volume data detected for {symbol}. "
+                                f"Recent volumes: {recent_volumes}"
+                            )
                         avg_recent_volume = sum(recent_volumes) / len(recent_volumes)
                         turnover = avg_recent_volume * ltp
                         
@@ -2479,7 +2493,13 @@ def main():
                     
                     # Adaptive spike threshold (lower in high volatility)
                     market_volatility = calculate_atr(candles[-30:]) if len(candles) >= 30 else 0
-                    spike_multiplier = 3.0 if market_volatility < (price * 0.01) else 2.2  # Dynamic adjustment
+                    # Use the last traded price for volatility scaling instead of undefined 'price'
+                    reference_price = ltp  # ltp is fetched from the quote data
+                    spike_multiplier = (
+                        3.0
+                        if (reference_price > 0 and market_volatility < (reference_price * 0.01))
+                        else 2.2
+                    )  # Dynamic adjustment
                     
                     # Volume spike logic
                     if current_volume > spike_multiplier * avg_30d_volume:
