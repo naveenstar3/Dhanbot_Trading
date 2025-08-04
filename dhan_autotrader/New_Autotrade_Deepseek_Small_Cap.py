@@ -18,6 +18,7 @@ from scipy.stats import linregress  # Added for trend analysis
 
 log_buffer = io.StringIO()
 test_mode = False
+skip_sector_check = True
 
 class TeeLogger:
     def __init__(self, *streams):
@@ -1255,14 +1256,22 @@ def detect_bullish_pattern(candles, symbol=None):
             
             # Consolidation range with breakout confirmation
             if range_pct < 0.03 and c.iloc[-1] > resistance:  # Close above resistance
-                # Volume vs prior resistance tests
-                resistance_tests = [v for i, candle in enumerate(candles[-20:]) 
-                                   if candle['high'] >= resistance_level * 0.995]
-                test_vol_avg = sum(resistance_tests) / len(resistance_tests) if resistance_tests else 0
-                
-                # Volume confirmation: current volume > 1.5x resistance test average
-                vol_ok = current_vol > test_vol_avg * 1.5 if test_vol_avg > 0 else False
-                vol_ratio = current_vol / test_vol_avg if test_vol_avg > 0 else 0
+                # Volume vs prior resistance tests (use per-candle volumes, not the full Series)
+                resistance_tests = [
+                    candle["volume"]
+                    for candle in candles[-20:]
+                    if candle["high"] >= resistance * 0.995
+                ]
+                test_vol_avg = sum(resistance_tests) / len(resistance_tests) if resistance_tests else 0.0
+
+                # Volume confirmation: current volume must be > 1.5 × prior-test average
+                current_vol = v.iloc[-1]                                      # latest candle volume
+                if test_vol_avg > 0:
+                    vol_ok   = current_vol > 1.5 * test_vol_avg
+                    vol_ratio = current_vol / test_vol_avg
+                else:
+                    vol_ok   = False
+                    vol_ratio = 0.0
                 # Price confirmation (closing above resistance)
                 price_ok = c.iloc[-1] > resistance
                 
@@ -1510,7 +1519,8 @@ def check_gap_up(security_id):
         if prev_close <= 0:
             return False
 
-        gap_up = (today_open - prev_close) / prev_close > 0.01
+        # Allow mild 1–2 % gaps; block only > 2 %
+        gap_up = (today_open - prev_close) / prev_close > 0.02
 
         # Block all gap-ups >1% regardless of pullback
         if gap_up:
@@ -2270,7 +2280,8 @@ def main():
                     # Enforce sector confirmation for small caps
                     mapped_sector = sector_indices.get(sector.strip().upper(), None)
                     
-                    if not nifty_bullish:
+                    # Skip sector sentiment checks when skip_sector_check is True
+                    if not skip_sector_check and not nifty_bullish:
                         if not mapped_sector:
                             print(f'  ⚠️ Sector not mapped for {symbol} ({sector}) - skipping')
                             continue
@@ -2279,6 +2290,7 @@ def main():
                                 print(f'  ❌ Sector bearish for {symbol} ({mapped_sector}) - skipping')
                                 continue
                             print(f'  ⚠️ Allowing Small Cap {symbol} despite bearish sector')
+                    
                     # Fetch candles with rate limit control
                     try:
                         candles = fetch_candles(secid, count=75)  # Increased for chart patterns
@@ -2357,18 +2369,30 @@ def main():
                             continue
 
                         spread_pct = bid_ask_spread / ltp * 100
-                        if spread_pct > 1.0:  # 1% threshold
+                        if spread_pct > 1.5:  # 1.5 % threshold (safe for small-caps)
                             print(f'⚠️ High bid-ask spread ({spread_pct:.2f}%) for {symbol} - skipping')
                             continue
 
-                        # Turnover check (₹ value)
-                        recent_volumes = [c.get("volume") for c in candles[-5:]] if len(candles) >= 5 else [candles[-1].get("volume")]
-                        # Fail loudly if any volume entry is missing or non‑positive
-                        if any(v is None or v <= 0 for v in recent_volumes):
-                            raise ValueError(
-                                f"❌ Invalid volume data detected for {symbol}. "
-                                f"Recent volumes: {recent_volumes}"
+                        # Turnover check (₹ value) – robust handling of sparse/zero volumes
+                        # 📈 Expanded look-back to 10 candles to accommodate thin-traded stocks
+                        recent_volumes_raw = (
+                            [c.get("volume") for c in candles[-10:]]
+                            if len(candles) >= 10
+                            else [c.get("volume") for c in candles]
+                        )
+                        
+                        # Keep only positive, non-null volumes
+                        recent_volumes = [v for v in recent_volumes_raw if v]
+                        
+                        # If fewer than three valid observations, treat as illiquid and skip gracefully
+                        if len(recent_volumes) < 3:
+                            print(
+                                f"⚠️ Insufficient positive volume observations for {symbol}: "
+                                f"{recent_volumes_raw} – skipping illiquid stock"
                             )
+                            continue  # Skip this symbol without raising
+                        
+                        # Proceed with turnover calculation once liquidity criteria are met
                         avg_recent_volume = sum(recent_volumes) / len(recent_volumes)
                         turnover = avg_recent_volume * ltp
                         
@@ -2378,11 +2402,12 @@ def main():
                         
                         # Base thresholds by stock type (using stock_origin values)
                         volume_thresholds = {
-                            'Large Cap': {'early': 8000, 'mid': 12000, 'late': 15000},
-                            'Mid Cap': {'early': 5000, 'mid': 8000, 'late': 10000},
-                            'Small Cap': {'early': 2000, 'mid': 3000, 'late': 4000},
-                            'UNKNOWN': {'early': 3000, 'mid': 5000, 'late': 7000}  # Default for unexpected values
+                            'Large Cap': {'early': 5000, 'mid': 8000 , 'late': 10000},
+                            'Mid Cap'  : {'early': 3000, 'mid': 5000 , 'late':  7000},
+                            'Small Cap': {'early': 1000, 'mid': 1500 , 'late':  2000},
+                            'UNKNOWN'  : {'early': 2000, 'mid': 3500 , 'late':  5000}
                         }
+                        
                         
                         # Get appropriate thresholds (default to Small Cap if unknown type)
                         thresholds = volume_thresholds.get(stock_type, volume_thresholds['Small Cap'])
@@ -2401,12 +2426,12 @@ def main():
                         else:
                             min_volume = thresholds['late'] * volatility_factor
                         
-                        # Dynamic turnover requirement (scaled by stock type)
                         min_turnover = {
-                            'Large Cap': 1000000,
-                            'Mid Cap': 750000,
-                            'Small Cap': 500000
-                        }.get(stock_type, 500000)  # Default to Small Cap threshold
+                            'Large Cap': 500000,   # ₹5 L
+                            'Mid Cap'  : 250000,   # ₹2.5 L
+                            'Small Cap': 100000    # ₹1 L
+                        }.get(stock_type, 100000)
+                        
                         
                         if avg_recent_volume < min_volume:
                             print(f'❌ Avg volume too low: {avg_recent_volume:.0f} < {min_volume:.0f} ({stock_type}) - skipping {symbol}')
@@ -2514,30 +2539,40 @@ def main():
                     # Technical indicators with RSI divergence check
                     closes = pd.Series([c["close"] for c in candles])
                     highs = pd.Series([c["high"] for c in candles])
+                    # --- Compute full RSI series first (14-period) ---
+                    delta = closes.diff()
+                    gain  = delta.where(delta > 0, 0)
+                    loss  = -delta.where(delta < 0, 0)
+                    avg_gain = gain.rolling(14).mean().bfill()
+                    avg_loss = loss.rolling(14).mean().bfill().replace(0, 0.01)
+                    rs = avg_gain / avg_loss
+                    rsi_series = 100 - (100 / (1 + rs))
+
+                    # Latest RSI value and MACD metrics (unchanged)
                     rsi, macd_hist, macd_cross = compute_rsi_macd(closes)
-                    
-                    # ✅ FIXED: Robust RSI Divergence Detection to avoid float indexing
-                    def has_rsi_divergence(highs, rsi, lookback=14):
-                        if len(highs) < lookback or len(rsi) < lookback:
+
+                    # --- Robust RSI-divergence helper (expects Series) ---
+                    def has_rsi_divergence(highs, rsi_series, lookback=14):
+                        if len(highs) < lookback or len(rsi_series) < lookback:
                             return False
-                        
+
                         highs_lookback = highs.iloc[-lookback:]
-                        rsi_lookback = rsi.iloc[-lookback:]
-                        
+                        rsi_lookback   = rsi_series.iloc[-lookback:]
+
                         if highs_lookback.empty or rsi_lookback.empty:
                             return False
-                    
+
                         max_high_idx = highs_lookback.idxmax()
-                        max_high = highs.loc[max_high_idx]
-                        rsi_at_high = rsi.loc[max_high_idx]
-                        
+                        max_high     = highs.loc[max_high_idx]
+                        rsi_at_high  = rsi_series.loc[max_high_idx]
+
                         current_high = highs.iloc[-1]
-                        current_rsi = rsi.iloc[-1]
-                        
+                        current_rsi  = rsi_series.iloc[-1]
+
                         return current_high > max_high and current_rsi < rsi_at_high
-                    
-                    
-                    rsi_divergence = has_rsi_divergence(highs, rsi) if len(closes) >= 14 else False
+
+                    # Use the Series-based divergence check
+                    rsi_divergence = has_rsi_divergence(highs, rsi_series) if len(closes) >= 14 else False
                     print(f'📊 RSI: {rsi:.2f}, MACD Hist: {macd_hist:.4f}, MACD Cross: {macd_cross}, Divergence: {rsi_divergence}')
                     
                     # Later in the validation...
@@ -2563,16 +2598,17 @@ def main():
                             print(f'❌ RSI out of range ({rsi:.2f}), skipping...')
                             continue
                     
-                    # Enhanced MACD validation with pattern awareness
+                    # Adaptive MACD validation with pattern awareness
                     if "Bottom" in pattern_name or "Reversal" in pattern_name:
-                        # For reversal patterns, accept positive histogram OR crossover
+                        # Reversal setups: need fresh bullish cue – positive hist **OR** crossover
                         if not (macd_hist > 0 or macd_cross):
-                            print('❌ MACD filter failed for reversal (need positive hist OR cross), skipping...')
+                            print('❌ MACD filter failed for reversal (need positive hist OR cross), skipping.')
                             continue
                     else:
-                        # For continuation patterns, maintain strict crossover requirement
-                        if not (macd_hist > 0 and macd_cross):
-                            print('❌ MACD filter failed (need positive hist AND cross), skipping...')
+                        # Continuation / breakout setups: require MACD above signal (hist > 0);
+                        # demanding the one-bar crossover again would reject valid momentum trades.
+                        if macd_hist <= 0:
+                            print('❌ MACD filter failed (hist ≤ 0), skipping.')
                             continue
                             
                     # Pattern-specific validation rules
@@ -2605,7 +2641,7 @@ def main():
                         breakout_level = resistance_level
                     
                     # Skip if within 1.2% of resistance without breakout
-                    RESISTANCE_BUFFER = 0.012
+                    RESISTANCE_BUFFER = 0.015
                     current_price = candles[-1]['close']
                     if (pattern_name not in BREAKOUT_PATTERNS and 
                         current_price >= resistance_level * (1 - RESISTANCE_BUFFER)):
