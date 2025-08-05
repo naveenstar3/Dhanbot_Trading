@@ -341,8 +341,40 @@ def get_historical_price_daily(security_id, from_date, to_date):
         print(f"⚠️ Error fetching daily historical: {str(e)[:70]}")
         return []
 
-# ✅ CNC Market Order Placement (BUY or SELL)
-def place_order(security_id, quantity, transaction_type="BUY"):
+# ✅ Market / Super (Bracket) Order Placement
+def place_order(
+    security_id,
+    quantity,
+    transaction_type="BUY",
+    *,
+    super_order: bool = False,
+    take_profit: float | None = None,
+    stop_loss: float | None = None,
+):
+    """
+    Places a standard CNC market order or a Super-(Beta) intraday bracket order.
+
+    Parameters
+    ----------
+    security_id : str | int
+        Dhan security ID.
+    quantity : int
+        Order quantity (> 0).
+    transaction_type : {"BUY", "SELL"}
+        Direction of the parent leg.
+    super_order : bool, default False
+        When True, sends a Super (Beta) order by enabling Dhan's `smartOrder`.
+    take_profit : float, optional
+        Target price (required for Super orders).
+    stop_loss : float, optional
+        Stop-loss price (required for Super orders).
+    """
+    if quantity <= 0:
+        raise ValueError("❌ `quantity` must be a positive integer")
+
+    if super_order and (take_profit is None or stop_loss is None):
+        raise ValueError("❌ Super orders require both `take_profit` and `stop_loss`")
+
     url = "https://api.dhan.co/orders"
     headers = {
         "access-token": ACCESS_TOKEN,
@@ -350,30 +382,29 @@ def place_order(security_id, quantity, transaction_type="BUY"):
     }
 
     payload = {
-        "transactionType": transaction_type,  # BUY or SELL
+        "transactionType": transaction_type.upper(),            # BUY / SELL
         "exchangeSegment": "NSE_EQ",
-        "productType": "CNC",
+        "productType": "INTRADAY" if super_order else "CNC",
         "orderType": "MARKET",
         "validity": "DAY",
-        "securityId": security_id,
-        "quantity": quantity,
+        "securityId": str(security_id),
+        "quantity": int(quantity),
         "price": 0,
         "orderValue": 0,
         "disclosedQuantity": 0,
         "afterMarketOrder": False,
         "amoTime": "OPEN",
         "triggerPrice": 0,
-        "smartOrder": False
+        "smartOrder": super_order                               # ← enables Super(Beta)
     }
+
+    if super_order:
+        # Dhan expects target & SL as `squareOff` / `stopLoss`
+        payload["squareOff"] = round(take_profit, 2)
+        payload["stopLoss"]  = round(stop_loss, 2)
 
     try:
         response = session.post(url, json=payload)
-        json_resp = response.json()
-        if response.status_code == 200:
-            print(f"✅ Order {transaction_type} placed successfully for ID: {security_id}")
-        else:
-            print(f"❌ Order failed: {json_resp}")
-        return response.status_code, json_resp
+        return response.status_code, response.json()
     except Exception as e:
-        print(f"⚠️ Order placement failed: {e}")
-        return 500, {"error": str(e)}
+        raise RuntimeError(f"⚠️ Order placement failed: {e}") from e
