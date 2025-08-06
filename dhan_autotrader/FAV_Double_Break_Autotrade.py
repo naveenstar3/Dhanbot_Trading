@@ -1,4 +1,5 @@
 # ── STANDARD LIBS ─────────────────────────────────────────────────────────────
+import sys
 import time
 import logging
 from datetime import datetime
@@ -94,7 +95,7 @@ RISK_PCT          = 1.0
 RR_RATIO          = 3.0              # 3 : 1 for Double Break
 MAX_TRADES        = 10
 MAX_ERRORS        = 5
-POLL_SEC          = 55
+POLL_SEC          = 30
 
 # ── DATA STRUCTURES ──────────────────────────────────────────────────────────
 class ORBState:
@@ -106,12 +107,14 @@ class ORBState:
         "low",
         "locked",
         "first_break_side",
+        "first_break_price",          # NEW → close price at 1st break
+        "first_break_ts",             # NEW → timestamp of 1st break
         "first_break_candle_high",
         "first_break_candle_low",
         "retracement_extreme",
         "pulled_back",
         "entry_taken",
-        "double_break_complete",  # NEW → permanently blacklist symbol
+        "double_break_complete",      # permanently blacklist symbol for the day
     )
 
     def __init__(self):
@@ -122,12 +125,14 @@ class ORBState:
 
         # Double-Break bookkeeping
         self.first_break_side: Optional[str] = None       # "LONG" or "SHORT"
+        self.first_break_price: Optional[float] = None    # close at first break
+        self.first_break_ts: Optional[str] = None         # timestamp of first break
         self.first_break_candle_high: Optional[float] = None
         self.first_break_candle_low: Optional[float] = None
-        self.retracement_extreme: Optional[float] = None  # swing low (long) / swing high (short)
+        self.retracement_extreme: Optional[float] = None  # swing low/high during pullback
         self.pulled_back: bool = False                    # has price closed back in range?
         self.entry_taken: bool = False                    # one trade per day
-        self.double_break_complete: bool = False           # initialize flag to avoid AttributeError
+        self.double_break_complete: bool = False          # flag once trade done
 
 
 class Trade:
@@ -282,25 +287,37 @@ class DoubleBreakEngine:
             ts = str(bar_ts)
 
         # ------------------------------------------------------------------ #
-        # STEP 1 – detect the FIRST break, store its candle extremes
+        # STEP 1 – detect the FIRST break, store its candle extremes + timestamp
         # ------------------------------------------------------------------ #
         if st.first_break_side is None:
             # LONG side first break
+            if isinstance(bar_ts, datetime):
+                ts_str = bar_ts.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                ts_str = str(bar_ts).split("+")[0]  # remove +05:30 if present
+            
+            # LONG side first break
             if close > st.high:
-                st.first_break_side = "LONG"
-                st.first_break_candle_low = low
+                st.first_break_side   = "LONG"
+                st.first_break_price  = close
+                st.first_break_ts     = ts_str
+                st.first_break_candle_low  = low
                 st.first_break_candle_high = high
                 st.retracement_extreme = low  # start with its low
-                log.info(f"✅ {sym}: first LONG break recorded @ {close} at {ts}")
+                log.info(f"✅ {sym}: first LONG break recorded @ {close} at {ts_str}")
                 return
+            
             # SHORT side first break
             if close < st.low:
-                st.first_break_side = "SHORT"
-                st.first_break_candle_low = low
+                st.first_break_side   = "SHORT"
+                st.first_break_price  = close
+                st.first_break_ts     = ts_str
+                st.first_break_candle_low  = low
                 st.first_break_candle_high = high
                 st.retracement_extreme = high  # start with its high
-                log.info(f"✅ {sym}: first SHORT break recorded @ {close} at {ts}")
+                log.info(f"✅ {sym}: first SHORT break recorded @ {close} at {ts_str}")
                 return
+                        
             # nothing else to do yet
             return
 
@@ -486,8 +503,11 @@ class DoubleBreakEngine:
         qty = position_size(entry, stop, self.equity_base)
     
         if side == "LONG" and qty * entry > available_cash:
-            log.warning(f"{sym}: insufficient capital for LONG ({qty} @ {entry}).")
+            required_cash = qty * entry
+            shortfall = required_cash - available_cash
+            log.warning(f"{sym}: insufficient capital for LONG ({qty} @ {entry}). Need ₹{required_cash:.2f}, short by ₹{shortfall:.2f}.")
             return
+        
         if qty == 0:
             log.info(f"{sym}: qty 0 — risk too small.")
             return
@@ -497,25 +517,71 @@ class DoubleBreakEngine:
                 else entry - RR_RATIO * (stop - entry)
         txn = "BUY" if side == "LONG" else "SELL"
     
-        code, resp = dh.place_order(
-            sid,
-            qty,
-            transaction_type=txn,
-            super_order=True,         # ← activates “Super (Beta)” bracket order
-            take_profit=target,
-            stop_loss=stop,
-        )
-        
-        # ── Flag the session as complete on the first successful order ────────────
-        if code == 200 and resp.get("status") == "success":
-            self.trade_placed = True
-            
-        if code != 200:
-            log.error(f"{sym}: order rejected — {resp}")
-            return
-        
+        # ── 0 · Hard cap: value must not exceed MAX_BUDGET ──────────────────
+        MAX_BUDGET = float(getattr(config, "capital", 5_000))   # ₹
+        order_value = qty * entry
+        if order_value > MAX_BUDGET:
+            qty = int(MAX_BUDGET // entry)
+            order_value = qty * entry
+            if qty == 0:
+                log.warning(f"{sym}: price {entry} exceeds max_budget {MAX_BUDGET}. Skipping.")
+                return
+            log.info(f"{sym}: qty trimmed to {qty} (₹{order_value:.0f}) to respect max_budget.")
 
-        oid = resp["data"]["order_id"]
+        # ── 1 · Place the *parent* leg via the SDK’s dedicated helper ────────
+        #    (wrapper takes care of generating the two child legs)
+        code, resp = dh.place_super_order(
+            security_id=sid,
+            quantity=qty,
+            transaction_type=txn,     # "BUY" or "SELL"
+            entry_price=entry,
+            stop_loss=stop,
+            take_profit=target,
+            product_type="INTRADAY",  # mandatory for Super(beta)
+            order_type="MARKET",      # market entry
+        )
+
+        # The Super-order API first returns TRANSIT / PENDING.
+        if code != 200:
+            log.error(f"{sym}: HTTP error {code} — {resp}")
+            return
+
+        oid = (
+            (resp.get("data") or {}).get("orderId")
+            or resp.get("orderId")
+        )
+        if not oid:
+            log.error(f"{sym}: cannot locate orderId in reply → {resp}")
+            return
+
+        log.info(f"{sym}: parent order accepted (ID {oid}) — waiting for child legs …")
+
+        # ── 2 · Poll order-details until status is OPEN and 2 child legs exist ──
+        for _ in range(15):                       # ~15 s max
+            od = dh.get_order_details(oid) or {}
+            status  = od.get("orderStatus", "").upper()
+            childs  = od.get("child_orders", [])
+            if status in {"OPEN", "TRIGGER PENDING"} and len(childs) >= 2:
+                log.info(f"{sym}: SL & TP legs confirmed — shutting down.")
+                sys.exit(0)  # ✅ exit gracefully if confirmed
+            time.sleep(1)
+
+        # If loop ends without confirming child legs
+        log.error(f"{sym}: child legs not confirmed within 15 s — exiting with error.")
+        sys.exit(1)  # ❌ stop engine if SL/TP legs not created
+
+        # dh.place_order returns either
+        #   {"status":"success","data":{"order_id":…}}
+        # or {"status":"success","order_id":…}
+        oid = (
+            (resp.get("data") or {}).get("order_id")
+            or resp.get("order_id")
+        )
+        if not oid:
+            log.error(f"{sym}: success reply but no order_id field — {resp}")
+            return
+
+        self.trade_placed = True     # first valid order of the session
         self.trades[oid] = Trade(
             order_id=oid,
             side=side,
@@ -530,6 +596,25 @@ class DoubleBreakEngine:
             f"DOUBLE-BREAK {side} {sym} qty={qty} entry={entry} "
             f"SL={stop} TP={target}"
         )
+
+        # ── 4 · Confirm that child legs exist, then terminate ───────────────
+        confirmed = False
+        for _ in range(5):                       # ≤ 5 s wait
+            try:
+                od = dh.get_order_details(oid)   # SDK call → dict
+                if od and len(od.get("child_orders", [])) >= 2:
+                    confirmed = True
+                    break
+            except Exception as e:               # network / parsing etc.
+                log.debug(f"{sym}: order-detail poll failed: {e}")
+            time.sleep(1)
+
+        if confirmed:
+            log.info(f"{sym}: SL & TP legs confirmed — shutting down.")
+            sys.exit(0)                          # graceful exit
+        else:
+            log.error(f"{sym}: unable to confirm SL/TP legs — exiting anyway.")
+            sys.exit(1)
 
     # ── MANAGE OPEN TRADES ───────────────────────────────────────────────────
     def manage_trades(self):
@@ -614,6 +699,53 @@ class DoubleBreakEngine:
             st.locked = True
 
         log.info("ORB back-filled from historical data – late start handled.")
+        
+    # ── NEW · BACK-FILL FIRST BREAK ON RESTART ─────────────────────────────
+    def backfill_first_break(self):
+        """
+        After ORB is locked, scan today's 1-minute candles (09:20 → now) once,
+        and reconstruct the FIRST-BREAK state so that a mid-session restart
+        keeps earlier breakout information.
+        """
+        today = now_ist().strftime("%Y-%m-%d")
+        to_dt = now_ist().strftime("%Y-%m-%d %H:%M:%S")
+
+        for sym, sid in self.watch:
+            st = self.state[sym]
+            if st.first_break_side is not None:
+                continue        # already populated live
+
+            from_dt = f"{today} 09:20:00"
+            candles = dh.get_historical_price(
+                sid, interval="1", from_date=from_dt, to_date=to_dt
+            )
+            if not candles:
+                continue
+
+            for c in candles:
+                close, high, low = c["close"], c["high"], c["low"]
+
+                # LONG breakout
+                if close > st.high:
+                    st.first_break_side   = "LONG"
+                    st.first_break_price  = close
+                    st.first_break_ts     = str(c.get("timestamp") or c.get("time") or c.get("datetime"))
+                    st.first_break_candle_low  = low
+                    st.first_break_candle_high = high
+                    st.retracement_extreme = low
+                    log.info(f"🔄 {sym}: first LONG break back-filled @ {close}")
+                    break
+
+                # SHORT breakout
+                if close < st.low:
+                    st.first_break_side   = "SHORT"
+                    st.first_break_price  = close
+                    st.first_break_ts     = str(c.get("timestamp") or c.get("time") or c.get("datetime"))
+                    st.first_break_candle_low  = low
+                    st.first_break_candle_high = high
+                    st.retracement_extreme = high
+                    log.info(f"🔄 {sym}: first SHORT break back-filled @ {close}")
+                    break
 
     # ── MAIN LOOP ────────────────────────────────────────────────────────────
     def run(self):
@@ -656,8 +788,13 @@ class DoubleBreakEngine:
                         s.locked = True
                     log.info("ORB locked for all symbols (live capture).")
 
-                # Run detailed stock-wise iteration once ORB levels are locked (handles late starts)
+                # Run detailed stock-wise iteration once ORB levels are locked
                 if all(st.locked for st in self.state.values()):
+                    # Back-fill first-break state only once per restart
+                    if not getattr(self, "_first_break_backfill_done", False):
+                        self.backfill_first_break()
+                        self._first_break_backfill_done = True
+
                     # ── Detailed stock-wise iteration with per-symbol debug ──
                     original_total = len(self.watch)
                     pending_symbols = [
@@ -709,17 +846,20 @@ class DoubleBreakEngine:
 
                         # ── 2 · Build a clear status headline for *every* symbol ──
                         if st.first_break_side is None:
+                            # only the "awaiting 1st break" INFO should be logged
                             headline = (
                                 f"{idx:02d}/{original_total:02d} {sym}: "
                                 f"Awaiting 1st break – ORB {fmt(st.low)}-{fmt(st.high)}."
                             )
+                            log.info(headline)
+                    
                         elif not st.pulled_back:
-                            headline = (
-                                f"{idx:02d}/{original_total:02d} {sym}: "
-                                f"1st break {st.first_break_side} seen – waiting pull-back "
-                                f"inside ORB {fmt(st.low)}-{fmt(st.high)}."
-                            )
+                            # after the FIRST break, skip the INFO headline entirely
+                            # (you'll still see the DEBUG "Checking ..." line above)
+                            pass
+                    
                         else:
+                            # once pulled_back is True, we resume INFO headlines
                             trg = st.high if st.first_break_side == "LONG" else st.low
                             headline = (
                                 f"{idx:02d}/{original_total:02d} {sym}: "
@@ -727,12 +867,10 @@ class DoubleBreakEngine:
                                 f"{'above' if st.first_break_side == 'LONG' else 'below'} "
                                 f"{fmt(trg)} (ORB {fmt(st.low)}-{fmt(st.high)})."
                             )
-
-                        log.info(headline)
+                            log.info(headline)                    
 
                         # ── 3 · Detailed tick-level processing (unchanged) ──
-                        self.process_symbol(sym, sid)
-                    
+                        self.process_symbol(sym, sid)                    
 
 
                 self.manage_trades()

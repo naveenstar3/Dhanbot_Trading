@@ -353,21 +353,6 @@ def place_order(
 ):
     """
     Places a standard CNC market order or a Super-(Beta) intraday bracket order.
-
-    Parameters
-    ----------
-    security_id : str | int
-        Dhan security ID.
-    quantity : int
-        Order quantity (> 0).
-    transaction_type : {"BUY", "SELL"}
-        Direction of the parent leg.
-    super_order : bool, default False
-        When True, sends a Super (Beta) order by enabling Dhan's `smartOrder`.
-    take_profit : float, optional
-        Target price (required for Super orders).
-    stop_loss : float, optional
-        Stop-loss price (required for Super orders).
     """
     if quantity <= 0:
         raise ValueError("❌ `quantity` must be a positive integer")
@@ -399,12 +384,69 @@ def place_order(
     }
 
     if super_order:
-        # Dhan expects target & SL as `squareOff` / `stopLoss`
-        payload["squareOff"] = round(take_profit, 2)
-        payload["stopLoss"]  = round(stop_loss, 2)
+        payload["squareOff"] = round(take_profit, 2)            # target
+        payload["stopLoss"]  = round(stop_loss, 2)              # stop-loss
 
     try:
         response = session.post(url, json=payload)
         return response.status_code, response.json()
     except Exception as e:
         raise RuntimeError(f"⚠️ Order placement failed: {e}") from e
+
+
+# ▶️ NEW – Legacy-compatible wrapper for Super(Beta) orders
+def place_super_order(
+    security_id,
+    quantity,
+    transaction_type: str = "BUY",      # BUY (long) or SELL (short)
+    *,
+    entry_price: float,
+    take_profit: float,
+    stop_loss: float,
+    product_type: str = "INTRADAY",     # accepted, ignored here
+    order_type: str = "MARKET",         # accepted, ignored here
+    **_ignore,                          # swallow any future extras
+):
+    """
+    Converts absolute TP / SL prices into the positive point-offsets required
+    by Dhan's Super(Beta) bracket-order API, then delegates to `place_order`.
+    Works transparently for BOTH long and short parents.
+    """
+    # Δ points away from entry (must be > 0)
+    tp_pts = abs(take_profit - entry_price)
+    sl_pts = abs(stop_loss  - entry_price)
+
+    return place_order(
+        security_id,
+        quantity,
+        transaction_type=transaction_type,
+        super_order=True,
+        take_profit=tp_pts,
+        stop_loss=sl_pts,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GET ORDER DETAILS  ➟  needed by the engine to confirm SL / TP child legs
+# ─────────────────────────────────────────────────────────────────────────────
+def get_order_details(order_id: str | int, *, max_retries: int = 3, delay: float = 1.0):
+    url = f"https://api.dhan.co/orders/{order_id}"
+
+    for attempt in range(max_retries):
+        try:
+            resp = session.get(url, timeout=10)
+            if resp.status_code == 200:
+                body = resp.json()
+                # flatten to the inner data object if present
+                return body.get("data", body)
+            if resp.status_code == 429:          # rate-limited – back-off & retry
+                time.sleep(delay)
+                continue
+            print(f"⚠️ get_order_details → {resp.status_code}: {resp.text[:100]}")
+            return None
+        except Exception as exc:                 # network / JSON error
+            if attempt < max_retries - 1:
+                time.sleep(delay)
+            else:
+                print(f"⚠️ get_order_details exception: {exc}")
+    return None
