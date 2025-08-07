@@ -700,72 +700,52 @@ class DoubleBreakEngine:
 
         log.info("ORB back-filled from historical data – late start handled.")
         
-    # ── NEW · BACK-FILL FIRST & DOUBLE BREAK ON RESTART ──────────────────────
+    # ── NEW · BACK-FILL FIRST BREAK ON RESTART ─────────────────────────────
     def backfill_first_break(self):
         """
         After ORB is locked, scan today's 1-minute candles (09:20 → now) once,
-        and reconstruct the FIRST-BREAK and DOUBLE-BREAK state so that a
-        mid-session restart skips symbols already completed.
+        and reconstruct the FIRST-BREAK state so that a mid-session restart
+        keeps earlier breakout information.
         """
         today = now_ist().strftime("%Y-%m-%d")
         to_dt = now_ist().strftime("%Y-%m-%d %H:%M:%S")
-    
+
         for sym, sid in self.watch:
             st = self.state[sym]
-            # Skip if already live-populated or double-break was completed
-            if st.first_break_side is not None or st.double_break_complete:
-                continue
-    
+            if st.first_break_side is not None:
+                continue        # already populated live
+
             from_dt = f"{today} 09:20:00"
             candles = dh.get_historical_price(
                 sid, interval="1", from_date=from_dt, to_date=to_dt
             )
             if not candles:
                 continue
-    
-            # 1 · Find first break
-            brk_idx = None
-            for idx, c in enumerate(candles):
-                close = c["close"]
+
+            for c in candles:
+                close, high, low = c["close"], c["high"], c["low"]
+
+                # LONG breakout
                 if close > st.high:
                     st.first_break_side   = "LONG"
                     st.first_break_price  = close
-                    st.first_break_ts     = str(c.get("timestamp") or c.get("time") or c.get("datetime")).split("+")[0]
-                    st.first_break_candle_low  = c["low"]
-                    st.first_break_candle_high = c["high"]
-                    st.retracement_extreme = c["low"]
+                    st.first_break_ts     = str(c.get("timestamp") or c.get("time") or c.get("datetime"))
+                    st.first_break_candle_low  = low
+                    st.first_break_candle_high = high
+                    st.retracement_extreme = low
                     log.info(f"🔄 {sym}: first LONG break back-filled @ {close}")
-                    brk_idx = idx
                     break
+
+                # SHORT breakout
                 if close < st.low:
                     st.first_break_side   = "SHORT"
                     st.first_break_price  = close
-                    st.first_break_ts     = str(c.get("timestamp") or c.get("time") or c.get("datetime")).split("+")[0]
-                    st.first_break_candle_low  = c["low"]
-                    st.first_break_candle_high = c["high"]
-                    st.retracement_extreme = c["high"]
+                    st.first_break_ts     = str(c.get("timestamp") or c.get("time") or c.get("datetime"))
+                    st.first_break_candle_low  = low
+                    st.first_break_candle_high = high
+                    st.retracement_extreme = high
                     log.info(f"🔄 {sym}: first SHORT break back-filled @ {close}")
-                    brk_idx = idx
                     break
-    
-            # If no first break found, move on
-            if brk_idx is None:
-                continue
-    
-            # 2 · Scan after first break for double-break completion
-            for c in candles[brk_idx+1:]:
-                close = c["close"]
-                # LONG double-break
-                if st.first_break_side == "LONG" and close > st.high:
-                    st.double_break_complete = True
-                    log.info(f"🔄 {sym}: double break back-filled – marking as complete")
-                    break
-                # SHORT double-break
-                if st.first_break_side == "SHORT" and close < st.low:
-                    st.double_break_complete = True
-                    log.info(f"🔄 {sym}: double break back-filled – marking as complete")
-                    break
-    
 
     # ── MAIN LOOP ────────────────────────────────────────────────────────────
     def run(self):
