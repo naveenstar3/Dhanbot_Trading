@@ -202,19 +202,24 @@ def detect_fvg(candles: Deque[Dict]) -> Tuple[bool, Optional[float], Optional[fl
         return False, None, None
     
     # Get the three most recent candles
-    c0 = candles[-3]  # Two periods back
-    c1 = candles[-2]  # One period back
-    c2 = candles[-1]  # Current period
+    c0 = candles[-3]
+    c1 = candles[-2]
+    c2 = candles[-1]
     
-    # LONG FVG: c2.low > c0.high
+    # LONG FVG: gap from c0.high up to c2.low
     if c2["low"] > c0["high"]:
-        return True, c2["low"], c0["high"]
+        fvg_high = c2["low"]
+        fvg_low  = c0["high"]
+        return True, fvg_high, fvg_low
     
-    # SHORT FVG: c2.high < c0.low
+    # SHORT FVG: gap from c2.high down to c0.low
     if c2["high"] < c0["low"]:
-        return True, c0["low"], c2["high"]
+        fvg_high = c0["low"]
+        fvg_low  = c2["high"]
+        return True, fvg_high, fvg_low
     
     return False, None, None
+
 # ── CORE ENGINE ──────────────────────────────────────────────────────────────────────────────────
 class BasicORBFVGEngine:
     def __init__(self):
@@ -231,23 +236,25 @@ class BasicORBFVGEngine:
     # ── ORB CAPTURE ───────────────────────────────────────────────────────────────────────────────
     def capture_orb(self):
         """
-        Fills ORB range between 09:15-09:20 using 5-minute candles.
-        Adds DEBUG lines so we know exactly which candle was processed.
+        Fills ORB range between 09:15-09:20 using 1-minute candles stacked.
         """
         for sym, sid in self.watch:
-            bars = dh.get_historical_price(sid, interval="5", limit=1)
+            # Fetch the five 1-minute bars spanning 09:15–09:20
+            bars = dh.get_historical_price(sid, interval="1", limit=5)
             if not bars:
-                log.error(f"❌ No historical data for {sym} ({sid}) during ORB capture")
+                log.error(f"❌ No ORB data for {sym} — could not fetch five 1-min candles")
                 continue
-            bar = bars[-1]
+            highs = [b["high"] for b in bars]
+            lows  = [b["low"]  for b in bars]
             st = self.state[sym]
-            prev_high, prev_low = st.high, st.low
-            st.high = max(st.high or bar["high"], bar["high"])
-            st.low  = min(st.low  or bar["low"],  bar["low"])
+            # Update ORB bounds based on full set of 1-min highs/lows
+            st.high = max(st.high or max(highs), max(highs))
+            st.low  = min(st.low  or min(lows),  min(lows))
             log.debug(
-                f"{sym}: ORB-capture candle h={bar['high']} l={bar['low']} "
-                f"→ stored high {prev_high}->{st.high} | low {prev_low}->{st.low}"
+                f"{sym}: ORB-capture highs={highs} lows={lows} "
+                f"→ stored ORB low={st.low} high={st.high}"
             )
+    
     
     # ── MAIN STATE MACHINE PER SYMBOL ─────────────────────────────────────────────────────────────
     def process_symbol(self, sym: str, sid: str):
@@ -297,21 +304,19 @@ class BasicORBFVGEngine:
         # ------------------------------------------------------------------ #
         if st.breakout_side is None:
             # LONG side breakout
-            if close > st.high:
-                st.breakout_side = "LONG"
-                st.breakout_price = close
+            if high > st.high:
+                st.breakout_side      = "LONG"
+                st.breakout_price     = high
                 st.breakout_timestamp = ts
-                log.info(f"✅ {sym}: breakout to the upside detected @ {close} at {ts}")
+                log.info(f"✅ {sym}: breakout to the upside detected @ {high} at {ts}")
                 return
-                
             # SHORT side breakout
-            if close < st.low:
-                st.breakout_side = "SHORT"
-                st.breakout_price = close
+            if low < st.low:
+                st.breakout_side      = "SHORT"
+                st.breakout_price     = low
                 st.breakout_timestamp = ts
-                log.info(f"✅ {sym}: breakout to the downside detected @ {close} at {ts}")
+                log.info(f"✅ {sym}: breakout to the downside detected @ {low} at {ts}")
                 return
-                
             # No breakout yet, continue monitoring
             return
             
@@ -341,18 +346,18 @@ class BasicORBFVGEngine:
                     f"✅✅ {sym}: FVG filled for LONG trade @ {close}. "
                     f"Entering trade with FVG {st.fvg_low:.2f}-{st.fvg_high:.2f}"
                 )
-                self.open_trade(sym, sid, "LONG", close, st.low)
+                # Use the FVG low as the stop for LONG
+                self.open_trade(sym, sid, "LONG", close, st.fvg_low)
                 st.entry_taken = True
-                st.orb_complete = True
-                st.fvg_fill_timestamp = ts
-                
+                ...
             # For SHORT: price must close within the FVG area (between fvg_low and fvg_high)
             elif st.breakout_side == "SHORT" and st.fvg_low <= close <= st.fvg_high:
                 log.info(
                     f"✅✅ {sym}: FVG filled for SHORT trade @ {close}. "
                     f"Entering trade with FVG {st.fvg_low:.2f}-{st.fvg_high:.2f}"
                 )
-                self.open_trade(sym, sid, "SHORT", close, st.high)
+                # Use the FVG high as the stop for SHORT
+                self.open_trade(sym, sid, "SHORT", close, st.fvg_high)
                 st.entry_taken = True
                 st.orb_complete = True
                 st.fvg_fill_timestamp = ts
